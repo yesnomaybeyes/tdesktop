@@ -465,7 +465,7 @@ void DeleteMessagesBox::prepare() {
 		}
 		auto count = qMax(1, _ids.size());
 		if (canDeleteAllForEveryone) {
-			_forEveryone.create(this, forEveryoneText, false, st::defaultBoxCheckbox);
+			_forEveryone.create(this, forEveryoneText, true, st::defaultBoxCheckbox);
 		} else if (peer && peer->isChannel()) {
 			if (peer->isMegagroup()) {
 				text += qsl("\n\n") + lng_delete_for_everyone_hint(lt_count, count);
