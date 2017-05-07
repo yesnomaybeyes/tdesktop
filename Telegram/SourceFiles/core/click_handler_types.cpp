@@ -76,6 +76,18 @@ void UrlClickHandler::doOpen(QString url) {
 
 	if (url.startsWith(qstr("tg://"), Qt::CaseInsensitive)) {
 		App::openLocalUrl(url);
+	} else if (url.indexOf("youtu") >= 0) {
+		QStringList args = QApplication::arguments();
+		QRegExp rx("player=.{0,}");
+		int index = args.indexOf(rx);
+		if (index >= 0) {
+			QString path = args[index].split("=")[1];
+			path = path.replace("\\", "/");
+			//QProcess::startDetached("C:/Program Files/DAUM/PotPlayer/PotPlayerMini64.exe", QStringList() << url);
+			QProcess::startDetached(path, QStringList() << url);
+		} else {
+			QDesktopServices::openUrl(url);
+		}
 	} else {
 		QDesktopServices::openUrl(url);
 	}
