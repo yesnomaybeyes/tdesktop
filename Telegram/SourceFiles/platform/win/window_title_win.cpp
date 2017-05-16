@@ -27,11 +27,26 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 namespace Platform {
 
 TitleWidget::TitleWidget(QWidget *parent) : Window::TitleWidget(parent)
+, _top(this, st::titleButtonTop)
 , _minimize(this, st::titleButtonMinimize)
 , _maximizeRestore(this, st::titleButtonMaximize)
 , _close(this, st::titleButtonClose)
 , _shadow(this, st::titleShadow)
 , _maximizedState(parent->window()->windowState() & Qt::WindowMaximized) {
+	_top->setClickedCallback([this]() {
+		if (_topState) {
+			_topState = false;
+			window()->setWindowFlags(windowFlags() | Qt::WindowStaysOnBottomHint);
+			window()->show();
+		} else {
+			_topState = true;
+			window()->setWindowFlags(Qt::WindowStaysOnTopHint);
+			window()->show();
+		}
+		updateButtonsState();
+	});
+	_top->setPointerCursor(false);
+
 	_minimize->setClickedCallback([this]() {
 		window()->setWindowState(Qt::WindowMinimized);
 		_minimize->clearState();
@@ -43,6 +58,7 @@ TitleWidget::TitleWidget(QWidget *parent) : Window::TitleWidget(parent)
 	});
 	_maximizeRestore->setPointerCursor(false);
 	_close->setClickedCallback([this]() {
+		
 		window()->close();
 		_close->clearState();
 	});
@@ -50,6 +66,7 @@ TitleWidget::TitleWidget(QWidget *parent) : Window::TitleWidget(parent)
 
 	setAttribute(Qt::WA_OpaquePaintEvent);
 	resize(width(), st::titleHeight);
+	updateButtonsState();
 }
 
 void TitleWidget::init() {
@@ -72,7 +89,8 @@ void TitleWidget::updateControlsPosition() {
 	auto right = 0;
 	_close->moveToRight(right, 0); right += _close->width();
 	_maximizeRestore->moveToRight(right, 0); right += _maximizeRestore->width();
-	_minimize->moveToRight(right, 0);
+	_minimize->moveToRight(right, 0); right += _minimize->width();
+	_top->moveToRight(right, 0);
 }
 
 void TitleWidget::resizeEvent(QResizeEvent *e) {
@@ -97,6 +115,14 @@ void TitleWidget::onWindowStateChanged(Qt::WindowState state) {
 
 void TitleWidget::updateButtonsState() {
 	_minimize->setIconOverride(_activeState ? &st::titleButtonMinimizeIconActive : nullptr, _activeState ? &st::titleButtonMinimizeIconActiveOver : nullptr);
+
+	if (!_topState) {
+		_top->setIconOverride(_activeState ? &st::titleButtonTop2IconActive : &st::titleButtonTop2Icon, _activeState ? &st::titleButtonTop2IconActiveOver : &st::titleButtonTop2IconOver);
+	}
+	else {
+		_top->setIconOverride(_activeState ? &st::titleButtonTopIconActive : nullptr, _activeState ? &st::titleButtonTopIconActiveOver : nullptr);
+	}
+
 	if (_maximizedState) {
 		_maximizeRestore->setIconOverride(_activeState ? &st::titleButtonRestoreIconActive : &st::titleButtonRestoreIcon, _activeState ? &st::titleButtonRestoreIconActiveOver : &st::titleButtonRestoreIconOver);
 	} else {
@@ -110,6 +136,7 @@ Window::HitTestResult TitleWidget::hitTest(const QPoint &p) const {
 		|| (_minimize->geometry().contains(p))
 		|| (_maximizeRestore->geometry().contains(p))
 		|| (_close->geometry().contains(p))
+		|| (_top->geometry().contains(p))
 	) {
 		return Window::HitTestResult::SysButton;
 	} else if (rect().contains(p)) {
