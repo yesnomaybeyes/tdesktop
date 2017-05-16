@@ -1008,11 +1008,11 @@ void ContactsBox::Inner::paintDisabledCheckUserpic(Painter &p, PeerData *peer, i
 
 		p.setPen(userpicBorderPen);
 		p.setBrush(Qt::NoBrush);
-		p.drawEllipse(userpicEllipse);
+		p.drawRect(userpicEllipse);
 
 		p.setPen(iconBorderPen);
 		p.setBrush(st::contactsPhotoDisabledCheckFg);
-		p.drawEllipse(iconEllipse);
+		p.drawRect(iconEllipse);
 	}
 
 	st::contactsPhotoCheckbox.check.check.paint(p, iconEllipse.topLeft(), outerWidth);
