@@ -49,7 +49,14 @@ const QPixmap &circleMask(int width, int height) {
 			p.fillRect(0, 0, width, height, Qt::transparent);
 			p.setBrush(Qt::white);
 			p.setPen(Qt::NoPen);
-			p.drawRect(0, 0, width, height);
+
+			QStringList args = QApplication::arguments();
+			int index = args.indexOf("-square-avatars");
+			if (index >= 0) {
+				p.drawRect(0, 0, width, height);
+			} else {
+				p.drawEllipse(0, 0, width, height);
+			}
 		}
 		mask.setDevicePixelRatio(cRetinaFactor());
 		i = masks.insert(key, App::pixmapFromImageInPlace(std::move(mask)));
