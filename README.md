@@ -5,3 +5,5 @@ To do list:
 * Save deleted messages.  
 * Split photos by months (or days).
 * Show only red favicons and do not show grey favicons.
+* Move typed text from text field of message to image caption.
+* Maybe auto updates from github. (?)
