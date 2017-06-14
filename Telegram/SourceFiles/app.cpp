@@ -314,32 +314,25 @@ namespace {
 			return lang(lng_status_online);
 		}
 		QString when;
+		if (!precise) {
+			int32 minutes = (now - online) / 60;
+			if (!minutes) {
+				return lang(lng_status_lastseen_now);
+			} else if (minutes < 60) {
+				return lng_status_lastseen_minutes(lt_count, minutes);
+			} else {
+				precise = true;
+			}
+		}
+		QDateTime dOnline(date(online)), dNow(date(now));
 		if (precise) {
-			QDateTime dOnline(date(online)), dNow(date(now));
 			if (dOnline.date() == dNow.date()) {
 				return lng_status_lastseen_today(lt_time, dOnline.time().toString(cTimeFormat()));
 			} else if (dOnline.date().addDays(1) == dNow.date()) {
 				return lng_status_lastseen_yesterday(lt_time, dOnline.time().toString(cTimeFormat()));
 			}
-			return lng_status_lastseen_date_time(lt_date, dOnline.date().toString(qsl("dd.MM.yy")), lt_time, dOnline.time().toString(cTimeFormat()));
 		}
-		int32 minutes = (now - online) / 60;
-		if (!minutes) {
-			return lang(lng_status_lastseen_now);
-		} else if (minutes < 60) {
-			return lng_status_lastseen_minutes(lt_count, minutes);
-		}
-		int32 hours = (now - online) / 3600;
-		if (hours < 12) {
-			return lng_status_lastseen_hours(lt_count, hours);
-		}
-		QDateTime dOnline(date(online)), dNow(date(now));
-		if (dOnline.date() == dNow.date()) {
-			return lng_status_lastseen_today(lt_time, dOnline.time().toString(cTimeFormat()));
-		} else if (dOnline.date().addDays(1) == dNow.date()) {
-			return lng_status_lastseen_yesterday(lt_time, dOnline.time().toString(cTimeFormat()));
-		}
-		return lng_status_lastseen_date(lt_date, dOnline.date().toString(qsl("dd.MM.yy")));
+		return lng_status_lastseen_date_time(lt_date, dOnline.date().toString(qsl("dd.MM.yy")), lt_time, dOnline.time().toString(cTimeFormat()));
 	}
 
 	namespace {
