@@ -43,19 +43,31 @@ bool ValidatePhotoDimensions(int width, int height) {
 
 } // namespace
 
-SendFilesBox::SendFilesBox(QWidget*, QImage image, CompressConfirm compressed)
+SendFilesBox::SendFilesBox(QWidget*, QImage image, CompressConfirm compressed, QString captionFromHistory = "")
 : _image(image)
 , _compressConfirm(compressed)
 , _caption(this, st::confirmCaptionArea, langFactory(lng_photo_caption)) {
 	_files.push_back(QString());
+
+	_caption->setText(captionFromHistory);
+	QTextCursor tmpCursor = _caption->textCursor();
+	tmpCursor.movePosition(QTextCursor::End);
+	_caption->setTextCursor(tmpCursor);
+
 	prepareSingleFileLayout();
 }
 
-SendFilesBox::SendFilesBox(QWidget*, const QStringList &files, CompressConfirm compressed)
+SendFilesBox::SendFilesBox(QWidget*, const QStringList &files, CompressConfirm compressed, QString captionFromHistory = "")
 : _files(files)
 , _compressConfirm(compressed)
 , _caption(this, st::confirmCaptionArea, langFactory(_files.size() > 1 ? lng_photos_comment : lng_photo_caption)) {
 	if (_files.size() == 1) {
+
+		_caption->setText(captionFromHistory);
+		QTextCursor tmpCursor = _caption->textCursor();
+		tmpCursor.movePosition(QTextCursor::End);
+		_caption->setTextCursor(tmpCursor);
+
 		prepareSingleFileLayout();
 	}
 }
@@ -247,7 +259,7 @@ void SendFilesBox::prepare() {
 		subscribe(_compressed->checkedChanged, [this](bool checked) { onCompressedChange(); });
 	}
 	if (_caption) {
-		_caption->setMaxLength(MaxPhotoCaption);
+		//_caption->setMaxLength(MaxPhotoCaption);
 		_caption->setCtrlEnterSubmit(Ui::CtrlEnterSubmit::Both);
 		connect(_caption, SIGNAL(resized()), this, SLOT(onCaptionResized()));
 		connect(_caption, SIGNAL(submitted(bool)), this, SLOT(onSend(bool)));
