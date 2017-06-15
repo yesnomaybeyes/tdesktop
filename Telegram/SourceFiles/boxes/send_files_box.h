@@ -33,8 +33,8 @@ class SendFilesBox : public BoxContent {
 	Q_OBJECT
 
 public:
-	SendFilesBox(QWidget*, QImage image, CompressConfirm compressed);
-	SendFilesBox(QWidget*, const QStringList &files, CompressConfirm compressed);
+	SendFilesBox(QWidget*, QImage image, CompressConfirm compressed, QString captionFromHistory);
+	SendFilesBox(QWidget*, const QStringList &files, CompressConfirm compressed, QString captionFromHistory);
 	SendFilesBox(QWidget*, const QString &phone, const QString &firstname, const QString &lastname);
 
 	void setConfirmedCallback(base::lambda<void(const QStringList &files, const QImage &image, std::unique_ptr<FileLoadTask::MediaInformation> information, bool compressed, const QString &caption, bool ctrlShiftEnter)> callback) {
