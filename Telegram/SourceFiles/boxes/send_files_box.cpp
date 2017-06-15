@@ -49,11 +49,7 @@ SendFilesBox::SendFilesBox(QWidget*, QImage image, CompressConfirm compressed, Q
 , _caption(this, st::confirmCaptionArea, lang(lng_photo_caption)) {
 	_files.push_back(QString());
 
-	_caption->setText(captionFromHistory);
-	QTextCursor tmpCursor = _caption->textCursor();
-	tmpCursor.movePosition(QTextCursor::End);
-	_caption->setTextCursor(tmpCursor);
-
+	setTextFromFieldToCaption(captionFromHistory);
 	prepareSingleFileLayout();
 }
 
@@ -63,13 +59,17 @@ SendFilesBox::SendFilesBox(QWidget*, const QStringList &files, CompressConfirm c
 , _caption(this, st::confirmCaptionArea, lang(_files.size() > 1 ? lng_photos_comment : lng_photo_caption)) {
 	if (_files.size() == 1) {
 
-		_caption->setText(captionFromHistory);
-		QTextCursor tmpCursor = _caption->textCursor();
-		tmpCursor.movePosition(QTextCursor::End);
-		_caption->setTextCursor(tmpCursor);
-
+		setTextFromFieldToCaption(captionFromHistory);
 		prepareSingleFileLayout();
 	}
+}
+
+void SendFilesBox::setTextFromFieldToCaption(QString text) {
+	int maxLength = MaxPhotoCaption;
+	_caption->setText(text.left(maxLength));
+	QTextCursor tmpCursor = _caption->textCursor();
+	tmpCursor.movePosition(QTextCursor::End);
+	_caption->setTextCursor(tmpCursor);
 }
 
 void SendFilesBox::prepareSingleFileLayout() {
