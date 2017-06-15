@@ -259,7 +259,7 @@ void SendFilesBox::prepare() {
 		subscribe(_compressed->checkedChanged, [this](bool checked) { onCompressedChange(); });
 	}
 	if (_caption) {
-		//_caption->setMaxLength(MaxPhotoCaption);
+		_caption->setMaxLength(MaxPhotoCaption);
 		_caption->setCtrlEnterSubmit(Ui::CtrlEnterSubmit::Both);
 		connect(_caption, SIGNAL(resized()), this, SLOT(onCaptionResized()));
 		connect(_caption, SIGNAL(submitted(bool)), this, SLOT(onSend(bool)));
