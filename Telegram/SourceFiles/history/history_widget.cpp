@@ -4374,13 +4374,14 @@ bool HistoryWidget::confirmSendingFiles(const SendingFilesLists &lists, Compress
 		auto insertTextOnCancel = QString();
 		auto sendCallback = [this](const QStringList &files, const QImage &image, std::unique_ptr<FileLoadTask::MediaInformation> information, bool compressed, const QString &caption, MsgId replyTo) {
 			auto type = compressed ? SendMediaType::Photo : SendMediaType::File;
+			_field->setText("");
 			uploadFilesAfterConfirmation(files, QByteArray(), image, std::move(information), type, caption);
 		};
 		auto boxCompressConfirm = compressed;
 		if (files.size() > 1 && !lists.allFilesForCompress) {
 			boxCompressConfirm = CompressConfirm::None;
 		}
-		auto box = Box<SendFilesBox>(files, boxCompressConfirm);
+		auto box = Box<SendFilesBox>(files, boxCompressConfirm, _field->toPlainText());
 		return showSendFilesBox(std::move(box), insertTextOnCancel, addedComment, std::move(sendCallback));
 	});
 }
@@ -4391,9 +4392,11 @@ bool HistoryWidget::confirmSendingFiles(const QImage &image, const QByteArray &c
 	App::wnd()->activateWindow();
 	auto sendCallback = [this, content](const QStringList &files, const QImage &image, std::unique_ptr<FileLoadTask::MediaInformation> information, bool compressed, const QString &caption, MsgId replyTo) {
 		auto type = compressed ? SendMediaType::Photo : SendMediaType::File;
+		_field->setText("");
 		uploadFilesAfterConfirmation(files, content, image, std::move(information), type, caption);
 	};
-	auto box = Box<SendFilesBox>(image, compressed);
+	
+	auto box = Box<SendFilesBox>(image, compressed, _field->toPlainText());
 	return showSendFilesBox(std::move(box), insertTextOnCancel, nullptr, std::move(sendCallback));
 }
 
