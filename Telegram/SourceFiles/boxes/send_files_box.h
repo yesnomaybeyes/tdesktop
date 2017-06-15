@@ -61,6 +61,7 @@ private slots:
 	}
 
 private:
+	void setTextFromFieldToCaption(QString text);
 	void prepareSingleFileLayout();
 	void prepareDocumentLayout();
 	void tryToReadSingleFile();
