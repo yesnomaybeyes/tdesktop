@@ -145,7 +145,14 @@ QImage createCircleMask(int size, QColor bg, QColor fg) {
 		p.fillRect(0, 0, realSize, realSize, bg);
 		p.setPen(Qt::NoPen);
 		p.setBrush(fg);
-		p.drawRect(0, 0, realSize, realSize);
+		
+		QStringList args = QApplication::arguments();
+		int index = args.indexOf("-square-avatars");
+		if (index >= 0) {
+			p.drawRect(0, 0, realSize, realSize);
+		} else {
+			p.drawEllipse(0, 0, realSize, realSize);
+		}
 	}
 	result.setDevicePixelRatio(cRetinaFactor());
 	return result;
