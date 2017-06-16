@@ -230,7 +230,8 @@ void TopBarWidget::paintUnreadCounter(Painter &p, int outerWidth) {
 		}
 	}
 
-	if (auto counter = (fullCounter - (Global::IncludeMuted() ? 0 : mutedCount))) {
+	// Shows only unmuted messages.
+	if (auto counter = (fullCounter - mutedCount)) {
 		auto counterText = (counter > 99) ? qsl("..%1").arg(counter % 100) : QString::number(counter);
 		Dialogs::Layout::UnreadBadgeStyle unreadSt;
 		unreadSt.muted = (mutedCount >= fullCounter);
