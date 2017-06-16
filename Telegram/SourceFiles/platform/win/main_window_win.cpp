@@ -744,7 +744,10 @@ void MainWindow::unreadCounterChangedHook() {
 void MainWindow::updateIconCounters() {
 	auto counter = App::histories().unreadBadge();
 	auto muted = App::histories().unreadOnlyMuted();
-
+	
+	//Shows only unmuted messages in badge of tray icon.
+	counter -= App::histories().unreadMutedCount();
+	
 	auto iconSizeSmall = QSize(GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON));
 	auto iconSizeBig = QSize(GetSystemMetrics(SM_CXICON), GetSystemMetrics(SM_CYICON));
 
