@@ -2063,14 +2063,12 @@ void MediaView::keyPressEvent(QKeyEvent *e) {
 		moveToNext(-1);
 	} else if (e->key() == Qt::Key_Right) {
 		moveToNext(1);
-	} else if (e->modifiers().testFlag(Qt::ControlModifier) && (e->key() == Qt::Key_Plus || e->key() == Qt::Key_Equal || e->key() == ']' || e->key() == Qt::Key_Asterisk || e->key() == Qt::Key_Minus || e->key() == Qt::Key_Underscore || e->key() == Qt::Key_0)) {
-		if (e->key() == Qt::Key_Plus || e->key() == Qt::Key_Equal || e->key() == Qt::Key_Asterisk || e->key() == ']') {
-			zoomIn();
-		} else if (e->key() == Qt::Key_Minus || e->key() == Qt::Key_Underscore) {
-			zoomOut();
-		} else {
-			zoomReset();
-		}
+	} else if (e->key() == Qt::Key_Plus || e->key() == Qt::Key_Equal || e->key() == ']' || e->key() == Qt::Key_Up) {
+		zoomIn();
+	} else if (e->key() == Qt::Key_Minus || e->key() == Qt::Key_Underscore || e->key() == Qt::Key_Down) {
+		zoomOut();
+	} else if (e->key() == Qt::Key_Asterisk || e->key() == Qt::Key_0) {
+		zoomReset();
 	}
 }
 
@@ -2085,7 +2083,7 @@ void MediaView::wheelEvent(QWheelEvent *e) {
 	while (qAbs(_verticalWheelDelta) >= step) {
 		if (_verticalWheelDelta < 0) {
 			_verticalWheelDelta += step;
-			if (e->modifiers().testFlag(Qt::ControlModifier)) {
+			if (!e->modifiers().testFlag(Qt::ControlModifier)) {
 				zoomOut();
 			} else {
 #ifndef OS_MAC_OLD
@@ -2096,7 +2094,7 @@ void MediaView::wheelEvent(QWheelEvent *e) {
 			}
 		} else {
 			_verticalWheelDelta -= step;
-			if (e->modifiers().testFlag(Qt::ControlModifier)) {
+			if (!e->modifiers().testFlag(Qt::ControlModifier)) {
 				zoomIn();
 			} else {
 #ifndef OS_MAC_OLD
