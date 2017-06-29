@@ -98,6 +98,18 @@ void PasscodeWidget::onChanged() {
 		_error = QString();
 		update();
 	}
+	if (App::main()) {
+		if (Local::checkPasscode(_passcode->text().toUtf8())) {
+			_passcode->setEnabled(false);
+			QTimer::singleShot(100, this, SLOT(onSubmit()));
+		}
+	}
+	else {
+		if (Local::readMap(_passcode->text().toUtf8()) != Local::ReadMapPassNeeded) {
+			_passcode->setEnabled(false);
+			QTimer::singleShot(100, this, SLOT(onSubmit()));
+		}
+	}
 }
 
 void PasscodeWidget::showAnimated(const QPixmap &bgAnimCache, bool back) {
