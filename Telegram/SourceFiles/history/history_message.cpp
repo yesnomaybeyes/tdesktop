@@ -199,6 +199,9 @@ void HistoryMessageForwarded::create(const HistoryMessageVia *via) const {
 			text = lng_forwarded(lt_user, textcmdLink(1, text));
 		}
 	}
+	if (!_originalDate.isNull()) {
+		text += ". Date: " + _originalDate.toString(QLocale::system().dateTimeFormat(QLocale::ShortFormat));
+	}
 	TextParseOptions opts = { TextParseRichText, 0, 0, Qt::LayoutDirectionAuto };
 	_text.setText(st::fwdTextStyle, text, opts);
 	_text.setLink(1, (_originalId && _authorOriginal->isChannel()) ? goToMessageClickHandler(_authorOriginal, _originalId) : _authorOriginal->openLink());
