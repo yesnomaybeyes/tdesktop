@@ -120,6 +120,9 @@ void HistoryMessageForwarded::create(const HistoryMessageVia *via) const {
 				textcmdLink(1, phrase));
 		}
 	}
+	if (!originalDate.isNull()) {
+		phrase += ". Date: " + originalDate.toString(QLocale::system().dateTimeFormat(QLocale::ShortFormat));
+	}
 	TextParseOptions opts = {
 		TextParseRichText,
 		0,
