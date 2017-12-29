@@ -41,7 +41,7 @@ void LocalStorageBox::prepare() {
 	connect(App::wnd(), SIGNAL(tempDirCleared(int)), this, SLOT(onTempDirCleared(int)));
 	connect(App::wnd(), SIGNAL(tempDirClearFailed(int)), this, SLOT(onTempDirClearFailed(int)));
 
-	subscribe(AuthSession::CurrentDownloaderTaskFinished(), [this] { update(); });
+	subscribe(Auth().downloaderTaskFinished(), [this] { update(); });
 
 	updateControls();
 
@@ -100,7 +100,7 @@ void LocalStorageBox::paintEvent(QPaintEvent *e) {
 		switch (_state) {
 		case State::Clearing: return lang(lng_local_storage_clearing);
 		case State::Cleared: return lang(lng_local_storage_cleared);
-		case State::ClearFailed: return lang(lng_local_storage_clear_failed);
+		case State::ClearFailed: return Lang::Hard::ClearPathFailed();
 		}
 		return QString();
 	})();

@@ -20,7 +20,7 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 */
 #pragma once
 
-#include "base/weak_unique_ptr.h"
+#include "base/weak_ptr.h"
 #include "base/timer.h"
 #include "mtproto/sender.h"
 #include "mtproto/auth_key.h"
@@ -43,14 +43,14 @@ struct DhConfig {
 	std::vector<gsl::byte> p;
 };
 
-class Call : public base::enable_weak_from_this, private MTP::Sender {
+class Call : public base::has_weak_ptr, private MTP::Sender {
 public:
 	class Delegate {
 	public:
 		virtual DhConfig getDhConfig() const = 0;
-		virtual void callFinished(gsl::not_null<Call*> call) = 0;
-		virtual void callFailed(gsl::not_null<Call*> call) = 0;
-		virtual void callRedial(gsl::not_null<Call*> call) = 0;
+		virtual void callFinished(not_null<Call*> call) = 0;
+		virtual void callFailed(not_null<Call*> call) = 0;
+		virtual void callRedial(not_null<Call*> call) = 0;
 
 		enum class Sound {
 			Connecting,
@@ -69,12 +69,12 @@ public:
 		Incoming,
 		Outgoing,
 	};
-	Call(gsl::not_null<Delegate*> delegate, gsl::not_null<UserData*> user, Type type);
+	Call(not_null<Delegate*> delegate, not_null<UserData*> user, Type type);
 
 	Type type() const {
 		return _type;
 	}
-	gsl::not_null<UserData*> user() const {
+	not_null<UserData*> user() const {
 		return _user;
 	}
 	bool isIncomingWaiting() const;
@@ -157,8 +157,8 @@ private:
 	void setFailedQueued(int error);
 	void destroyController();
 
-	gsl::not_null<Delegate*> _delegate;
-	gsl::not_null<UserData*> _user;
+	not_null<Delegate*> _delegate;
+	not_null<UserData*> _user;
 	Type _type = Type::Outgoing;
 	State _state = State::Starting;
 	FinishType _finishAfterRequestingCall = FinishType::None;

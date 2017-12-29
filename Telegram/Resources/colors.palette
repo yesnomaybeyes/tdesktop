@@ -255,7 +255,7 @@ emojiPanHeaderFg: windowSubTextFg; // emoji panel section header text
 emojiPanHeaderBg: #fffffff2 | emojiPanBg; // emoji panel section header background
 emojiIconFg: checkboxFg; // emoji category icon
 emojiIconFgActive: windowBgActive; // active emoji category icon
-stickerPanDeleteBg: #000000cc; // delete X button background for custom sent stickers in stickers panel (legacy)
+stickerPanDeleteBg: #000000ff; // delete X button background for custom sent stickers in stickers panel (legacy)
 stickerPanDeleteFg: windowFgActive; // delete X button icon for custom sent stickers in stickers panel (legacy)
 stickerPreviewBg: #ffffffb0; // sticker and GIF preview background (when you press and hold on a sticker)
 
@@ -316,6 +316,7 @@ historyPeer8NameFg: #ce671b; // orange group member name
 historyPeer8NameFgSelected: historyPeer8NameFg; // orange group member name in a selected message
 historyPeer8UserpicBg: #faa774; // orange userpic background
 historyPeerUserpicFg: windowFgActive; // default userpic initials
+historyPeerSavedMessagesBg: historyPeer4UserpicBg; // saved messages userpic background
 
 // Some values are marked as (adjusted), it means they're adjusted by
 // hue and saturation of the average background color if user chooses
@@ -468,7 +469,10 @@ overviewPhotoSelectOverlay: #40ace333; // shared photos / videos / links fill fo
 profileStatusFgOver: #7c99b2; // group members list in group profile user last seen text with mouse over
 profileVerifiedCheckBg: windowBgActive; // profile verified check icon background
 profileVerifiedCheckFg: windowFgActive; // profile verified check icon tick
-profileAdminStartFg: windowBgActive; // group members list admin star icon
+profileAdminStartFg: windowBgActive; // group members list creator star icon
+profileAdminStarFgOver: profileAdminStartFg; // group members list creator star icon with mouse over
+profileOtherAdminStarFg: windowSubTextFg; // group members list admin star icon
+profileOtherAdminStarFgOver: profileStatusFgOver; // group members list admin star icon with mouse over
 
 // settings
 notificationsBoxMonitorFg: windowFg; // custom notifications settings box monitor color

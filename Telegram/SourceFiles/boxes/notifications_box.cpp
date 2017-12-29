@@ -127,7 +127,10 @@ void NotificationsBox::prepare() {
 		_sampleOpacities.push_back(Animation());
 	}
 	_countSlider->setActiveSectionFast(_oldCount - 1);
-	_countSlider->setSectionActivatedCallback([this] { countChanged(); });
+	_countSlider->sectionActivated(
+	) | rpl::start_with_next(
+		[this] { countChanged(); },
+		lifetime());
 
 	setMouseTracking(true);
 
@@ -195,7 +198,7 @@ void NotificationsBox::countChanged() {
 
 	if (currentCount() != Global::NotificationsCount()) {
 		Global::SetNotificationsCount(currentCount());
-		AuthSession::Current().notifications().settingsChanged().notify(ChangeType::MaxCount);
+		Auth().notifications().settingsChanged().notify(ChangeType::MaxCount);
 		Local::writeUserSettings();
 	}
 }
@@ -352,7 +355,7 @@ void NotificationsBox::setOverCorner(Notify::ScreenCorner corner) {
 		_isOverCorner = true;
 		setCursor(style::cur_pointer);
 		Global::SetNotificationsDemoIsShown(true);
-		AuthSession::Current().notifications().settingsChanged().notify(ChangeType::DemoIsShown);
+		Auth().notifications().settingsChanged().notify(ChangeType::DemoIsShown);
 	}
 	_overCorner = corner;
 
@@ -387,7 +390,7 @@ void NotificationsBox::clearOverCorner() {
 		_isOverCorner = false;
 		setCursor(style::cur_default);
 		Global::SetNotificationsDemoIsShown(false);
-		AuthSession::Current().notifications().settingsChanged().notify(ChangeType::DemoIsShown);
+		Auth().notifications().settingsChanged().notify(ChangeType::DemoIsShown);
 
 		for_const (auto &samples, _cornerSamples) {
 			for_const (auto widget, samples) {
@@ -414,7 +417,7 @@ void NotificationsBox::mouseReleaseEvent(QMouseEvent *e) {
 
 		if (_chosenCorner != Global::NotificationsCorner()) {
 			Global::SetNotificationsCorner(_chosenCorner);
-			AuthSession::Current().notifications().settingsChanged().notify(ChangeType::Corner);
+			Auth().notifications().settingsChanged().notify(ChangeType::Corner);
 			Local::writeUserSettings();
 		}
 	}

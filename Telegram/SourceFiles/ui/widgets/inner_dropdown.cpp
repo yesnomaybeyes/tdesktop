@@ -78,6 +78,8 @@ void InnerDropdown::resizeToContent() {
 	}
 	if (newWidth != width() || newHeight != height()) {
 		resize(newWidth, newHeight);
+		update();
+		finishAnimating();
 	}
 }
 
@@ -109,7 +111,10 @@ void InnerDropdown::paintEvent(QPaintEvent *e) {
 	auto ms = getms();
 	if (_a_show.animating(ms)) {
 		if (auto opacity = _a_opacity.current(ms, _hiding ? 0. : 1.)) {
-			_showAnimation->paintFrame(p, 0, 0, width(), _a_show.current(1.), opacity);
+			// _a_opacity.current(ms)->opacityAnimationCallback()->_showAnimation.reset()
+			if (_showAnimation) {
+				_showAnimation->paintFrame(p, 0, 0, width(), _a_show.current(1.), opacity);
+			}
 		}
 	} else if (_a_opacity.animating(ms)) {
 		p.setOpacity(_a_opacity.current(0.));
@@ -129,30 +134,38 @@ void InnerDropdown::paintEvent(QPaintEvent *e) {
 }
 
 void InnerDropdown::enterEventHook(QEvent *e) {
-	showAnimated(_origin);
+	if (_autoHiding) {
+		showAnimated(_origin);
+	}
 	return TWidget::enterEventHook(e);
 }
 
 void InnerDropdown::leaveEventHook(QEvent *e) {
-	auto ms = getms();
-	if (_a_show.animating(ms) || _a_opacity.animating(ms)) {
-		hideAnimated();
-	} else {
-		_hideTimer.start(300);
+	if (_autoHiding) {
+		auto ms = getms();
+		if (_a_show.animating(ms) || _a_opacity.animating(ms)) {
+			hideAnimated();
+		} else {
+			_hideTimer.start(300);
+		}
 	}
 	return TWidget::leaveEventHook(e);
 }
 
 void InnerDropdown::otherEnter() {
-	showAnimated(_origin);
+	if (_autoHiding) {
+		showAnimated(_origin);
+	}
 }
 
 void InnerDropdown::otherLeave() {
-	auto ms = getms();
-	if (_a_show.animating(ms) || _a_opacity.animating(ms)) {
-		hideAnimated();
-	} else {
-		_hideTimer.start(0);
+	if (_autoHiding) {
+		auto ms = getms();
+		if (_a_show.animating(ms) || _a_opacity.animating(ms)) {
+			hideAnimated();
+		} else {
+			_hideTimer.start(0);
+		}
 	}
 }
 
@@ -162,6 +175,10 @@ void InnerDropdown::setOrigin(PanelAnimation::Origin origin) {
 
 void InnerDropdown::showAnimated(PanelAnimation::Origin origin) {
 	setOrigin(origin);
+	showAnimated();
+}
+
+void InnerDropdown::showAnimated() {
 	_hideTimer.stop();
 	showStarted();
 }
@@ -177,17 +194,43 @@ void InnerDropdown::hideAnimated(HideOption option) {
 	startOpacityAnimation(true);
 }
 
+void InnerDropdown::finishAnimating() {
+	if (_a_show.animating()) {
+		_a_show.finish();
+		showAnimationCallback();
+	}
+	if (_showAnimation) {
+		_showAnimation.reset();
+		showChildren();
+	}
+	if (_a_opacity.animating()) {
+		_a_opacity.finish();
+		opacityAnimationCallback();
+	}
+}
+
+void InnerDropdown::showFast() {
+	_hideTimer.stop();
+	finishAnimating();
+	if (isHidden()) {
+		showChildren();
+		show();
+	}
+	_hiding = false;
+}
+
 void InnerDropdown::hideFast() {
 	if (isHidden()) return;
 
 	_hideTimer.stop();
+	finishAnimating();
 	_hiding = false;
-	_a_opacity.finish();
 	hideFinished();
 }
 
 void InnerDropdown::hideFinished() {
 	_a_show.finish();
+	_showAnimation.reset();
 	_cache = QPixmap();
 	_ignoreShowEvents = false;
 	if (!isHidden()) {
@@ -204,7 +247,7 @@ void InnerDropdown::prepareCache() {
 	auto showAnimation = base::take(_a_show);
 	auto showAnimationData = base::take(_showAnimation);
 	showChildren();
-	_cache = myGrab(this);
+	_cache = GrabWidget(this);
 	_showAnimation = base::take(showAnimationData);
 	_a_show = base::take(showAnimation);
 	if (_a_show.animating()) {
@@ -254,7 +297,7 @@ void InnerDropdown::startShowAnimation() {
 		auto inner = rect().marginsRemoved(_st.padding);
 		_showAnimation->setFinalImage(std::move(cache), QRect(inner.topLeft() * cIntRetinaFactor(), inner.size() * cIntRetinaFactor()));
 		auto corners = App::cornersMask(ImageRoundRadius::Small);
-		_showAnimation->setCornerMasks(QImage(*corners[0]), QImage(*corners[1]), QImage(*corners[2]), QImage(*corners[3]));
+		_showAnimation->setCornerMasks(corners[0], corners[1], corners[2], corners[3]);
 		_showAnimation->start();
 	}
 	hideChildren();
@@ -262,7 +305,7 @@ void InnerDropdown::startShowAnimation() {
 }
 
 QImage InnerDropdown::grabForPanelAnimation() {
-	myEnsureResized(this);
+	SendPendingMoveResizeEvents(this);
 	auto result = QImage(size() * cIntRetinaFactor(), QImage::Format_ARGB32_Premultiplied);
 	result.setDevicePixelRatio(cRetinaFactor());
 	result.fill(Qt::transparent);
@@ -329,8 +372,10 @@ InnerDropdown::Container::Container(QWidget *parent, object_ptr<TWidget> child, 
 	_child->moveToLeft(_st.scrollPadding.left(), _st.scrollPadding.top());
 }
 
-void InnerDropdown::Container::setVisibleTopBottom(int visibleTop, int visibleBottom) {
-	_child->setVisibleTopBottom(visibleTop - _st.scrollPadding.top(), visibleBottom - _st.scrollPadding.top());
+void InnerDropdown::Container::visibleTopBottomUpdated(
+		int visibleTop,
+		int visibleBottom) {
+	setChildVisibleTopBottom(_child, visibleTop, visibleBottom);
 }
 
 void InnerDropdown::Container::resizeToContent() {

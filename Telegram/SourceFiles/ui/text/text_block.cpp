@@ -20,6 +20,8 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 */
 #include "ui/text/text_block.h"
 
+#include "core/crash_reports.h"
+
 // COPIED FROM qtextlayout.cpp AND MODIFIED
 namespace {
 
@@ -324,21 +326,15 @@ TextBlock::TextBlock(const style::font &font, const QString &str, QFixed minResi
 			}
 		}
 
-		QString part = str.mid(_from, length);
+		const auto part = str.mid(_from, length);
 
 		// Attempt to catch a crash in text processing
-		SignalHandlers::setCrashAnnotationRef("CrashString", &part);
+		CrashReports::SetAnnotationRef("CrashString", &part);
 
 		QStackTextEngine engine(part, blockFont->f);
-		QTextLayout layout(&engine);
-		layout.beginLayout();
-		layout.createLine();
-
 		BlockParser parser(&engine, this, minResizeWidth, _from, part);
 
-		layout.endLayout();
-
-		SignalHandlers::clearCrashAnnotationRef("CrashString");
+		CrashReports::ClearAnnotationRef("CrashString");
 	}
 }
 

@@ -20,12 +20,14 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 */
 #include "storage/file_download.h"
 
+#include "data/data_document.h"
 #include "mainwidget.h"
 #include "mainwindow.h"
 #include "messenger.h"
 #include "storage/localstorage.h"
 #include "platform/platform_file_utilities.h"
 #include "auth_session.h"
+#include "core/crash_reports.h"
 
 namespace Storage {
 
@@ -84,6 +86,7 @@ constexpr auto kDownloadPhotoPartSize = 64 * 1024; // 64kb for photo
 constexpr auto kDownloadDocumentPartSize = 128 * 1024; // 128kb for document
 constexpr auto kMaxFileQueries = 16; // max 16 file parts downloaded at the same time
 constexpr auto kMaxWebFileQueries = 8; // max 8 http[s] files downloaded at the same time
+constexpr auto kDownloadCdnPartSize = 128 * 1024; // 128kb for cdn requests
 
 } // namespace
 
@@ -113,14 +116,15 @@ WebLoadMainManager *_webLoadMainManager = nullptr;
 } // namespace
 
 FileLoader::FileLoader(const QString &toFile, int32 size, LocationType locationType, LoadToCacheSetting toCache, LoadFromCloudSetting fromCloud, bool autoLoading)
-: _downloader(&AuthSession::Current().downloader())
+: _downloader(&Auth().downloader())
 , _autoLoading(autoLoading)
-, _file(toFile)
-, _fname(toFile)
+, _filename(toFile)
+, _file(_filename)
 , _toCache(toCache)
 , _fromCloud(fromCloud)
 , _size(size)
 , _locationType(locationType) {
+	Expects(!_filename.isEmpty() || (_size <= Storage::kMaxFileInMemory));
 }
 
 QByteArray FileLoader::imageFormat(const QSize &shrinkBox) const {
@@ -161,11 +165,11 @@ int32 FileLoader::fullSize() const {
 }
 
 bool FileLoader::setFileName(const QString &fileName) {
-	if (_toCache != LoadToCacheAsWell || !_fname.isEmpty()) {
-		return fileName.isEmpty() || (fileName == _fname);
+	if (_toCache != LoadToCacheAsWell || !_filename.isEmpty()) {
+		return fileName.isEmpty() || (fileName == _filename);
 	}
-	_fname = fileName;
-	_file.setFileName(_fname);
+	_filename = fileName;
+	_file.setFileName(_filename);
 	return true;
 }
 
@@ -231,7 +235,7 @@ void FileLoader::localLoaded(const StorageImageSaved &result, const QByteArray &
 		_imagePixmap = imagePixmap;
 	}
 	_localStatus = LocalLoaded;
-	if (!_fname.isEmpty() && _toCache == LoadToCacheAsWell) {
+	if (!_filename.isEmpty() && _toCache == LoadToCacheAsWell) {
 		if (!_fileIsOpen) _fileIsOpen = _file.open(QIODevice::WriteOnly);
 		if (!_fileIsOpen) {
 			cancel(true);
@@ -267,7 +271,7 @@ void FileLoader::start(bool loadFirst, bool prior) {
 		return;
 	}
 
-	if (!_fname.isEmpty() && _toCache == LoadToFileOnly && !_fileIsOpen) {
+	if (!_filename.isEmpty() && _toCache == LoadToFileOnly && !_fileIsOpen) {
 		_fileIsOpen = _file.open(QIODevice::WriteOnly);
 		if (!_fileIsOpen) {
 			return cancel(true);
@@ -378,14 +382,16 @@ void FileLoader::cancel(bool fail) {
 		_file.remove();
 	}
 	_data = QByteArray();
-	_fname = QString();
-	_file.setFileName(_fname);
+	removeFromQueue();
 
 	if (fail) {
 		emit failed(this, started);
 	} else {
 		emit progress(this);
 	}
+
+	_filename = QString();
+	_file.setFileName(_filename);
 
 	loadNext();
 }
@@ -452,10 +458,19 @@ bool mtpFileLoader::loadPart() {
 }
 
 int mtpFileLoader::partSize() const {
-	if (_locationType == UnknownFileLocation) {
-		return kDownloadPhotoPartSize;
-	}
-	return kDownloadDocumentPartSize;
+	return kDownloadCdnPartSize;
+
+	// Different part sizes are not supported for now :(
+	// Because we start downloading with some part size
+	// and then we get a cdn-redirect where we support only
+	// fixed part size download for hash checking.
+	//
+	//if (_cdnDcId) {
+	//	return kDownloadCdnPartSize;
+	//} else if (_locationType == UnknownFileLocation) {
+	//	return kDownloadPhotoPartSize;
+	//}
+	//return kDownloadDocumentPartSize;
 }
 
 mtpFileLoader::RequestData mtpFileLoader::prepareRequest(int offset) const {
@@ -467,19 +482,21 @@ mtpFileLoader::RequestData mtpFileLoader::prepareRequest(int offset) const {
 }
 
 void mtpFileLoader::makeRequest(int offset) {
+	Expects(!_finished);
+
 	auto requestData = prepareRequest(offset);
 	auto send = [this, &requestData] {
 		auto offset = requestData.offset;
 		auto limit = partSize();
 		auto shiftedDcId = MTP::downloadDcId(requestData.dcId, requestData.dcIndex);
 		if (_cdnDcId) {
-			t_assert(requestData.dcId == _cdnDcId);
+			Assert(requestData.dcId == _cdnDcId);
 			return MTP::send(MTPupload_GetCdnFile(MTP_bytes(_cdnToken), MTP_int(offset), MTP_int(limit)), rpcDone(&mtpFileLoader::cdnPartLoaded), rpcFail(&mtpFileLoader::cdnPartFailed), shiftedDcId, 50);
 		} else if (_urlLocation) {
-			t_assert(requestData.dcId == _dcId);
+			Assert(requestData.dcId == _dcId);
 			return MTP::send(MTPupload_GetWebFile(MTP_inputWebFileLocation(MTP_bytes(_urlLocation->url()), MTP_long(_urlLocation->accessHash())), MTP_int(offset), MTP_int(limit)), rpcDone(&mtpFileLoader::webPartLoaded), rpcFail(&mtpFileLoader::partFailed), shiftedDcId, 50);
 		} else {
-			t_assert(requestData.dcId == _dcId);
+			Assert(requestData.dcId == _dcId);
 			auto location = [this] {
 				if (_location) {
 					return MTP_inputFileLocation(MTP_long(_location->volume()), MTP_int(_location->local()), MTP_long(_location->secret()));
@@ -492,7 +509,31 @@ void mtpFileLoader::makeRequest(int offset) {
 	placeSentRequest(send(), requestData);
 }
 
+void mtpFileLoader::requestMoreCdnFileHashes() {
+	Expects(!_finished);
+
+	if (_cdnHashesRequestId || _cdnUncheckedParts.empty()) {
+		return;
+	}
+
+	auto offset = _cdnUncheckedParts.cbegin()->first;
+	auto requestData = RequestData();
+	requestData.dcId = _dcId;
+	requestData.dcIndex = 0;
+	requestData.offset = offset;
+	auto shiftedDcId = MTP::downloadDcId(requestData.dcId, requestData.dcIndex);
+	auto requestId = _cdnHashesRequestId = MTP::send(
+		MTPupload_GetCdnFileHashes(
+			MTP_bytes(_cdnToken),
+			MTP_int(offset)),
+		rpcDone(&mtpFileLoader::getCdnFileHashesDone),
+		rpcFail(&mtpFileLoader::cdnPartFailed),
+		shiftedDcId);
+	placeSentRequest(requestId, requestData);
+}
+
 void mtpFileLoader::normalPartLoaded(const MTPupload_File &result, mtpRequestId requestId) {
+	Expects(!_finished);
 	Expects(result.type() == mtpc_upload_fileCdnRedirect || result.type() == mtpc_upload_file);
 
 	auto offset = finishSentRequestGetOffset(requestId);
@@ -519,6 +560,8 @@ void mtpFileLoader::webPartLoaded(const MTPupload_WebFile &result, mtpRequestId 
 }
 
 void mtpFileLoader::cdnPartLoaded(const MTPupload_CdnFile &result, mtpRequestId requestId) {
+	Expects(!_finished);
+
 	auto offset = finishSentRequestGetOffset(requestId);
 	if (result.type() == mtpc_upload_cdnFileReuploadNeeded) {
 		auto requestData = RequestData();
@@ -550,15 +593,97 @@ void mtpFileLoader::cdnPartLoaded(const MTPupload_CdnFile &result, mtpRequestId 
 	auto decryptInPlace = result.c_upload_cdnFile().vbytes.v;
 	MTP::aesCtrEncrypt(decryptInPlace.data(), decryptInPlace.size(), key.data(), &state);
 	auto bytes = gsl::as_bytes(gsl::make_span(decryptInPlace));
-	return partLoaded(offset, bytes);
+
+	switch (checkCdnFileHash(offset, bytes)) {
+	case CheckCdnHashResult::NoHash: {
+		_cdnUncheckedParts.emplace(offset, decryptInPlace);
+		requestMoreCdnFileHashes();
+	} return;
+
+	case CheckCdnHashResult::Invalid: {
+		LOG(("API Error: Wrong cdnFileHash for offset %1.").arg(offset));
+		cancel(true);
+	} return;
+
+	case CheckCdnHashResult::Good: return partLoaded(offset, bytes);
+	}
+	Unexpected("Result of checkCdnFileHash()");
 }
 
-void mtpFileLoader::reuploadDone(const MTPBool &result, mtpRequestId requestId) {
+mtpFileLoader::CheckCdnHashResult mtpFileLoader::checkCdnFileHash(int offset, base::const_byte_span bytes) {
+	auto cdnFileHashIt = _cdnFileHashes.find(offset);
+	if (cdnFileHashIt == _cdnFileHashes.cend()) {
+		return CheckCdnHashResult::NoHash;
+	}
+	auto realHash = hashSha256(bytes.data(), bytes.size());
+	if (base::compare_bytes(gsl::as_bytes(gsl::make_span(realHash)), gsl::as_bytes(gsl::make_span(cdnFileHashIt->second.hash)))) {
+		return CheckCdnHashResult::Invalid;
+	}
+	return CheckCdnHashResult::Good;
+}
+
+void mtpFileLoader::reuploadDone(const MTPVector<MTPCdnFileHash> &result, mtpRequestId requestId) {
 	auto offset = finishSentRequestGetOffset(requestId);
+	addCdnHashes(result.v);
 	makeRequest(offset);
 }
 
+void mtpFileLoader::getCdnFileHashesDone(const MTPVector<MTPCdnFileHash> &result, mtpRequestId requestId) {
+	Expects(!_finished);
+	Expects(_cdnHashesRequestId == requestId);
+
+	_cdnHashesRequestId = 0;
+
+	const auto offset = finishSentRequestGetOffset(requestId);
+	addCdnHashes(result.v);
+	auto someMoreChecked = false;
+	for (auto i = _cdnUncheckedParts.begin(); i != _cdnUncheckedParts.cend();) {
+		const auto uncheckedOffset = i->first;
+		const auto uncheckedBytes = gsl::as_bytes(gsl::make_span(i->second));
+
+		switch (checkCdnFileHash(uncheckedOffset, uncheckedBytes)) {
+		case CheckCdnHashResult::NoHash: {
+			++i;
+		} break;
+
+		case CheckCdnHashResult::Invalid: {
+			LOG(("API Error: Wrong cdnFileHash for offset %1.").arg(offset));
+			cancel(true);
+			return;
+		} break;
+
+		case CheckCdnHashResult::Good: {
+			someMoreChecked = true;
+			const auto goodOffset = uncheckedOffset;
+			const auto goodBytes = std::move(i->second);
+			const auto goodBytesSpan = gsl::make_span(goodBytes);
+			const auto weak = QPointer<mtpFileLoader>(this);
+			i = _cdnUncheckedParts.erase(i);
+			if (!feedPart(goodOffset, gsl::as_bytes(goodBytesSpan))
+				|| !weak) {
+				return;
+			} else if (_finished) {
+				emit progress(this);
+				loadNext();
+				return;
+			}
+		} break;
+
+		default: Unexpected("Result of checkCdnFileHash()");
+		}
+	}
+	if (someMoreChecked) {
+		emit progress(this);
+		loadNext();
+		return requestMoreCdnFileHashes();
+	}
+	LOG(("API Error: Could not find cdnFileHash for offset %1 after getCdnFileHashes request.").arg(offset));
+	cancel(true);
+}
+
 void mtpFileLoader::placeSentRequest(mtpRequestId requestId, const RequestData &requestData) {
+	Expects(!_finished);
+
 	_downloader->requestedAmountIncrement(requestData.dcId, requestData.dcIndex, partSize());
 	++_queue->queriesCount;
 	_sentRequests.emplace(requestId, requestData);
@@ -577,7 +702,9 @@ int mtpFileLoader::finishSentRequestGetOffset(mtpRequestId requestId) {
 	return requestData.offset;
 }
 
-void mtpFileLoader::partLoaded(int offset, base::const_byte_span bytes) {
+bool mtpFileLoader::feedPart(int offset, base::const_byte_span bytes) {
+	Expects(!_finished);
+
 	if (bytes.size()) {
 		if (_fileIsOpen) {
 			auto fsize = _file.size();
@@ -588,10 +715,21 @@ void mtpFileLoader::partLoaded(int offset, base::const_byte_span bytes) {
 			}
 			_file.seek(offset);
 			if (_file.write(reinterpret_cast<const char*>(bytes.data()), bytes.size()) != qint64(bytes.size())) {
-				return cancel(true);
+				cancel(true);
+				return false;
 			}
 		} else {
+			if (offset > 100 * 1024 * 1024) {
+				// Debugging weird out of memory crashes.
+				auto info = QString("offset: %1, size: %2, cancelled: %3, finished: %4, filename: '%5', tocache: %6, fromcloud: %7, data: %8, fullsize: %9").arg(offset).arg(bytes.size()).arg(Logs::b(_cancelled)).arg(Logs::b(_finished)).arg(_filename).arg(int(_toCache)).arg(int(_fromCloud)).arg(_data.size()).arg(_size);
+				info += QString(", locationtype: %1, inqueue: %2, localstatus: %3").arg(int(_locationType)).arg(Logs::b(_inQueue)).arg(int(_localStatus));
+				CrashReports::SetAnnotation("DebugInfo", info);
+			}
 			_data.reserve(offset + bytes.size());
+			if (offset > 100 * 1024 * 1024) {
+				CrashReports::ClearAnnotation("DebugInfo");
+			}
+
 			if (offset > _data.size()) {
 				_skippedBytes += offset - _data.size();
 				_data.resize(offset);
@@ -612,14 +750,16 @@ void mtpFileLoader::partLoaded(int offset, base::const_byte_span bytes) {
 	if (!bytes.size() || (bytes.size() % 1024)) { // bad next offset
 		_lastComplete = true;
 	}
-	if (_sentRequests.empty() && (_lastComplete || (_size && _nextRequestOffset >= _size))) {
-		if (!_fname.isEmpty() && (_toCache == LoadToCacheAsWell)) {
-			if (!_fileIsOpen) _fileIsOpen = _file.open(QIODevice::WriteOnly);
+	if (_sentRequests.empty()
+		&& _cdnUncheckedParts.empty()
+		&& (_lastComplete || (_size && _nextRequestOffset >= _size))) {
+		if (!_filename.isEmpty() && (_toCache == LoadToCacheAsWell)) {
 			if (!_fileIsOpen) {
-				return cancel(true);
+				_fileIsOpen = _file.open(QIODevice::WriteOnly);
 			}
-			if (_file.write(_data) != qint64(_data.size())) {
-				return cancel(true);
+			if (!_fileIsOpen || _file.write(_data) != qint64(_data.size())) {
+				cancel(true);
+				return false;
 			}
 		}
 		_finished = true;
@@ -635,8 +775,8 @@ void mtpFileLoader::partLoaded(int offset, base::const_byte_span bytes) {
 				Local::writeImage(storageKey(*_urlLocation), StorageImageSaved(_data));
 			} else if (_locationType != UnknownFileLocation) { // audio, video, document
 				auto mkey = mediaKey(_locationType, _dcId, _id, _version);
-				if (!_fname.isEmpty()) {
-					Local::writeFileLocation(mkey, FileLocation(_fname));
+				if (!_filename.isEmpty()) {
+					Local::writeFileLocation(mkey, FileLocation(_filename));
 				}
 				if (_toCache == LoadToCacheAsWell) {
 					if (_locationType == DocumentFileLocation) {
@@ -653,10 +793,14 @@ void mtpFileLoader::partLoaded(int offset, base::const_byte_span bytes) {
 	if (_finished) {
 		_downloader->taskFinished().notify();
 	}
+	return true;
+}
 
-	emit progress(this);
-
-	loadNext();
+void mtpFileLoader::partLoaded(int offset, base::const_byte_span bytes) {
+	if (feedPart(offset, bytes)) {
+		emit progress(this);
+		loadNext();
+	}
 }
 
 bool mtpFileLoader::partFailed(const RPCError &error) {
@@ -669,9 +813,12 @@ bool mtpFileLoader::partFailed(const RPCError &error) {
 bool mtpFileLoader::cdnPartFailed(const RPCError &error, mtpRequestId requestId) {
 	if (MTP::isDefaultHandledError(error)) return false;
 
+	if (requestId == _cdnHashesRequestId) {
+		_cdnHashesRequestId = 0;
+	}
 	if (error.type() == qstr("FILE_TOKEN_INVALID") || error.type() == qstr("REQUEST_TOKEN_INVALID")) {
 		auto offset = finishSentRequestGetOffset(requestId);
-		changeCDNParams(offset, 0, QByteArray(), QByteArray(), QByteArray());
+		changeCDNParams(offset, 0, QByteArray(), QByteArray(), QByteArray(), QVector<MTPCdnFileHash>());
 		return true;
 	}
 	return partFailed(error);
@@ -686,10 +833,18 @@ void mtpFileLoader::cancelRequests() {
 }
 
 void mtpFileLoader::switchToCDN(int offset, const MTPDupload_fileCdnRedirect &redirect) {
-	changeCDNParams(offset, redirect.vdc_id.v, redirect.vfile_token.v, redirect.vencryption_key.v, redirect.vencryption_iv.v);
+	changeCDNParams(offset, redirect.vdc_id.v, redirect.vfile_token.v, redirect.vencryption_key.v, redirect.vencryption_iv.v, redirect.vcdn_file_hashes.v);
 }
 
-void mtpFileLoader::changeCDNParams(int offset, MTP::DcId dcId, const QByteArray &token, const QByteArray &encryptionKey, const QByteArray &encryptionIV) {
+void mtpFileLoader::addCdnHashes(const QVector<MTPCdnFileHash> &hashes) {
+	for_const (auto &hash, hashes) {
+		Assert(hash.type() == mtpc_cdnFileHash);
+		auto &data = hash.c_cdnFileHash();
+		_cdnFileHashes.emplace(data.voffset.v, CdnFileHash { data.vlimit.v, data.vhash.v });
+	}
+}
+
+void mtpFileLoader::changeCDNParams(int offset, MTP::DcId dcId, const QByteArray &token, const QByteArray &encryptionKey, const QByteArray &encryptionIV, const QVector<MTPCdnFileHash> &hashes) {
 	if (dcId != 0 && (encryptionKey.size() != MTP::CTRState::KeySize || encryptionIV.size() != MTP::CTRState::IvecSize)) {
 		LOG(("Message Error: Wrong key (%1) / iv (%2) size in CDN params").arg(encryptionKey.size()).arg(encryptionIV.size()));
 		cancel(true);
@@ -704,6 +859,7 @@ void mtpFileLoader::changeCDNParams(int offset, MTP::DcId dcId, const QByteArray
 	_cdnToken = token;
 	_cdnEncryptionKey = encryptionKey;
 	_cdnEncryptionIV = encryptionIV;
+	addCdnHashes(hashes);
 
 	if (resendAllRequests && !_sentRequests.empty()) {
 		auto resendOffsets = std::vector<int>();
@@ -715,7 +871,7 @@ void mtpFileLoader::changeCDNParams(int offset, MTP::DcId dcId, const QByteArray
 			resendOffsets.push_back(resendOffset);
 		}
 		for (auto resendOffset : resendOffsets) {
-			makeRequest(offset);
+			makeRequest(resendOffset);
 		}
 	}
 	makeRequest(offset);
@@ -803,7 +959,7 @@ void webFileLoader::onFinished(const QByteArray &data) {
 	} else {
 		_data = data;
 	}
-	if (!_fname.isEmpty() && (_toCache == LoadToCacheAsWell)) {
+	if (!_filename.isEmpty() && (_toCache == LoadToCacheAsWell)) {
 		if (!_fileIsOpen) _fileIsOpen = _file.open(QIODevice::WriteOnly);
 		if (!_fileIsOpen) {
 			return cancel(true);
@@ -1004,7 +1160,7 @@ bool WebLoadManager::handleReplyResult(webFileLoaderPrivate *loader, WebReplyPro
 	}
 
 	if (result == WebReplyProcessProgress) {
-		if (loader->size() > AnimationInMemory) {
+		if (loader->size() > Storage::kMaxFileInMemory) {
 			LOG(("API Error: too large file is loaded to cache: %1").arg(loader->size()));
 			result = WebReplyProcessError;
 		}

@@ -33,7 +33,7 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 
 class LanguageBox::Inner : public TWidget, private base::Subscriber {
 public:
-	Inner(QWidget *parent, gsl::not_null<Languages*> languages);
+	Inner(QWidget *parent, not_null<Languages*> languages);
 
 	void setSelected(int index);
 	void refresh();
@@ -42,18 +42,19 @@ private:
 	void activateCurrent();
 	void languageChanged(int languageIndex);
 
-	gsl::not_null<Languages*> _languages;
+	not_null<Languages*> _languages;
 	std::shared_ptr<Ui::RadiobuttonGroup> _group;
 	std::vector<object_ptr<Ui::Radiobutton>> _buttons;
 
 };
 
-LanguageBox::Inner::Inner(QWidget *parent, gsl::not_null<Languages*> languages) : TWidget(parent)
+LanguageBox::Inner::Inner(QWidget *parent, not_null<Languages*> languages) : TWidget(parent)
 , _languages(languages) {
 	_group = std::make_shared<Ui::RadiobuttonGroup>(0);
 	_group->setChangedCallback([this](int value) { languageChanged(value); });
 	subscribe(Lang::Current().updated(), [this] {
 		activateCurrent();
+		refresh();
 	});
 }
 
@@ -67,17 +68,17 @@ void LanguageBox::Inner::refresh() {
 	}
 	_buttons.clear();
 
-	auto y = st::boxOptionListPadding.top();
+	auto y = st::boxOptionListPadding.top() + st::langsButton.margin.top();
 	_buttons.reserve(_languages->size());
 	auto index = 0;
 	for_const (auto &language, *_languages) {
 		_buttons.emplace_back(this, _group, index++, language.nativeName, st::langsButton);
 		auto button = _buttons.back().data();
-		button->moveToLeft(st::boxPadding.left() + st::boxOptionListPadding.left(), y + st::langsButton.margin.top());
+		button->moveToLeft(st::boxPadding.left() + st::boxOptionListPadding.left(), y);
 		button->show();
 		y += button->heightNoMargins() + st::boxOptionListSkip;
 	}
-	auto newHeight = y + st::boxOptionListPadding.bottom() + st::boxPadding.bottom();
+	auto newHeight = y - st::boxOptionListSkip + st::boxOptionListPadding.bottom() + st::langsButton.margin.bottom();
 	resize(st::langsWidth, newHeight);
 }
 
@@ -96,12 +97,13 @@ void LanguageBox::Inner::languageChanged(int languageIndex) {
 void LanguageBox::Inner::activateCurrent() {
 	auto currentId = Lang::Current().id();
 	for (auto i = 0, count = _languages->size(); i != count; ++i) {
-		if ((*_languages)[i].id == currentId) {
+		auto languageId = (*_languages)[i].id;
+		auto isCurrent = (languageId == currentId) || (languageId == Lang::DefaultLanguageId() && currentId.isEmpty());
+		if (isCurrent) {
 			_group->setValue(i);
 			return;
 		}
 	}
-	refresh();
 }
 
 void LanguageBox::prepare() {
@@ -131,8 +133,7 @@ void LanguageBox::refresh() {
 	refreshLanguages();
 
 	_inner->refresh();
-	auto maxHeight = st::boxOptionListPadding.top() + _languages.size() * (st::langsButton.height + st::boxOptionListSkip) + st::boxOptionListPadding.bottom() + st::boxPadding.bottom();
-	setDimensions(st::langsWidth, qMin(maxHeight, st::boxMaxListHeight));
+	setDimensions(st::langsWidth, qMin(_inner->height(), st::boxMaxListHeight));
 }
 
 void LanguageBox::refreshLanguages() {

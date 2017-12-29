@@ -20,6 +20,8 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 */
 #include "boxes/connection_box.h"
 
+#include "data/data_photo.h"
+#include "data/data_document.h"
 #include "boxes/confirm_box.h"
 #include "lang/lang_keys.h"
 #include "storage/localstorage.h"
@@ -51,7 +53,7 @@ void ConnectionBox::ShowApplyProxyConfirmation(const QMap<QString, QString> &fie
 			reinitLocationManager();
 			reinitWebLoadManager();
 			if (*weakBox) (*weakBox)->closeBox();
-		}), KeepOtherLayers);
+		}), LayerOption::KeepOther);
 		*weakBox = box;
 	}
 }
@@ -93,7 +95,7 @@ bool ConnectionBox::badProxyValue() const {
 }
 
 void ConnectionBox::updateControlsVisibility() {
-	auto newHeight = st::boxOptionListPadding.top() + _autoRadio->heightNoMargins() + st::boxOptionListSkip + _httpProxyRadio->heightNoMargins() + st::boxOptionListSkip + _tcpProxyRadio->heightNoMargins() + st::boxOptionListSkip + st::connectionIPv6Skip + _tryIPv6->heightNoMargins() + st::boxOptionListPadding.bottom() + st::boxPadding.bottom();
+	auto newHeight = st::boxOptionListPadding.top() + _autoRadio->heightNoMargins() + st::boxOptionListSkip + _httpProxyRadio->heightNoMargins() + st::boxOptionListSkip + _tcpProxyRadio->heightNoMargins() + st::boxOptionListSkip + st::connectionIPv6Skip + _tryIPv6->heightNoMargins() + st::defaultCheckbox.margin.bottom() + st::boxOptionListPadding.bottom() + st::boxPadding.bottom();
 	if (_typeGroup->value() == dbictAuto && badProxyValue()) {
 		_hostInput->hide();
 		_portInput->hide();
@@ -127,7 +129,7 @@ void ConnectionBox::resizeEvent(QResizeEvent *e) {
 
 void ConnectionBox::updateControlsPosition() {
 	auto type = _typeGroup->value();
-	_autoRadio->moveToLeft(st::boxPadding.left() + st::boxOptionListPadding.left(), st::boxOptionListPadding.top());
+	_autoRadio->moveToLeft(st::boxPadding.left() + st::boxOptionListPadding.left(), _autoRadio->getMargins().top() + st::boxOptionListPadding.top());
 	_httpProxyRadio->moveToLeft(st::boxPadding.left() + st::boxOptionListPadding.left(), _autoRadio->bottomNoMargins() + st::boxOptionListSkip);
 
 	auto inputy = 0;
@@ -145,9 +147,9 @@ void ConnectionBox::updateControlsPosition() {
 	}
 
 	if (inputy) {
-		_hostInput->moveToLeft(st::boxPadding.left() + st::boxOptionListPadding.left() + st::defaultBoxCheckbox.textPosition.x() - st::defaultInputField.textMargins.left(), inputy);
+		_hostInput->moveToLeft(st::boxPadding.left() + st::boxOptionListPadding.left() + st::defaultCheck.diameter + st::defaultBoxCheckbox.textPosition.x() - st::defaultInputField.textMargins.left(), inputy);
 		_portInput->moveToRight(st::boxPadding.right(), inputy);
-		_userInput->moveToLeft(st::boxPadding.left() + st::boxOptionListPadding.left() + st::defaultBoxCheckbox.textPosition.x() - st::defaultInputField.textMargins.left(), _hostInput->y() + _hostInput->height() + st::boxOptionInputSkip);
+		_userInput->moveToLeft(st::boxPadding.left() + st::boxOptionListPadding.left() + st::defaultCheck.diameter + st::defaultBoxCheckbox.textPosition.x() - st::defaultInputField.textMargins.left(), _hostInput->y() + _hostInput->height() + st::boxOptionInputSkip);
 		_passwordInput->moveToRight(st::boxPadding.right(), _userInput->y());
 	}
 
@@ -167,7 +169,7 @@ void ConnectionBox::typeChanged(DBIConnectionType type) {
 		}
 		if ((type == dbictHttpProxy) && !_portInput->getLastText().toInt()) {
 			_portInput->setText(qsl("80"));
-			_portInput->finishAnimations();
+			_portInput->finishAnimating();
 		}
 	}
 	update();
@@ -264,7 +266,7 @@ AutoDownloadBox::AutoDownloadBox(QWidget *parent)
 , _gifPrivate(this, lang(lng_media_auto_private_chats), !(cAutoDownloadGif() & dbiadNoPrivate), st::defaultBoxCheckbox)
 , _gifGroups(this, lang(lng_media_auto_groups), !(cAutoDownloadGif() & dbiadNoGroups), st::defaultBoxCheckbox)
 , _gifPlay(this, lang(lng_media_auto_play), cAutoPlayGif(), st::defaultBoxCheckbox)
-, _sectionHeight(st::boxTitleHeight + 2 * (st::defaultBoxCheckbox.height + st::setLittleSkip)) {
+, _sectionHeight(st::boxTitleHeight + 2 * (st::defaultCheck.diameter + st::setLittleSkip)) {
 }
 
 void AutoDownloadBox::prepare() {
@@ -323,7 +325,7 @@ void AutoDownloadBox::onSave() {
 		cSetAutoDownloadAudio(autoDownloadAudio);
 		if (enabledPrivate || enabledGroups) {
 			for (auto document : App::documentsData()) {
-				if (document->voice()) {
+				if (document->isVoiceMessage()) {
 					document->automaticLoadSettingsChanged();
 				}
 			}

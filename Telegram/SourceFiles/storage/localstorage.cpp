@@ -22,7 +22,9 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 
 #include "storage/serialize_document.h"
 #include "storage/serialize_common.h"
+#include "chat_helpers/stickers.h"
 #include "data/data_drafts.h"
+#include "boxes/send_files_box.h"
 #include "window/themes/window_theme.h"
 #include "observer_peer.h"
 #include "mainwidget.h"
@@ -36,18 +38,20 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 #include "apiwrap.h"
 #include "auth_session.h"
 #include "window/window_controller.h"
+#include "base/flags.h"
 
 #include <openssl/evp.h>
 
 namespace Local {
 namespace {
 
-constexpr int kThemeFileSizeLimit = 5 * 1024 * 1024;
+constexpr auto kThemeFileSizeLimit = 5 * 1024 * 1024;
+constexpr auto kFileLoaderQueueStopTimeout = TimeMs(5000);
 
 using FileKey = quint64;
 
 constexpr char tdfMagic[] = { 'T', 'D', 'F', '$' };
-constexpr int tdfMagicLen = sizeof(tdfMagic);
+constexpr auto tdfMagicLen = int(sizeof(tdfMagic));
 
 QString toFilePart(FileKey val) {
 	QString result;
@@ -75,11 +79,11 @@ bool _userWorking() {
 }
 
 enum class FileOption {
-	User = 0x01,
-	Safe = 0x02,
+	User = (1 << 0),
+	Safe = (1 << 1),
 };
-Q_DECLARE_FLAGS(FileOptions, FileOption);
-Q_DECLARE_OPERATORS_FOR_FLAGS(FileOptions);
+using FileOptions = base::flags<FileOption>;
+inline constexpr auto is_flag_type(FileOption) { return true; };
 
 bool keyAlreadyUsed(QString &name, FileOptions options = FileOption::User | FileOption::Safe) {
 	name += '0';
@@ -163,9 +167,7 @@ void createLocalKey(const QByteArray &pass, QByteArray *salt, MTP::AuthKeyPtr *r
 }
 
 struct FileReadDescriptor {
-	FileReadDescriptor() : version(0) {
-	}
-	int32 version;
+	int32 version = 0;
 	QByteArray data;
 	QBuffer buffer;
 	QDataStream stream;
@@ -504,6 +506,7 @@ enum { // Local Storage Keys
 	lskSavedGifs = 0x0f, // no data
 	lskStickersKeys = 0x10, // no data
 	lskTrustedBots = 0x11, // no data
+	lskFavedStickers = 0x12, // no data
 };
 
 enum {
@@ -569,7 +572,7 @@ enum {
 	dbiNotificationsCount  = 0x45,
 	dbiNotificationsCorner = 0x46,
 	dbiThemeKey = 0x47,
-	dbiDialogsWidthRatio = 0x48,
+	dbiDialogsWidthRatioOld = 0x48,
 	dbiUseExternalVideoPlayer = 0x49,
 	dbiDcOptions = 0x4a,
 	dbiMtpAuthorization = 0x4b,
@@ -577,6 +580,7 @@ enum {
 	dbiAuthSessionData = 0x4d,
 	dbiLangPackKey = 0x4e,
 	dbiConnectionType = 0x4f,
+	dbiStickersFavedLimit = 0x50,
 
 	dbiEncryptedWithSalt = 333,
 	dbiEncrypted = 444,
@@ -611,7 +615,7 @@ TrustedBots _trustedBots;
 bool _trustedBotsRead = false;
 
 FileKey _recentStickersKeyOld = 0;
-FileKey _installedStickersKey = 0, _featuredStickersKey = 0, _recentStickersKey = 0, _archivedStickersKey = 0;
+FileKey _installedStickersKey = 0, _featuredStickersKey = 0, _recentStickersKey = 0, _favedStickersKey = 0, _archivedStickersKey = 0;
 FileKey _savedGifsKey = 0;
 
 FileKey _backgroundKey = 0;
@@ -632,7 +636,7 @@ FileKey _langPackKey = 0;
 
 typedef QMap<StorageKey, FileDesc> StorageMap;
 StorageMap _imagesMap, _stickerImagesMap, _audiosMap;
-int32 _storageImagesSize = 0, _storageStickersSize = 0, _storageAudiosSize = 0;
+qint64 _storageImagesSize = 0, _storageStickersSize = 0, _storageAudiosSize = 0;
 
 bool _mapChanged = false;
 int32 _oldMapVersion = 0, _oldSettingsVersion = 0;
@@ -643,10 +647,10 @@ enum class WriteMapWhen {
 	Soon,
 };
 
-std::unique_ptr<StoredAuthSession> StoredAuthSessionCache;
-StoredAuthSession &GetStoredAuthSessionCache() {
+std::unique_ptr<AuthSessionData> StoredAuthSessionCache;
+AuthSessionData &GetStoredAuthSessionCache() {
 	if (!StoredAuthSessionCache) {
-		StoredAuthSessionCache = std::make_unique<StoredAuthSession>();
+		StoredAuthSessionCache = std::make_unique<AuthSessionData>();
 	}
 	return *StoredAuthSessionCache;
 }
@@ -885,7 +889,7 @@ bool _readSetting(quint32 blockId, QDataStream &stream, int version, ReadSetting
 		stream >> dcIdWithShift >> flags >> ip >> port;
 		if (!_checkStreamStatus(stream)) return false;
 
-		context.dcOptions.constructAddOne(dcIdWithShift, MTPDdcOption::Flags(flags), ip.toStdString(), port);
+		context.dcOptions.constructAddOne(dcIdWithShift, MTPDdcOption::Flags::from_raw(flags), ip.toStdString(), port);
 	} break;
 
 	case dbiDcOptions: {
@@ -918,6 +922,14 @@ bool _readSetting(quint32 blockId, QDataStream &stream, int version, ReadSetting
 		if (!_checkStreamStatus(stream)) return false;
 
 		Global::SetStickersRecentLimit(limit);
+	} break;
+
+	case dbiStickersFavedLimit: {
+		qint32 limit;
+		stream >> limit;
+		if (!_checkStreamStatus(stream)) return false;
+
+		Global::SetStickersFavedLimit(limit);
 	} break;
 
 	case dbiMegagroupSizeMax: {
@@ -1091,12 +1103,12 @@ bool _readSetting(quint32 blockId, QDataStream &stream, int version, ReadSetting
 		Global::SetNotificationsCorner(static_cast<Notify::ScreenCorner>((v >= 0 && v < 4) ? v : 2));
 	} break;
 
-	case dbiDialogsWidthRatio: {
+	case dbiDialogsWidthRatioOld: {
 		qint32 v;
 		stream >> v;
 		if (!_checkStreamStatus(stream)) return false;
 
-		GetStoredAuthSessionCache().dialogsWidthRatio = v / 1000000.;
+		GetStoredAuthSessionCache().setDialogsWidthRatio(v / 1000000.);
 	} break;
 
 	case dbiLastSeenWarningSeenOld: {
@@ -1104,7 +1116,7 @@ bool _readSetting(quint32 blockId, QDataStream &stream, int version, ReadSetting
 		stream >> v;
 		if (!_checkStreamStatus(stream)) return false;
 
-		GetStoredAuthSessionCache().data.setLastSeenWarningSeen(v == 1);
+		GetStoredAuthSessionCache().setLastSeenWarningSeen(v == 1);
 	} break;
 
 	case dbiAuthSessionData: {
@@ -1112,7 +1124,7 @@ bool _readSetting(quint32 blockId, QDataStream &stream, int version, ReadSetting
 		stream >> v;
 		if (!_checkStreamStatus(stream)) return false;
 
-		GetStoredAuthSessionCache().data.constructFromSerialized(v);
+		GetStoredAuthSessionCache().constructFromSerialized(v);
 	} break;
 
 	case dbiWorkMode: {
@@ -1270,11 +1282,13 @@ bool _readSetting(quint32 blockId, QDataStream &stream, int version, ReadSetting
 	} break;
 
 	case dbiWindowPosition: {
-		TWindowPos pos;
-		stream >> pos.x >> pos.y >> pos.w >> pos.h >> pos.moncrc >> pos.maximized;
+		auto position = TWindowPos();
+		stream >> position.x >> position.y >> position.w >> position.h;
+		stream >> position.moncrc >> position.maximized;
 		if (!_checkStreamStatus(stream)) return false;
 
-		cSetWindowPos(pos);
+		DEBUG_LOG(("Window Pos: Read from storage %1, %2, %3, %4 (maximized %5)").arg(position.x).arg(position.y).arg(position.w).arg(position.h).arg(Logs::b(position.maximized)));
+		cSetWindowPos(position);
 	} break;
 
 	case dbiLoggedPhoneNumber: {
@@ -1409,7 +1423,9 @@ bool _readSetting(quint32 blockId, QDataStream &stream, int version, ReadSetting
 		stream >> v;
 		if (!_checkStreamStatus(stream)) return false;
 
-		cSetCompressPastedImage(v == 1);
+		GetStoredAuthSessionCache().setSendFilesWay((v == 1)
+			? SendFilesWay::Album
+			: SendFilesWay::Files);
 	} break;
 
 	case dbiEmojiTabOld: {
@@ -1753,18 +1769,8 @@ void _writeUserSettings() {
 			recentEmojiPreloadData.push_back(qMakePair(item.first->id(), item.second));
 		}
 	}
-	auto userDataInstance = StoredAuthSessionCache ? &StoredAuthSessionCache->data : Messenger::Instance().getAuthSessionData();
+	auto userDataInstance = StoredAuthSessionCache ? StoredAuthSessionCache.get() : Messenger::Instance().getAuthSessionData();
 	auto userData = userDataInstance ? userDataInstance->serialize() : QByteArray();
-	auto dialogsWidthRatio = [] {
-		if (StoredAuthSessionCache) {
-			return StoredAuthSessionCache->dialogsWidthRatio;
-		} else if (auto window = App::wnd()) {
-			if (auto controller = window->controller()) {
-				return controller->dialogsWidthRatio().value();
-			}
-		}
-		return Window::Controller::kDefaultDialogsWidthRatio;
-	};
 
 	uint32 size = 21 * (sizeof(quint32) + sizeof(qint32));
 	size += sizeof(quint32) + Serialize::stringSize(Global::AskDownloadPath() ? QString() : Global::DownloadPath()) + Serialize::bytearraySize(Global::AskDownloadPath() ? QByteArray() : Global::DownloadPathBookmark());
@@ -1775,7 +1781,7 @@ void _writeUserSettings() {
 	}
 
 	size += sizeof(quint32) + sizeof(qint32) + cEmojiVariants().size() * (sizeof(uint32) + sizeof(uint64));
-	size += sizeof(quint32) + sizeof(qint32) + (cRecentStickersPreload().isEmpty() ? cGetRecentStickers().size() : cRecentStickersPreload().size()) * (sizeof(uint64) + sizeof(ushort));
+	size += sizeof(quint32) + sizeof(qint32) + (Stickers::GetRecentPack().isEmpty() ? Stickers::GetRecentPack().size() : cRecentStickersPreload().size()) * (sizeof(uint64) + sizeof(ushort));
 	size += sizeof(quint32) + Serialize::stringSize(cDialogLastPath());
 	size += sizeof(quint32) + 3 * sizeof(qint32);
 	size += sizeof(quint32) + 2 * sizeof(qint32);
@@ -1801,7 +1807,6 @@ void _writeUserSettings() {
 	data.stream << quint32(dbiNotificationsCorner) << qint32(Global::NotificationsCorner());
 	data.stream << quint32(dbiAskDownloadPath) << qint32(Global::AskDownloadPath());
 	data.stream << quint32(dbiDownloadPath) << (Global::AskDownloadPath() ? QString() : Global::DownloadPath()) << (Global::AskDownloadPath() ? QByteArray() : Global::DownloadPathBookmark());
-	data.stream << quint32(dbiCompressPastedImage) << qint32(cCompressPastedImage());
 	data.stream << quint32(dbiDialogLastPath) << cDialogLastPath();
 	data.stream << quint32(dbiSongVolume) << qint32(qRound(Global::SongVolume() * 1e6));
 	data.stream << quint32(dbiVideoVolume) << qint32(qRound(Global::VideoVolume() * 1e6));
@@ -1809,7 +1814,6 @@ void _writeUserSettings() {
 	data.stream << quint32(dbiDialogsMode) << qint32(Global::DialogsModeEnabled() ? 1 : 0) << static_cast<qint32>(Global::DialogsMode());
 	data.stream << quint32(dbiModerateMode) << qint32(Global::ModerateModeEnabled() ? 1 : 0);
 	data.stream << quint32(dbiAutoPlay) << qint32(cAutoPlayGif() ? 1 : 0);
-	data.stream << quint32(dbiDialogsWidthRatio) << qint32(snap(qRound(dialogsWidthRatio() * 1000000), 0, 1000000));
 	data.stream << quint32(dbiUseExternalVideoPlayer) << qint32(cUseExternalVideoPlayer());
 	if (!userData.isEmpty()) {
 		data.stream << quint32(dbiAuthSessionData) << userData;
@@ -1820,11 +1824,11 @@ void _writeUserSettings() {
 	}
 	data.stream << quint32(dbiEmojiVariants) << cEmojiVariants();
 	{
-		RecentStickerPreload v(cRecentStickersPreload());
+		auto v = cRecentStickersPreload();
 		if (v.isEmpty()) {
-			v.reserve(cGetRecentStickers().size());
-			for (RecentStickerPack::const_iterator i = cGetRecentStickers().cbegin(), e = cGetRecentStickers().cend(); i != e; ++i) {
-				v.push_back(qMakePair(i->first->id, i->second));
+			v.reserve(Stickers::GetRecentPack().size());
+			for_const (auto &pair, Stickers::GetRecentPack()) {
+				v.push_back(qMakePair(pair.first->id, pair.second));
 			}
 		}
 		data.stream << quint32(dbiRecentStickers) << v;
@@ -1967,7 +1971,7 @@ ReadMapState _readMap(const QByteArray &pass) {
 	qint64 storageImagesSize = 0, storageStickersSize = 0, storageAudiosSize = 0;
 	quint64 locationsKey = 0, reportSpamStatusesKey = 0, trustedBotsKey = 0;
 	quint64 recentStickersKeyOld = 0;
-	quint64 installedStickersKey = 0, featuredStickersKey = 0, recentStickersKey = 0, archivedStickersKey = 0;
+	quint64 installedStickersKey = 0, featuredStickersKey = 0, recentStickersKey = 0, favedStickersKey = 0, archivedStickersKey = 0;
 	quint64 savedGifsKey = 0;
 	quint64 backgroundKey = 0, userSettingsKey = 0, recentHashtagsAndBotsKey = 0, savedPeersKey = 0;
 	while (!map.stream.atEnd()) {
@@ -2058,6 +2062,9 @@ ReadMapState _readMap(const QByteArray &pass) {
 		case lskStickersKeys: {
 			map.stream >> installedStickersKey >> featuredStickersKey >> recentStickersKey >> archivedStickersKey;
 		} break;
+		case lskFavedStickers: {
+			map.stream >> favedStickersKey;
+		} break;
 		case lskSavedGifsOld: {
 			quint64 key;
 			map.stream >> key;
@@ -2095,6 +2102,7 @@ ReadMapState _readMap(const QByteArray &pass) {
 	_installedStickersKey = installedStickersKey;
 	_featuredStickersKey = featuredStickersKey;
 	_recentStickersKey = recentStickersKey;
+	_favedStickersKey = favedStickersKey;
 	_archivedStickersKey = archivedStickersKey;
 	_savedGifsKey = savedGifsKey;
 	_savedPeersKey = savedPeersKey;
@@ -2173,6 +2181,7 @@ void _writeMap(WriteMapWhen when) {
 	if (_installedStickersKey || _featuredStickersKey || _recentStickersKey || _archivedStickersKey) {
 		mapSize += sizeof(quint32) + 4 * sizeof(quint64);
 	}
+	if (_favedStickersKey) mapSize += sizeof(quint32) + sizeof(quint64);
 	if (_savedGifsKey) mapSize += sizeof(quint32) + sizeof(quint64);
 	if (_savedPeersKey) mapSize += sizeof(quint32) + sizeof(quint64);
 	if (_backgroundKey) mapSize += sizeof(quint32) + sizeof(quint64);
@@ -2225,6 +2234,9 @@ void _writeMap(WriteMapWhen when) {
 		mapData.stream << quint32(lskStickersKeys);
 		mapData.stream << quint64(_installedStickersKey) << quint64(_featuredStickersKey) << quint64(_recentStickersKey) << quint64(_archivedStickersKey);
 	}
+	if (_favedStickersKey) {
+		mapData.stream << quint32(lskFavedStickers) << quint64(_favedStickersKey);
+	}
 	if (_savedGifsKey) {
 		mapData.stream << quint32(lskSavedGifs) << quint64(_savedGifsKey);
 	}
@@ -2264,7 +2276,7 @@ void start() {
 	Expects(!_manager);
 
 	_manager = new internal::Manager();
-	_localLoader = new TaskQueue(0, FileLoaderQueueStopTimeout);
+	_localLoader = new TaskQueue(kFileLoaderQueueStopTimeout);
 
 	_basePath = cWorkingDir() + qsl("tdata/");
 	if (!QDir().exists(_basePath)) QDir().mkpath(_basePath);
@@ -2352,13 +2364,14 @@ void writeSettings() {
 	if (_langPackKey) {
 		size += sizeof(quint32) + sizeof(quint64);
 	}
-	size += sizeof(quint32) + sizeof(qint32) * 7;
+	size += sizeof(quint32) + sizeof(qint32) * 8;
 
 	EncryptedDescriptor data(size);
 	data.stream << quint32(dbiChatSizeMax) << qint32(Global::ChatSizeMax());
 	data.stream << quint32(dbiMegagroupSizeMax) << qint32(Global::MegagroupSizeMax());
 	data.stream << quint32(dbiSavedGifsLimit) << qint32(Global::SavedGifsLimit());
 	data.stream << quint32(dbiStickersRecentLimit) << qint32(Global::StickersRecentLimit());
+	data.stream << quint32(dbiStickersFavedLimit) << qint32(Global::StickersFavedLimit());
 	data.stream << quint32(dbiAutoStart) << qint32(cAutoStart());
 	data.stream << quint32(dbiStartMinimized) << qint32(cStartMinimized());
 	data.stream << quint32(dbiSendToMenu) << qint32(cSendToMenu());
@@ -2380,8 +2393,11 @@ void writeSettings() {
 		data.stream << quint32(dbiLangPackKey) << quint64(_langPackKey);
 	}
 
-	TWindowPos pos(cWindowPos());
-	data.stream << quint32(dbiWindowPosition) << qint32(pos.x) << qint32(pos.y) << qint32(pos.w) << qint32(pos.h) << qint32(pos.moncrc) << qint32(pos.maximized);
+	auto position = cWindowPos();
+	data.stream << quint32(dbiWindowPosition) << qint32(position.x) << qint32(position.y) << qint32(position.w) << qint32(position.h);
+	data.stream << qint32(position.moncrc) << qint32(position.maximized);
+
+	DEBUG_LOG(("Window Pos: Writing to storage %1, %2, %3, %4 (maximized %5)").arg(position.x).arg(position.y).arg(position.w).arg(position.h).arg(Logs::b(position.maximized)));
 
 	settings.writeEncrypted(data, SettingsKey);
 }
@@ -2414,7 +2430,7 @@ void reset() {
 	_storageWebFilesSize = 0;
 	_locationsKey = _reportSpamStatusesKey = _trustedBotsKey = 0;
 	_recentStickersKeyOld = 0;
-	_installedStickersKey = _featuredStickersKey = _recentStickersKey = _archivedStickersKey = 0;
+	_installedStickersKey = _featuredStickersKey = _recentStickersKey = _favedStickersKey = _archivedStickersKey = 0;
 	_savedGifsKey = 0;
 	_backgroundKey = _userSettingsKey = _recentHashtagsAndBotsKey = _savedPeersKey = 0;
 	_oldMapVersion = _oldSettingsVersion = 0;
@@ -2839,7 +2855,8 @@ TaskId startImageLoad(const StorageKey &location, mtpFileLoader *loader) {
 	if (j == _imagesMap.cend() || !_localLoader) {
 		return 0;
 	}
-	return _localLoader->addTask(MakeShared<ImageLoadTask>(j->first, location, loader));
+	return _localLoader->addTask(
+		std::make_unique<ImageLoadTask>(j->first, location, loader));
 }
 
 int32 hasImages() {
@@ -2897,7 +2914,8 @@ TaskId startStickerImageLoad(const StorageKey &location, mtpFileLoader *loader) 
 	if (j == _stickerImagesMap.cend() || !_localLoader) {
 		return 0;
 	}
-	return _localLoader->addTask(MakeShared<StickerImageLoadTask>(j->first, location, loader));
+	return _localLoader->addTask(
+		std::make_unique<StickerImageLoadTask>(j->first, location, loader));
 }
 
 bool willStickerImageLoad(const StorageKey &location) {
@@ -2970,7 +2988,8 @@ TaskId startAudioLoad(const StorageKey &location, mtpFileLoader *loader) {
 	if (j == _audiosMap.cend() || !_localLoader) {
 		return 0;
 	}
-	return _localLoader->addTask(MakeShared<AudioLoadTask>(j->first, location, loader));
+	return _localLoader->addTask(
+		std::make_unique<AudioLoadTask>(j->first, location, loader));
 }
 
 bool copyAudio(const StorageKey &oldLocation, const StorageKey &newLocation) {
@@ -3086,7 +3105,8 @@ TaskId startWebFileLoad(const QString &url, webFileLoader *loader) {
 	if (j == _webFilesMap.cend() || !_localLoader) {
 		return 0;
 	}
-	return _localLoader->addTask(MakeShared<WebFileLoadTask>(j->first, url, loader));
+	return _localLoader->addTask(
+		std::make_unique<WebFileLoadTask>(j->first, url, loader));
 }
 
 int32 hasWebFiles() {
@@ -3120,7 +3140,7 @@ public:
 		_wavemax = wavemax;
 	}
 	void finish() {
-		if (VoiceData *voice = _doc ? _doc->voice() : 0) {
+		if (const auto voice = _doc ? _doc->voice() : nullptr) {
 			if (!_waveform.isEmpty()) {
 				voice->waveform = _waveform;
 				voice->wavemax = _wavemax;
@@ -3137,7 +3157,7 @@ public:
 			auto i = items.constFind(_doc);
 			if (i != items.cend()) {
 				for_const (auto item, i.value()) {
-					Ui::repaintHistoryItem(item);
+					Auth().data().requestItemRepaint(item);
 				}
 			}
 		}
@@ -3158,11 +3178,12 @@ protected:
 };
 
 void countVoiceWaveform(DocumentData *document) {
-	if (VoiceData *voice = document->voice()) {
+	if (const auto voice = document->voice()) {
 		if (_localLoader) {
 			voice->waveform.resize(1 + sizeof(TaskId));
 			voice->waveform[0] = -1; // counting
-			TaskId taskId = _localLoader->addTask(MakeShared<CountWaveformTask>(document));
+			TaskId taskId = _localLoader->addTask(
+				std::make_unique<CountWaveformTask>(document));
 			memcpy(voice->waveform.data() + 1, &taskId, sizeof(taskId));
 		}
 	}
@@ -3184,7 +3205,7 @@ void _writeStickerSet(QDataStream &stream, const Stickers::Set &set) {
 	}
 
 	stream << quint64(set.id) << quint64(set.access) << set.title << set.shortName << qint32(set.stickers.size()) << qint32(set.hash) << qint32(set.flags);
-	for (StickerPack::const_iterator j = set.stickers.cbegin(), e = set.stickers.cend(); j != e; ++j) {
+	for (auto j = set.stickers.cbegin(), e = set.stickers.cend(); j != e; ++j) {
 		Serialize::Document::writeToStream(stream, *j);
 	}
 
@@ -3212,7 +3233,7 @@ template <typename CheckSet>
 void _writeStickerSets(FileKey &stickersKey, CheckSet checkSet, const Stickers::Order &order) {
 	if (!_working()) return;
 
-	auto &sets = Global::StickerSets();
+	auto &sets = Auth().data().stickerSets();
 	if (sets.isEmpty()) {
 		if (stickersKey) {
 			clearKey(stickersKey);
@@ -3288,9 +3309,9 @@ void _readStickerSets(FileKey &stickersKey, Stickers::Order *outOrder = nullptr,
 		return;
 	}
 
-	bool readingInstalled = (readingFlags == qFlags(MTPDstickerSet::Flag::f_installed));
+	bool readingInstalled = (readingFlags == MTPDstickerSet::Flag::f_installed);
 
-	auto &sets = Global::RefStickerSets();
+	auto &sets = Auth().data().stickerSetsRef();
 	if (outOrder) outOrder->clear();
 
 	quint32 cnt;
@@ -3305,16 +3326,19 @@ void _readStickerSets(FileKey &stickersKey, Stickers::Order *outOrder = nullptr,
 		qint32 scnt = 0;
 		stickers.stream >> setId >> setAccess >> setTitle >> setShortName >> scnt;
 
-		qint32 setHash = 0, setFlags = 0;
+		qint32 setHash = 0;
+		MTPDstickerSet::Flags setFlags = 0;
 		if (stickers.version > 8033) {
-			stickers.stream >> setHash >> setFlags;
-			if (setFlags & qFlags(MTPDstickerSet_ClientFlag::f_not_loaded__old)) {
-				setFlags &= ~qFlags(MTPDstickerSet_ClientFlag::f_not_loaded__old);
-				setFlags |= qFlags(MTPDstickerSet_ClientFlag::f_not_loaded);
+			qint32 setFlagsValue = 0;
+			stickers.stream >> setHash >> setFlagsValue;
+			setFlags = MTPDstickerSet::Flags::from_raw(setFlagsValue);
+			if (setFlags & MTPDstickerSet_ClientFlag::f_not_loaded__old) {
+				setFlags &= ~MTPDstickerSet_ClientFlag::f_not_loaded__old;
+				setFlags |= MTPDstickerSet_ClientFlag::f_not_loaded;
 			}
 		}
 		if (readingInstalled && stickers.version < 9061) {
-			setFlags |= qFlags(MTPDstickerSet::Flag::f_installed);
+			setFlags |= MTPDstickerSet::Flag::f_installed;
 		}
 
 		if (setId == Stickers::DefaultSetId) {
@@ -3325,10 +3349,13 @@ void _readStickerSets(FileKey &stickersKey, Stickers::Order *outOrder = nullptr,
 			}
 		} else if (setId == Stickers::CustomSetId) {
 			setTitle = qsl("Custom stickers");
-			setFlags |= qFlags(MTPDstickerSet_ClientFlag::f_special);
+			setFlags |= MTPDstickerSet_ClientFlag::f_special;
 		} else if (setId == Stickers::CloudRecentSetId) {
 			setTitle = lang(lng_recent_stickers);
-			setFlags |= qFlags(MTPDstickerSet_ClientFlag::f_special);
+			setFlags |= MTPDstickerSet_ClientFlag::f_special;
+		} else if (setId == Stickers::FavedSetId) {
+			setTitle = Lang::Hard::FavedSetTitle();
+			setFlags |= MTPDstickerSet_ClientFlag::f_special;
 		} else if (setId) {
 			if (readingInstalled && outOrder && stickers.version < 9061) {
 				outOrder->push_back(setId);
@@ -3386,7 +3413,7 @@ void _readStickerSets(FileKey &stickersKey, Stickers::Order *outOrder = nullptr,
 				QString emojiString;
 				qint32 stickersCount;
 				stickers.stream >> emojiString >> stickersCount;
-				StickerPack pack;
+				Stickers::Pack pack;
 				pack.reserve(stickersCount);
 				for (int32 k = 0; k < stickersCount; ++k) {
 					quint64 id;
@@ -3426,7 +3453,7 @@ void writeInstalledStickers() {
 	if (!Global::started()) return;
 
 	_writeStickerSets(_installedStickersKey, [](const Stickers::Set &set) {
-		if (set.id == Stickers::CloudRecentSetId) { // separate file for recent
+		if (set.id == Stickers::CloudRecentSetId || set.id == Stickers::FavedSetId) { // separate files for them
 			return StickerSetCheckResult::Skip;
 		} else if (set.flags & MTPDstickerSet_ClientFlag::f_special) {
 			if (set.stickers.isEmpty()) { // all other special are "installed"
@@ -3440,14 +3467,14 @@ void writeInstalledStickers() {
 			return StickerSetCheckResult::Skip;
 		}
 		return StickerSetCheckResult::Write;
-	}, Global::StickerSetsOrder());
+	}, Auth().data().stickerSetsOrder());
 }
 
 void writeFeaturedStickers() {
 	if (!Global::started()) return;
 
 	_writeStickerSets(_featuredStickersKey, [](const Stickers::Set &set) {
-		if (set.id == Stickers::CloudRecentSetId) { // separate file for recent
+		if (set.id == Stickers::CloudRecentSetId || set.id == Stickers::FavedSetId) { // separate files for them
 			return StickerSetCheckResult::Skip;
 		} else if (set.flags & MTPDstickerSet_ClientFlag::f_special) {
 			return StickerSetCheckResult::Skip;
@@ -3459,7 +3486,7 @@ void writeFeaturedStickers() {
 			return StickerSetCheckResult::Skip;
 		}
 		return StickerSetCheckResult::Write;
-	}, Global::FeaturedStickerSetsOrder());
+	}, Auth().data().featuredStickerSetsOrder());
 }
 
 void writeRecentStickers() {
@@ -3467,6 +3494,17 @@ void writeRecentStickers() {
 
 	_writeStickerSets(_recentStickersKey, [](const Stickers::Set &set) {
 		if (set.id != Stickers::CloudRecentSetId || set.stickers.isEmpty()) {
+			return StickerSetCheckResult::Skip;
+		}
+		return StickerSetCheckResult::Write;
+	}, Stickers::Order());
+}
+
+void writeFavedStickers() {
+	if (!Global::started()) return;
+
+	_writeStickerSets(_favedStickersKey, [](const Stickers::Set &set) {
+		if (set.id != Stickers::FavedSetId || set.stickers.isEmpty()) {
 			return StickerSetCheckResult::Skip;
 		}
 		return StickerSetCheckResult::Write;
@@ -3481,7 +3519,7 @@ void writeArchivedStickers() {
 			return StickerSetCheckResult::Skip;
 		}
 		return StickerSetCheckResult::Write;
-	}, Global::ArchivedStickerSetsOrder());
+	}, Auth().data().archivedStickerSetsOrder());
 }
 
 void importOldRecentStickers() {
@@ -3495,10 +3533,10 @@ void importOldRecentStickers() {
 		return;
 	}
 
-	auto &sets = Global::RefStickerSets();
+	auto &sets = Auth().data().stickerSetsRef();
 	sets.clear();
 
-	auto &order = Global::RefStickerSetsOrder();
+	auto &order = Auth().data().stickerSetsOrderRef();
 	order.clear();
 
 	auto &recent = cRefRecentStickers();
@@ -3565,44 +3603,64 @@ void readInstalledStickers() {
 		return importOldRecentStickers();
 	}
 
-	Global::RefStickerSets().clear();
-	_readStickerSets(_installedStickersKey, &Global::RefStickerSetsOrder(), qFlags(MTPDstickerSet::Flag::f_installed));
+	Auth().data().stickerSetsRef().clear();
+	_readStickerSets(_installedStickersKey, &Auth().data().stickerSetsOrderRef(), MTPDstickerSet::Flag::f_installed);
 }
 
 void readFeaturedStickers() {
-	_readStickerSets(_featuredStickersKey, &Global::RefFeaturedStickerSetsOrder(), qFlags(MTPDstickerSet_ClientFlag::f_featured));
+	_readStickerSets(_featuredStickersKey, &Auth().data().featuredStickerSetsOrderRef(), MTPDstickerSet::Flags() | MTPDstickerSet_ClientFlag::f_featured);
 
-	auto &sets = Global::StickerSets();
+	auto &sets = Auth().data().stickerSets();
 	int unreadCount = 0;
-	for_const (auto setId, Global::FeaturedStickerSetsOrder()) {
+	for_const (auto setId, Auth().data().featuredStickerSetsOrder()) {
 		auto it = sets.constFind(setId);
 		if (it != sets.cend() && (it->flags & MTPDstickerSet_ClientFlag::f_unread)) {
 			++unreadCount;
 		}
 	}
-	if (Global::FeaturedStickerSetsUnreadCount() != unreadCount) {
-		Global::SetFeaturedStickerSetsUnreadCount(unreadCount);
-		Global::RefFeaturedStickerSetsUnreadCountChanged().notify();
-	}
+	Auth().data().setFeaturedStickerSetsUnreadCount(unreadCount);
 }
 
 void readRecentStickers() {
 	_readStickerSets(_recentStickersKey);
 }
 
+void readFavedStickers() {
+	_readStickerSets(_favedStickersKey);
+}
+
 void readArchivedStickers() {
 	static bool archivedStickersRead = false;
 	if (!archivedStickersRead) {
-		_readStickerSets(_archivedStickersKey, &Global::RefArchivedStickerSetsOrder());
+		_readStickerSets(_archivedStickersKey, &Auth().data().archivedStickerSetsOrderRef());
 		archivedStickersRead = true;
 	}
+}
+
+int32 countDocumentVectorHash(const QVector<DocumentData*> vector) {
+	uint32 acc = 0;
+	for_const (auto doc, vector) {
+		auto docId = doc->id;
+		acc = (acc * 20261) + uint32(docId >> 32);
+		acc = (acc * 20261) + uint32(docId & 0xFFFFFFFF);
+	}
+	return int32(acc & 0x7FFFFFFF);
+}
+
+int32 countSpecialStickerSetHash(uint64 setId) {
+	auto &sets = Auth().data().stickerSets();
+	auto it = sets.constFind(setId);
+	if (it != sets.cend()) {
+		return countDocumentVectorHash(it->stickers);
+	}
+	return 0;
 }
 
 int32 countStickersHash(bool checkOutdatedInfo) {
 	uint32 acc = 0;
 	bool foundOutdated = false;
-	auto &sets = Global::StickerSets();
-	auto &order = Global::StickerSetsOrder();
+	auto &sets = Auth().data().stickerSets();
+	auto &order = Auth().data().stickerSetsOrder();
 	for (auto i = order.cbegin(), e = order.cend(); i != e; ++i) {
 		auto j = sets.constFind(*i);
 		if (j != sets.cend()) {
@@ -3618,23 +3676,17 @@ int32 countStickersHash(bool checkOutdatedInfo) {
 }
 
 int32 countRecentStickersHash() {
-	uint32 acc = 0;
-	auto &sets = Global::StickerSets();
-	auto it = sets.constFind(Stickers::CloudRecentSetId);
-	if (it != sets.cend()) {
-		for_const (auto doc, it->stickers) {
-			auto docId = doc->id;
-			acc = (acc * 20261) + uint32(docId >> 32);
-			acc = (acc * 20261) + uint32(docId & 0xFFFFFFFF);
-		}
-	}
-	return int32(acc & 0x7FFFFFFF);
+	return countSpecialStickerSetHash(Stickers::CloudRecentSetId);
+}
+
+int32 countFavedStickersHash() {
+	return countSpecialStickerSetHash(Stickers::FavedSetId);
 }
 
 int32 countFeaturedStickersHash() {
 	uint32 acc = 0;
-	auto &sets = Global::StickerSets();
-	auto &featured = Global::FeaturedStickerSetsOrder();
+	auto &sets = Auth().data().stickerSets();
+	auto &featured = Auth().data().featuredStickerSetsOrder();
 	for_const (auto setId, featured) {
 		acc = (acc * 20261) + uint32(setId >> 32);
 		acc = (acc * 20261) + uint32(setId & 0xFFFFFFFF);
@@ -3648,20 +3700,13 @@ int32 countFeaturedStickersHash() {
 }
 
 int32 countSavedGifsHash() {
-	uint32 acc = 0;
-	auto &saved = cSavedGifs();
-	for_const (auto doc, saved) {
-		auto docId = doc->id;
-		acc = (acc * 20261) + uint32(docId >> 32);
-		acc = (acc * 20261) + uint32(docId & 0xFFFFFFFF);
-	}
-	return int32(acc & 0x7FFFFFFF);
+	return countDocumentVectorHash(Auth().data().savedGifs());
 }
 
 void writeSavedGifs() {
 	if (!_working()) return;
 
-	const SavedGifs &saved(cSavedGifs());
+	auto &saved = Auth().data().savedGifs();
 	if (saved.isEmpty()) {
 		if (_savedGifsKey) {
 			clearKey(_savedGifsKey);
@@ -3701,7 +3746,7 @@ void readSavedGifs() {
 		return;
 	}
 
-	SavedGifs &saved(cRefSavedGifs());
+	auto &saved = Auth().data().savedGifsRef();
 	saved.clear();
 
 	quint32 cnt;
@@ -3960,43 +4005,35 @@ uint32 _peerSize(PeerData *peer) {
 	} else if (peer->isChat()) {
 		ChatData *chat = peer->asChat();
 
-		// name + count + date + version + admin + forbidden + left + inviteLink
-		result += Serialize::stringSize(chat->name) + sizeof(qint32) + sizeof(qint32) + sizeof(qint32) + sizeof(qint32) + sizeof(qint32) + sizeof(qint32) + Serialize::stringSize(chat->inviteLink());
+		// name + count + date + version + admin + old forbidden + left + inviteLink
+		result += Serialize::stringSize(chat->name) + sizeof(qint32) + sizeof(qint32) + sizeof(qint32) + sizeof(qint32) + sizeof(qint32) + sizeof(quint32) + Serialize::stringSize(chat->inviteLink());
 	} else if (peer->isChannel()) {
 		ChannelData *channel = peer->asChannel();
 
-		// name + access + date + version + forbidden + flags + inviteLink
-		result += Serialize::stringSize(channel->name) + sizeof(quint64) + sizeof(qint32) + sizeof(qint32) + sizeof(qint32) + sizeof(qint32) + Serialize::stringSize(channel->inviteLink());
+		// name + access + date + version + old forbidden + flags + inviteLink
+		result += Serialize::stringSize(channel->name) + sizeof(quint64) + sizeof(qint32) + sizeof(qint32) + sizeof(qint32) + sizeof(quint32) + Serialize::stringSize(channel->inviteLink());
 	}
 	return result;
 }
 
 void _writePeer(QDataStream &stream, PeerData *peer) {
-	stream << quint64(peer->id) << quint64(peer->photoId);
-	Serialize::writeStorageImageLocation(stream, peer->photoLoc);
-	if (peer->isUser()) {
-		UserData *user = peer->asUser();
-
-		stream << user->firstName << user->lastName << user->phone() << user->username << quint64(user->access);
+	stream << quint64(peer->id) << quint64(peer->userpicPhotoId());
+	Serialize::writeStorageImageLocation(stream, peer->userpicLocation());
+	if (const auto user = peer->asUser()) {
+		stream << user->firstName << user->lastName << user->phone() << user->username << quint64(user->accessHash());
 		if (AppVersion >= 9012) {
-			stream << qint32(user->flags);
+			stream << qint32(user->flags());
 		}
 		if (AppVersion >= 9016) {
 			stream << (user->botInfo ? user->botInfo->inlinePlaceholder : QString());
 		}
 		stream << qint32(user->onlineTill) << qint32(user->contact) << qint32(user->botInfo ? user->botInfo->version : -1);
-	} else if (peer->isChat()) {
-		ChatData *chat = peer->asChat();
-
-		qint32 flagsData = (AppVersion >= 9012) ? chat->flags : (chat->haveLeft() ? 1 : 0);
-
+	} else if (const auto chat = peer->asChat()) {
 		stream << chat->name << qint32(chat->count) << qint32(chat->date) << qint32(chat->version) << qint32(chat->creator);
-		stream << qint32(chat->isForbidden() ? 1 : 0) << qint32(flagsData) << chat->inviteLink();
-	} else if (peer->isChannel()) {
-		ChannelData *channel = peer->asChannel();
-
+		stream << qint32(0) << quint32(chat->flags()) << chat->inviteLink();
+	} else if (auto channel = peer->asChannel()) {
 		stream << channel->name << quint64(channel->access) << qint32(channel->date) << qint32(channel->version);
-		stream << qint32(channel->isForbidden() ? 1 : 0) << qint32(channel->flags) << channel->inviteLink();
+		stream << qint32(0) << quint32(channel->flags()) << channel->inviteLink();
 	}
 }
 
@@ -4004,7 +4041,7 @@ PeerData *_readPeer(FileReadDescriptor &from, int32 fileVersion = 0) {
 	quint64 peerId = 0, photoId = 0;
 	from.stream >> peerId >> photoId;
 
-	StorageImageLocation photoLoc(Serialize::readStorageImageLocation(from.stream));
+	auto photoLoc = Serialize::readStorageImageLocation(from.stream);
 
 	PeerData *result = App::peerLoaded(peerId);
 	bool wasLoaded = (result != nullptr);
@@ -4012,9 +4049,7 @@ PeerData *_readPeer(FileReadDescriptor &from, int32 fileVersion = 0) {
 		result = App::peer(peerId);
 		result->loadedStatus = PeerData::FullLoaded;
 	}
-	if (result->isUser()) {
-		UserData *user = result->asUser();
-
+	if (const auto user = result->asUser()) {
 		QString first, last, phone, username, inlinePlaceholder;
 		quint64 access;
 		qint32 flags = 0, onlineTill, contact, botInfoVersion;
@@ -4027,15 +4062,15 @@ PeerData *_readPeer(FileReadDescriptor &from, int32 fileVersion = 0) {
 		}
 		from.stream >> onlineTill >> contact >> botInfoVersion;
 
-		bool showPhone = !isServiceUser(user->id) && (user->id != AuthSession::CurrentUserPeerId()) && (contact <= 0);
+		bool showPhone = !isServiceUser(user->id) && (user->id != Auth().userPeerId()) && (contact <= 0);
 		QString pname = (showPhone && !phone.isEmpty()) ? App::formatPhone(phone) : QString();
 
 		if (!wasLoaded) {
 			user->setPhone(phone);
 			user->setName(first, last, pname, username);
 
-			user->access = access;
-			user->flags = MTPDuser::Flags(flags);
+			user->setFlags(MTPDuser::Flags::from_raw(flags));
+			user->setAccessHash(access);
 			user->onlineTill = onlineTill;
 			user->contact = contact;
 			user->setBotInfoVersion(botInfoVersion);
@@ -4043,28 +4078,30 @@ PeerData *_readPeer(FileReadDescriptor &from, int32 fileVersion = 0) {
 				user->botInfo->inlinePlaceholder = inlinePlaceholder;
 			}
 
-			if (user->id == AuthSession::CurrentUserPeerId()) {
+			if (user->id == Auth().userPeerId()) {
 				user->input = MTP_inputPeerSelf();
 				user->inputUser = MTP_inputUserSelf();
 			} else {
-				user->input = MTP_inputPeerUser(MTP_int(peerToUser(user->id)), MTP_long(user->isInaccessible() ? 0 : user->access));
-				user->inputUser = MTP_inputUser(MTP_int(peerToUser(user->id)), MTP_long(user->isInaccessible() ? 0 : user->access));
+				user->input = MTP_inputPeerUser(MTP_int(peerToUser(user->id)), MTP_long(user->accessHash()));
+				user->inputUser = MTP_inputUser(MTP_int(peerToUser(user->id)), MTP_long(user->accessHash()));
 			}
-
-			user->setUserpic(photoLoc.isNull() ? ImagePtr() : ImagePtr(photoLoc));
 		}
-	} else if (result->isChat()) {
-		ChatData *chat = result->asChat();
-
+	} else if (const auto chat = result->asChat()) {
 		QString name, inviteLink;
-		qint32 count, date, version, creator, forbidden, flagsData, flags;
-		from.stream >> name >> count >> date >> version >> creator >> forbidden >> flagsData >> inviteLink;
+		qint32 count, date, version, creator, oldForbidden;
+		quint32 flagsData, flags;
+		from.stream >> name >> count >> date >> version >> creator >> oldForbidden >> flagsData >> inviteLink;
 
 		if (from.version >= 9012) {
 			flags = flagsData;
 		} else {
 			// flagsData was haveLeft
-			flags = (flagsData == 1) ? MTPDchat::Flags(MTPDchat::Flag::f_left) : MTPDchat::Flags(0);
+			flags = (flagsData == 1)
+				? MTPDchat::Flags(MTPDchat::Flag::f_left)
+				: MTPDchat::Flags(0);
+		}
+		if (oldForbidden) {
+			flags |= quint32(MTPDchat_ClientFlag::f_forbidden);
 		}
 		if (!wasLoaded) {
 			chat->setName(name);
@@ -4072,41 +4109,38 @@ PeerData *_readPeer(FileReadDescriptor &from, int32 fileVersion = 0) {
 			chat->date = date;
 			chat->version = version;
 			chat->creator = creator;
-			chat->setIsForbidden(forbidden == 1);
-			chat->flags = MTPDchat::Flags(flags);
+			chat->setFlags(MTPDchat::Flags::from_raw(flags));
 			chat->setInviteLink(inviteLink);
 
 			chat->input = MTP_inputPeerChat(MTP_int(peerToChat(chat->id)));
 			chat->inputChat = MTP_int(peerToChat(chat->id));
-
-			chat->setUserpic(photoLoc.isNull() ? ImagePtr() : ImagePtr(photoLoc));
 		}
-	} else if (result->isChannel()) {
-		ChannelData *channel = result->asChannel();
-
+	} else if (const auto channel = result->asChannel()) {
 		QString name, inviteLink;
 		quint64 access;
-		qint32 date, version, forbidden, flags;
-		from.stream >> name >> access >> date >> version >> forbidden >> flags >> inviteLink;
-
+		qint32 date, version, oldForbidden;
+		quint32 flags;
+		from.stream >> name >> access >> date >> version >> oldForbidden >> flags >> inviteLink;
+		if (oldForbidden) {
+			flags |= quint32(MTPDchannel_ClientFlag::f_forbidden);
+		}
 		if (!wasLoaded) {
 			channel->setName(name, QString());
 			channel->access = access;
 			channel->date = date;
 			channel->version = version;
-			channel->setIsForbidden(forbidden == 1);
-			channel->flags = MTPDchannel::Flags(flags);
+			channel->setFlags(MTPDchannel::Flags::from_raw(flags));
 			channel->setInviteLink(inviteLink);
 
 			channel->input = MTP_inputPeerChannel(MTP_int(peerToChannel(channel->id)), MTP_long(access));
 			channel->inputChannel = MTP_inputChannel(MTP_int(peerToChannel(channel->id)), MTP_long(access));
-
-			channel->setUserpic(photoLoc.isNull() ? ImagePtr() : ImagePtr(photoLoc));
 		}
 	}
 	if (!wasLoaded) {
-		App::markPeerUpdated(result);
-		emit App::main()->peerPhotoChanged(result);
+		result->setUserpic(
+			photoId,
+			photoLoc,
+			photoLoc.isNull() ? ImagePtr() : ImagePtr(photoLoc));
 	}
 	return result;
 }
@@ -4287,7 +4321,7 @@ void readSavedPeers() {
 		peers.push_back(peer);
 	}
 
-	if (App::api()) App::api()->requestPeers(peers);
+	Auth().api().requestPeers(peers);
 }
 
 void addSavedPeer(PeerData *peer, const QDateTime &position) {

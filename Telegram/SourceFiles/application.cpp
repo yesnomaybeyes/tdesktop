@@ -26,8 +26,10 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 #include "storage/localstorage.h"
 #include "autoupdater.h"
 #include "window/notifications_manager.h"
+#include "core/crash_reports.h"
 #include "messenger.h"
 #include "base/timer.h"
+#include "core/crash_report_window.h"
 
 namespace {
 
@@ -71,8 +73,13 @@ QString _escapeFrom7bit(const QString &str) {
 
 } // namespace
 
-Application::Application(int &argc, char **argv) : QApplication(argc, argv) {
-	QByteArray d(QFile::encodeName(QDir(cWorkingDir()).absolutePath()));
+Application::Application(
+		not_null<Core::Launcher*> launcher,
+		int &argc,
+		char **argv)
+: QApplication(argc, argv)
+, _launcher(launcher) {
+	const auto d = QFile::encodeName(QDir(cWorkingDir()).absolutePath());
 	char h[33] = { 0 };
 	hashMd5Hex(d.constData(), d.size(), h);
 #ifndef OS_MAC_STORE
@@ -206,12 +213,12 @@ void Application::singleInstanceChecked() {
 	if (!Logs::started() || (!cManyInstance() && !Logs::instanceChecked())) {
 		new NotStartedWindow();
 	} else {
-		SignalHandlers::Status status = SignalHandlers::start();
-		if (status == SignalHandlers::CantOpen) {
+		const auto status = CrashReports::Start();
+		if (status == CrashReports::CantOpen) {
 			new NotStartedWindow();
-		} else if (status == SignalHandlers::LastCrashed) {
+		} else if (status == CrashReports::LastCrashed) {
 			if (Sandbox::LastCrashDump().isEmpty()) { // don't handle bad closing for now
-				if (SignalHandlers::restart() == SignalHandlers::CantOpen) {
+				if (CrashReports::Restart() == CrashReports::CantOpen) {
 					new NotStartedWindow();
 				} else {
 					Sandbox::launch();
@@ -242,6 +249,7 @@ void Application::newInstanceConnected() {
 }
 
 void Application::readClients() {
+	// This method can be called before Messenger is constructed.
 	QString startUrl;
 	QStringList toSend;
 	for (LocalClients::iterator i = _localClients.begin(), e = _localClients.end(); i != e; ++i) {
@@ -286,7 +294,9 @@ void Application::readClients() {
 	if (!startUrl.isEmpty()) {
 		cSetStartUrl(startUrl);
 	}
-	Messenger::Instance().checkStartUrl();
+	if (auto messenger = Messenger::InstancePointer()) {
+		messenger->checkStartUrl();
+	}
 }
 
 void Application::removeClients() {
@@ -309,8 +319,8 @@ void Application::startApplication() {
 }
 
 void Application::createMessenger() {
-	t_assert(!App::quitting());
-	_messengerInstance = std::make_unique<Messenger>();
+	Expects(!App::quitting());
+	_messengerInstance = std::make_unique<Messenger>(_launcher);
 }
 
 void Application::closeApplication() {
@@ -451,7 +461,7 @@ void Application::startUpdateCheck(bool forceWait) {
 	if (!Sandbox::started()) return;
 
 	_updateCheckTimer->stop();
-	if (_updateThread || _updateReply || !cAutoUpdate()) return;
+	if (_updateThread || _updateReply || !cAutoUpdate() || cExeName().isEmpty()) return;
 
 	int32 constDelay = cBetaVersion() ? 600 : UpdateDelayConstPart, randDelay = cBetaVersion() ? 300 : UpdateDelayRandPart;
 	int32 updateInSecs = cLastUpdateCheck() + constDelay + int32(rand() % randDelay) - unixtime();
@@ -619,7 +629,7 @@ void connect(const char *signal, QObject *object, const char *method) {
 }
 
 void launch() {
-	t_assert(application() != 0);
+	Assert(application() != 0);
 
 	float64 dpi = Application::primaryScreen()->logicalDotsPerInch();
 	if (dpi <= 108) { // 0-96-108

@@ -118,68 +118,125 @@ QString GetOverride(const QString &familyName) {
 
 } // Fonts
 
+namespace Ui {
 namespace {
 
-void _sendResizeEvents(QWidget *target) {
-	QResizeEvent e(target->size(), QSize());
-	QApplication::sendEvent(target, &e);
+class WidgetCreator : public QWidget {
+public:
+	static void Create(not_null<QWidget*> widget) {
+		volatile auto unknown = widget.get();
+		static_cast<WidgetCreator*>(unknown)->create();
+	}
 
-	const QObjectList children = target->children();
-	for (int i = 0; i < children.size(); ++i) {
-		QWidget *child = static_cast<QWidget*>(children.at(i));
-		if (child->isWidgetType() && !child->isWindow() && child->testAttribute(Qt::WA_PendingResizeEvent)) {
-			_sendResizeEvents(child);
+};
+
+void CreateWidgetStateRecursive(not_null<QWidget*> target) {
+	if (!target->testAttribute(Qt::WA_WState_Created)) {
+		if (!target->isWindow()) {
+			CreateWidgetStateRecursive(target->parentWidget());
+			WidgetCreator::Create(target);
+		} else if (!cIsSnowLeopard()) {
+			WidgetCreator::Create(target);
 		}
+	}
+}
+
+void SendPendingEventsRecursive(QWidget *target, bool parentHiddenFlag) {
+	auto wasVisible = target->isVisible();
+	if (!wasVisible) {
+		target->setAttribute(Qt::WA_WState_Visible, true);
+	}
+	if (target->testAttribute(Qt::WA_PendingMoveEvent)) {
+		target->setAttribute(Qt::WA_PendingMoveEvent, false);
+		QMoveEvent e(target->pos(), QPoint());
+		QApplication::sendEvent(target, &e);
+	}
+	if (target->testAttribute(Qt::WA_PendingResizeEvent)) {
+		target->setAttribute(Qt::WA_PendingResizeEvent, false);
+		QResizeEvent e(target->size(), QSize());
+		QApplication::sendEvent(target, &e);
+	}
+
+	auto removeVisibleFlag = [&] {
+		return parentHiddenFlag
+			|| target->testAttribute(Qt::WA_WState_Hidden);
+	};
+
+	auto &children = target->children();
+	for (auto i = 0; i < children.size(); ++i) {
+		auto child = children[i];
+		if (child->isWidgetType()) {
+			auto widget = static_cast<QWidget*>(child);
+			if (!widget->isWindow()) {
+				if (!widget->testAttribute(Qt::WA_WState_Created)) {
+					WidgetCreator::Create(widget);
+				}
+				SendPendingEventsRecursive(widget, removeVisibleFlag());
+			}
+		}
+	}
+
+	if (removeVisibleFlag()) {
+		target->setAttribute(Qt::WA_WState_Visible, false);
 	}
 }
 
 } // namespace
 
-bool TWidget::inFocusChain() const {
-	return !isHidden() && App::wnd() && (App::wnd()->focusWidget() == this || isAncestorOf(App::wnd()->focusWidget()));
+void SendPendingMoveResizeEvents(not_null<QWidget*> target) {
+	CreateWidgetStateRecursive(target);
+	SendPendingEventsRecursive(target, !target->isVisible());
 }
 
-void myEnsureResized(QWidget *target) {
-	if (target && (target->testAttribute(Qt::WA_PendingResizeEvent) || !target->testAttribute(Qt::WA_WState_Created))) {
-		_sendResizeEvents(target);
-	}
-}
-
-QPixmap myGrab(TWidget *target, QRect rect, QColor bg) {
-	myEnsureResized(target);
-	if (rect.isNull()) rect = target->rect();
-
-    auto result = QPixmap(rect.size() * cIntRetinaFactor());
-    result.setDevicePixelRatio(cRetinaFactor());
-	if (!target->testAttribute(Qt::WA_OpaquePaintEvent)) {
-		result.fill(bg);
+QPixmap GrabWidget(not_null<TWidget*> target, QRect rect, QColor bg) {
+	SendPendingMoveResizeEvents(target);
+	if (rect.isNull()) {
+		rect = target->rect();
 	}
 
-	App::wnd()->widgetGrabbed().notify(true);
-
-	target->grabStart();
-	target->render(&result, QPoint(0, 0), rect, QWidget::DrawChildren | QWidget::IgnoreMask);
-	target->grabFinish();
-
-	return result;
-}
-
-QImage myGrabImage(TWidget *target, QRect rect, QColor bg) {
-	myEnsureResized(target);
-	if (rect.isNull()) rect = target->rect();
-
-	auto result = QImage(rect.size() * cIntRetinaFactor(), QImage::Format_ARGB32_Premultiplied);
+	auto result = QPixmap(rect.size() * cIntRetinaFactor());
 	result.setDevicePixelRatio(cRetinaFactor());
 	if (!target->testAttribute(Qt::WA_OpaquePaintEvent)) {
 		result.fill(bg);
 	}
 
 	target->grabStart();
-	target->render(&result, QPoint(0, 0), rect, QWidget::DrawChildren | QWidget::IgnoreMask);
+	target->render(
+		&result,
+		QPoint(0, 0),
+		rect,
+		QWidget::DrawChildren | QWidget::IgnoreMask);
 	target->grabFinish();
 
 	return result;
 }
+
+QImage GrabWidgetToImage(not_null<TWidget*> target, QRect rect, QColor bg) {
+	Ui::SendPendingMoveResizeEvents(target);
+	if (rect.isNull()) {
+		rect = target->rect();
+	}
+
+	auto result = QImage(
+		rect.size() * cIntRetinaFactor(),
+		QImage::Format_ARGB32_Premultiplied);
+	result.setDevicePixelRatio(cRetinaFactor());
+	if (!target->testAttribute(Qt::WA_OpaquePaintEvent)) {
+		result.fill(bg);
+	}
+
+	target->grabStart();
+	target->render(
+		&result,
+		QPoint(0, 0),
+		rect,
+		QWidget::DrawChildren | QWidget::IgnoreMask);
+	target->grabFinish();
+
+	return result;
+}
+
+} // namespace Ui
 
 void sendSynteticMouseEvent(QWidget *widget, QEvent::Type type, Qt::MouseButton button, const QPoint &globalPoint) {
 	if (auto windowHandle = widget->window()->windowHandle()) {

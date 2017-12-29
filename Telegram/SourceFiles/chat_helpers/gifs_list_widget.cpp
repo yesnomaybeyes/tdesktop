@@ -20,6 +20,8 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 */
 #include "chat_helpers/gifs_list_widget.h"
 
+#include "data/data_photo.h"
+#include "data/data_document.h"
 #include "styles/style_chat_helpers.h"
 #include "ui/widgets/buttons.h"
 #include "ui/widgets/input_fields.h"
@@ -37,7 +39,6 @@ namespace {
 
 constexpr auto kSaveChosenTabTimeout = 1000;
 constexpr auto kSearchRequestDelay = 400;
-constexpr auto kStickersPanelPerRow = Stickers::kPanelPerRow;
 constexpr auto kInlineItemsMaxPerRow = 5;
 constexpr auto kSearchBotUsername = str_const("gif");
 
@@ -45,7 +46,7 @@ constexpr auto kSearchBotUsername = str_const("gif");
 
 class GifsListWidget::Footer : public TabbedSelector::InnerFooter {
 public:
-	Footer(gsl::not_null<GifsListWidget*> parent);
+	Footer(not_null<GifsListWidget*> parent);
 
 	void stealFocus();
 	void returnFocus();
@@ -55,11 +56,12 @@ public:
 
 protected:
 	void paintEvent(QPaintEvent *e) override;
+	void resizeEvent(QResizeEvent *e) override;
 
 	void processPanelHideFinished() override;
 
 private:
-	gsl::not_null<GifsListWidget*> _pan;
+	not_null<GifsListWidget*> _pan;
 
 	object_ptr<Ui::InputField> _field;
 	object_ptr<Ui::CrossButton> _cancel;
@@ -68,12 +70,10 @@ private:
 
 };
 
-GifsListWidget::Footer::Footer(gsl::not_null<GifsListWidget*> parent) : InnerFooter(parent)
+GifsListWidget::Footer::Footer(not_null<GifsListWidget*> parent) : InnerFooter(parent)
 , _pan(parent)
 , _field(this, st::gifsSearchField, langFactory(lng_gifs_search))
 , _cancel(this, st::gifsSearchCancel) {
-	_field->resize(width() - st::gifsSearchFieldPosition.x() - st::gifsSearchCancelPosition.x() - st::gifsSearchCancel.width, _field->height());
-	_field->moveToLeft(st::gifsSearchFieldPosition.x(), st::gifsSearchFieldPosition.y());
 	connect(_field, &Ui::InputField::submitted, this, [this](bool ctrlShiftEnter) {
 		_pan->sendInlineRequest();
 	});
@@ -85,10 +85,11 @@ GifsListWidget::Footer::Footer(gsl::not_null<GifsListWidget*> parent) : InnerFoo
 		}
 	});
 	connect(_field, &Ui::InputField::changed, this, [this] {
-		_cancel->toggleAnimated(!_field->getLastText().isEmpty());
+		_cancel->toggle(
+			!_field->getLastText().isEmpty(),
+			anim::type::normal);
 		_pan->searchForGifs(_field->getLastText());
 	});
-	_cancel->moveToRight(st::gifsSearchCancelPosition.x(), st::gifsSearchCancelPosition.y());
 	_cancel->setClickedCallback([this] {
 		_field->setText(QString());
 	});
@@ -115,15 +116,26 @@ void GifsListWidget::Footer::paintEvent(QPaintEvent *e) {
 	st::gifsSearchIcon.paint(p, st::gifsSearchIconPosition.x(), st::gifsSearchIconPosition.y(), width());
 }
 
+void GifsListWidget::Footer::resizeEvent(QResizeEvent *e) {
+	auto fieldWidth = width()
+		- st::gifsSearchFieldPosition.x()
+		- st::gifsSearchCancelPosition.x()
+		- st::gifsSearchCancel.width;
+	_field->resizeToWidth(fieldWidth);
+	_field->moveToLeft(st::gifsSearchFieldPosition.x(), st::gifsSearchFieldPosition.y());
+	_cancel->moveToRight(st::gifsSearchCancelPosition.x(), st::gifsSearchCancelPosition.y());
+}
+
 void GifsListWidget::Footer::processPanelHideFinished() {
 	// Preserve panel state through visibility toggles.
 	//_field->setText(QString());
 }
 
-GifsListWidget::GifsListWidget(QWidget *parent, gsl::not_null<Window::Controller*> controller) : Inner(parent, controller)
+GifsListWidget::GifsListWidget(
+	QWidget *parent,
+	not_null<Window::Controller*> controller)
+: Inner(parent, controller)
 , _section(Section::Gifs) {
-	resize(st::emojiPanWidth - st::emojiScroll.width - st::buttonRadius, countHeight());
-
 	setMouseTracking(true);
 	setAttribute(Qt::WA_OpaquePaintEvent);
 
@@ -136,10 +148,11 @@ GifsListWidget::GifsListWidget(QWidget *parent, gsl::not_null<Window::Controller
 	_inlineRequestTimer.setSingleShot(true);
 	connect(&_inlineRequestTimer, &QTimer::timeout, this, [this] { sendInlineRequest(); });
 
-	subscribe(AuthSession::Current().data().savedGifsUpdated(), [this] {
+	Auth().data().savedGifsUpdated(
+	) | rpl::start_with_next([this] {
 		refreshSavedGifs();
-	});
-	subscribe(AuthSession::CurrentDownloaderTaskFinished(), [this] {
+	}, lifetime());
+	subscribe(Auth().downloaderTaskFinished(), [this] {
 		update();
 	});
 	subscribe(controller->gifPauseLevelChanged(), [this] {
@@ -156,9 +169,11 @@ object_ptr<TabbedSelector::InnerFooter> GifsListWidget::createFooter() {
 	return std::move(result);
 }
 
-void GifsListWidget::setVisibleTopBottom(int visibleTop, int visibleBottom) {
+void GifsListWidget::visibleTopBottomUpdated(
+		int visibleTop,
+		int visibleBottom) {
 	auto top = getVisibleTop();
-	Inner::setVisibleTopBottom(visibleTop, visibleBottom);
+	Inner::visibleTopBottomUpdated(visibleTop, visibleBottom);
 	if (top != getVisibleTop()) {
 		_lastScrolled = getms();
 	}
@@ -172,17 +187,13 @@ void GifsListWidget::checkLoadMore() {
 	}
 }
 
-int GifsListWidget::countHeight() {
-	auto visibleHeight = getVisibleBottom() - getVisibleTop();
-	if (visibleHeight <= 0) {
-		visibleHeight = st::emojiPanMaxHeight - st::emojiCategory.height;
-	}
-	auto minimalLastHeight = (visibleHeight - st::stickerPanPadding);
+int GifsListWidget::countDesiredHeight(int newWidth) {
 	auto result = st::stickerPanPadding;
 	for (int i = 0, l = _rows.count(); i < l; ++i) {
+		layoutInlineRow(_rows[i], newWidth);
 		result += _rows[i].height;
 	}
-	return qMax(minimalLastHeight, result) + st::stickerPanPadding;
+	return result + st::stickerPanPadding;
 }
 
 GifsListWidget::~GifsListWidget() {
@@ -209,6 +220,7 @@ void GifsListWidget::inlineResultsDone(const MTPmessages_BotResults &result) {
 
 	auto it = _inlineCache.find(_inlineQuery);
 	auto adding = (it != _inlineCache.cend());
+	// #TODO layer 72 feed users
 	if (result.type() == mtpc_messages_botResults) {
 		auto &d = result.c_messages_botResults();
 		auto &v = d.vresults.v;
@@ -323,7 +335,7 @@ void GifsListWidget::mouseReleaseEvent(QMouseEvent *e) {
 		return;
 	}
 
-	if (dynamic_cast<InlineBots::Layout::SendClickHandler*>(activated.data())) {
+	if (dynamic_cast<InlineBots::Layout::SendClickHandler*>(activated.get())) {
 		int row = _selected / MatrixRowShift, column = _selected % MatrixRowShift;
 		selectInlineResult(row, column);
 	} else {
@@ -380,7 +392,7 @@ void GifsListWidget::enterFromChildEvent(QEvent *e, QWidget *child) {
 void GifsListWidget::clearSelection() {
 	if (_selected >= 0) {
 		int srow = _selected / MatrixRowShift, scol = _selected % MatrixRowShift;
-		t_assert(srow >= 0 && srow < _rows.size() && scol >= 0 && scol < _rows[srow].items.size());
+		Assert(srow >= 0 && srow < _rows.size() && scol >= 0 && scol < _rows[srow].items.size());
 		ClickHandler::clearActive(_rows[srow].items[scol]);
 		setCursor(style::cur_default);
 	}
@@ -445,9 +457,16 @@ bool GifsListWidget::inlineRowFinalize(Row &row, int32 &sumWidth, bool force) {
 	if (row.items.isEmpty()) return false;
 
 	auto full = (row.items.size() >= kInlineItemsMaxPerRow);
-	auto big = (sumWidth >= st::emojiPanWidth - st::emojiScroll.width - st::inlineResultsLeft);
+
+	// Currently use the same GIFs layout for all widget sizes.
+//	auto big = (sumWidth >= st::buttonRadius + width() - st::inlineResultsLeft);
+	auto big = (sumWidth >= st::emojiPanWidth - st::inlineResultsLeft);
 	if (full || big || force) {
-		_rows.push_back(layoutInlineRow(row, (full || big) ? sumWidth : 0));
+		row.maxWidth = (full || big) ? sumWidth : 0;
+		layoutInlineRow(
+			row,
+			width());
+		_rows.push_back(row);
 		row = Row();
 		row.items.reserve(kInlineItemsMaxPerRow);
 		sumWidth = 0;
@@ -460,7 +479,7 @@ void GifsListWidget::refreshSavedGifs() {
 	if (_section == Section::Gifs) {
 		clearInlineRows(false);
 
-		auto &saved = cSavedGifs();
+		auto &saved = Auth().data().savedGifs();
 		if (!saved.isEmpty()) {
 			_rows.reserve(saved.size());
 			auto row = Row();
@@ -473,11 +492,7 @@ void GifsListWidget::refreshSavedGifs() {
 		}
 		deleteUnusedGifLayouts();
 
-		auto newHeight = countHeight();
-		if (newHeight != height()) {
-			resize(width(), newHeight);
-		}
-
+		resizeToWidth(width());
 		update();
 	}
 
@@ -562,9 +577,9 @@ void GifsListWidget::deleteUnusedInlineLayouts() {
 	}
 }
 
-GifsListWidget::Row &GifsListWidget::layoutInlineRow(Row &row, int32 sumWidth) {
+void GifsListWidget::layoutInlineRow(Row &row, int fullWidth) {
 	auto count = int(row.items.size());
-	t_assert(count <= kInlineItemsMaxPerRow);
+	Assert(count <= kInlineItemsMaxPerRow);
 
 	// enumerate items in the order of growing maxWidth()
 	// for that sort item indices by maxWidth()
@@ -572,27 +587,31 @@ GifsListWidget::Row &GifsListWidget::layoutInlineRow(Row &row, int32 sumWidth) {
 	for (auto i = 0; i != count; ++i) {
 		indices[i] = i;
 	}
-	std::sort(indices, indices + count, [&row](int a, int b) -> bool {
-		return row.items.at(a)->maxWidth() < row.items.at(b)->maxWidth();
+	std::sort(indices, indices + count, [&](int a, int b) {
+		return row.items[a]->maxWidth()
+			< row.items[b]->maxWidth();
 	});
 
+	auto desiredWidth = row.maxWidth;
 	row.height = 0;
-	int availw = width() - (st::inlineResultsLeft - st::buttonRadius);
+	int availw = fullWidth - (st::inlineResultsLeft - st::buttonRadius);
 	for (int i = 0; i < count; ++i) {
-		int index = indices[i];
-		int w = sumWidth ? (row.items.at(index)->maxWidth() * availw / sumWidth) : row.items.at(index)->maxWidth();
-		int actualw = qMax(w, int(st::inlineResultsMinWidth));
-		row.height = qMax(row.height, row.items[index]->resizeGetHeight(actualw));
-		if (sumWidth) {
+		const auto index = indices[i];
+		const auto &item = row.items[index];
+		const auto w = desiredWidth
+			? (item->maxWidth() * availw / desiredWidth)
+			: item->maxWidth();
+		auto actualw = qMax(w, st::inlineResultsMinWidth);
+		row.height = qMax(row.height, item->resizeGetHeight(actualw));
+		if (desiredWidth) {
 			availw -= actualw;
-			sumWidth -= row.items.at(index)->maxWidth();
-			if (index > 0 && row.items.at(index - 1)->hasRightSkip()) {
+			desiredWidth -= row.items[index]->maxWidth();
+			if (index > 0 && row.items[index - 1]->hasRightSkip()) {
 				availw -= st::inlineResultsSkip;
-				sumWidth -= st::inlineResultsSkip;
+				desiredWidth -= st::inlineResultsSkip;
 			}
 		}
 	}
-	return row;
 }
 
 void GifsListWidget::preloadImages() {
@@ -640,8 +659,7 @@ int GifsListWidget::refreshInlineRows(const InlineCacheEntry *entry, bool result
 		inlineRowFinalize(row, sumWidth, true);
 	}
 
-	int32 h = countHeight();
-	if (h != height()) resize(width(), h);
+	resizeToWidth(width());
 	update();
 
 	_lastMousePos = QCursor::pos();
@@ -682,7 +700,12 @@ int GifsListWidget::validateExistingInlineRows(const InlineResults &results) {
 		}
 		_rows.resize(untilrow + 1);
 		_rows[untilrow].items.resize(untilcol);
-		_rows[untilrow] = layoutInlineRow(_rows[untilrow]);
+		_rows[untilrow].maxWidth = std::accumulate(
+			_rows[untilrow].items.begin(),
+			_rows[untilrow].items.end(),
+			0,
+			[](int w, auto &row) { return w + row->maxWidth(); });
+		layoutInlineRow(_rows[untilrow], width());
 		return until;
 	}
 	if (untilrow && !untilcol) { // remove last row, maybe it is not full
@@ -740,7 +763,7 @@ bool GifsListWidget::inlineItemVisible(const InlineBots::Layout::ItemBase *layou
 
 	auto row = position / MatrixRowShift;
 	auto col = position % MatrixRowShift;
-	t_assert((row < _rows.size()) && (col < _rows[row].items.size()));
+	Assert((row < _rows.size()) && (col < _rows[row].items.size()));
 
 	auto &inlineItems = _rows[row].items;
 	auto top = 0;
@@ -900,7 +923,9 @@ void GifsListWidget::updateSelected() {
 		}
 		if (col < inlineItems.size()) {
 			sel = row * MatrixRowShift + col;
-			inlineItems.at(col)->getState(lnk, cursor, QPoint(sx, sy));
+			auto result = inlineItems[col]->getState(QPoint(sx, sy), HistoryStateRequest());
+			lnk = result.link;
+			cursor = result.cursor;
 			lnkhost = inlineItems.at(col);
 		} else {
 			row = col = -1;
@@ -912,12 +937,12 @@ void GifsListWidget::updateSelected() {
 	int scol = (_selected >= 0) ? (_selected % MatrixRowShift) : -1;
 	if (_selected != sel) {
 		if (srow >= 0 && scol >= 0) {
-			t_assert(srow >= 0 && srow < _rows.size() && scol >= 0 && scol < _rows[srow].items.size());
+			Assert(srow >= 0 && srow < _rows.size() && scol >= 0 && scol < _rows[srow].items.size());
 			_rows[srow].items[scol]->update();
 		}
 		_selected = sel;
 		if (row >= 0 && col >= 0) {
-			t_assert(row >= 0 && row < _rows.size() && col >= 0 && col < _rows[row].items.size());
+			Assert(row >= 0 && row < _rows.size() && col >= 0 && col < _rows[row].items.size());
 			_rows[row].items[col]->update();
 		}
 		if (_previewShown && _selected >= 0 && _pressed != _selected) {

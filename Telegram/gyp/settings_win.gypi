@@ -35,10 +35,13 @@
         'VCCLCompilerTool': {
           'ProgramDataBaseFileName': '$(OutDir)\\$(ProjectName).pdb',
           'DebugInformationFormat': '3',          # Program Database (/Zi)
+          'WarnAsError': 'true',
           'AdditionalOptions': [
-            '/MP',   # Enable multi process build.
-            '/EHsc', # Catch C++ exceptions only, extern C functions never throw a C++ exception.
-            '/WX',   # Treat warnings as errors.
+            '/std:c++latest',
+            '/permissive-',
+            '/MP',     # Enable multi process build.
+            '/EHsc',   # Catch C++ exceptions only, extern C functions never throw a C++ exception.
+            '/w14834', # [[nodiscard]]
           ],
           'TreatWChar_tAsBuiltInType': 'false',
         },

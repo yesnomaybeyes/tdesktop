@@ -28,6 +28,7 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 "lng_menu_update" = "Actualizar";
 "lng_menu_restart" = "Reiniciar";
 "lng_menu_back" = "Atrás";
+"lng_menu_night_mode" = "Modo noche";
 
 "lng_disable_notifications_from_tray" = "Desactivar notificaciones";
 "lng_enable_notifications_from_tray" = "Activar notificaciones";
@@ -144,6 +145,7 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 "lng_error_public_groups_denied" = "Lamentablemente, tienes prohibido participar en grupos públicos.\n{more_info}";
 "lng_error_cant_edit_admin" = "No puedes editar los permisos de este administrador.";
 "lng_error_cant_add_member" = "No puedes añadir al bot a este grupo. Pide a algún administrador que lo haga.";
+"lng_error_cant_add_bot" = "Este bot no puede se añadido a grupos.";
 "lng_error_cant_add_admin_invite" = "No puedes añadir a este usuario como administrador porque no es un miembro de este grupo y no puedes invitarlo.";
 "lng_error_cant_add_admin_unban" = "No puedes añadir a este usuario como administrador porque está en la lista de suspendidos y no puedes quitar su suspensión.";
 "lng_error_cant_ban_admin" = "No puedes suspender a este usuario porque es un administrador del grupo y no puedes degradarlo.";
@@ -244,10 +246,10 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 "lng_no_chats" = "Tus chats estarán aquí";
 "lng_contacts_loading" = "Cargando...";
 "lng_contacts_not_found" = "No se encontraron contactos";
-"lng_dlg_search_chat" = "Buscar en este chat";
-"lng_dlg_search_channel" = "Buscar en este canal";
 "lng_dlg_search_for_messages" = "Buscar mensajes";
 "lng_update_telegram" = "Actualizar Telegram";
+"lng_dlg_search_in" = "Buscar mensajes en";
+"lng_dlg_search_from" = "De: {user}";
 
 "lng_settings_save" = "Guardar";
 "lng_settings_upload" = "Poner foto de perfil";
@@ -269,10 +271,15 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 "lng_username_link" = "Este enlace abre un chat contigo:";
 "lng_username_copied" = "Enlace copiado al portapapeles.";
 
+"lng_bio_title" = "Editar tu biografía";
+"lng_bio_placeholder" = "Biografía";
+"lng_bio_about" = "Puedes añadir algunas palabras sobre ti. Cualquiera que abra tu perfil verá este texto.";
+
 "lng_settings_section_info" = "Información";
 "lng_settings_phone_number" = "Número de teléfono:";
 "lng_settings_username" = "Alias:";
 "lng_settings_choose_username" = "Elige un alias";
+"lng_settings_empty_bio" = "Ninguna";
 
 "lng_settings_section_notify" = "Notificaciones";
 "lng_settings_desktop_notify" = "Notificaciones de escritorio";
@@ -368,6 +375,8 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 "lng_local_storage_clear_failed" = "Borrado fallido :(";
 
 "lng_settings_section_advanced_settings" = "Ajustes avanzados";
+"lng_settings_enable_night_theme" = "Activar modo noche";
+"lng_settings_disable_night_theme" = "Desactivar modo noche";
 
 "lng_passcode_remove_button" = "Quitar";
 
@@ -541,6 +550,10 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 "lng_change_phone_code_description" = "Enviamos un SMS con el código de activación a tu teléfono {phone}.";
 "lng_change_phone_success" = "Tu número de teléfono ha sido cambiado.";
 
+"lng_mute_duration_hours#one" = "Por {count} hora";
+"lng_mute_duration_hours#other" = "Por {count} horas";
+"lng_mute_box_tip" = "Elige cuánto tiempo quieres silenciar las notificaciones de este chat";
+
 "lng_preview_loading" = "Obteniendo enlace...";
 
 "lng_profile_chat_unaccessible" = "El grupo es inaccesible";
@@ -553,6 +566,7 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 "lng_profile_invite_link_section" = "Enlace de invitación";
 "lng_profile_create_public_link" = "Crear enlace público";
 "lng_profile_edit_public_link" = "Editar enlace público";
+"lng_profile_search_members" = "Buscar miembros";
 "lng_profile_manage_admins" = "Gestionar administradores";
 "lng_profile_manage_blocklist" = "Administrar usuarios suspendidos";
 "lng_profile_manage_restrictedlist" = "Administrar usuarios restringidos";
@@ -565,6 +579,7 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 "lng_profile_mobile_number" = "Número:";
 "lng_profile_username" = "Alias:";
 "lng_profile_link" = "Enlace:";
+"lng_profile_bio" = "Biografía:";
 "lng_profile_add_contact" = "Añadir contacto";
 "lng_profile_edit_contact" = "Editar";
 "lng_profile_enable_notifications" = "Notificaciones";
@@ -635,7 +650,6 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 "lng_report_button" = "Reportar";
 "lng_report_thanks" = "¡Gracias! Tu reporte será revisado por nuestro equipo muy pronto.";
 
-"lng_channel_add_admins" = "Nuevo administrador";
 "lng_channel_add_members" = "Añadir miembros";
 "lng_channel_add_banned" = "Suspender usuario";
 "lng_channel_add_restricted" = "Restringir usuario";
@@ -647,6 +661,8 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 "lng_channel_admins_too_much" = "Lo sentimos, alcanzaste el límite de administradores. Por favor, elimina un administrador primero.";
 "lng_channel_admin_status_creator" = "Creador";
 "lng_channel_admin_status_promoted_by" = "Ascendido por {user}";
+"lng_channel_admin_status_not_admin" = "No es administrador";
+"lng_channel_banned_status_restricted_by" = "Restringido por {user}";
 
 "lng_group_blocked_list_about" = "Los usuarios suspendidos son eliminados del grupo y sólo pueden volver si son invitados por un administrador. \nLos enlaces de invitación no funcionan para ellos.";
 
@@ -735,7 +751,7 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 "lng_action_pinned_media_video" = "un vídeo";
 "lng_action_pinned_media_audio" = "un audio";
 "lng_action_pinned_media_voice" = "un mensaje de voz";
-"lng_action_pinned_media_video_message" = "un mensaje de vídeo";
+"lng_action_pinned_media_video_message" = "un videomensaje";
 "lng_action_pinned_media_file" = "un archivo";
 "lng_action_pinned_media_gif" = "un GIF";
 "lng_action_pinned_media_contact" = "un contacto";
@@ -753,6 +769,15 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 "lng_action_game_you_scored_no_game#other" = "Conseguiste {count} puntos";
 "lng_action_payment_done" = "Has transferido satisfactoriamente {amount} a {user}";
 "lng_action_payment_done_for" = "Has transferido satisfactoriamente {amount} a {name} por {invoice}";
+"lng_action_took_screenshot" = "¡{from} hizo una captura de pantalla!";
+"lng_action_you_took_screenshot" = "¡Hiciste una captura de pantalla!";
+
+"lng_ttl_photo_received" = "{from} te envió una foto con autodestrucción. Por favor, mírala en tu teléfono.";
+"lng_ttl_photo_sent" = "Enviaste una foto con autodestrucción";
+"lng_ttl_photo_expired" = "La foto expiró";
+"lng_ttl_video_received" = "{from} te envió un vídeo con autodestrucción. Por favor, míralo en tu teléfono.";
+"lng_ttl_video_sent" = "Enviaste un vídeo con autodestrucción";
+"lng_ttl_video_expired" = "El vídeo expiró";
 
 "lng_profile_migrate_reached#one" = "Límite de {count} miembro alcanzado";
 "lng_profile_migrate_reached#other" = "Límite de {count} miembros alcanzado";
@@ -859,6 +884,13 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 "lng_emoji_hide_panel" = "Haz clic aquí para esconder el panel de emojis";
 
 "lng_recent_stickers" = "Uso frecuente";
+"lng_faved_stickers" = "Stickers favoritos";
+"lng_faved_stickers_add" = "Añadir a favoritos";
+"lng_faved_stickers_remove" = "Eliminar de favoritos";
+"lng_group_stickers" = "Stickers de grupo";
+"lng_group_stickers_description" = "Puedes elegir un pack para que los miembros del grupo lo utilicen en él.";
+"lng_group_stickers_add" = "Elegir pack de stickers";
+
 "lng_switch_stickers" = "Stickers";
 "lng_switch_emoji" = "Emoji";
 "lng_switch_gifs" = "GIF";
@@ -888,13 +920,16 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 "lng_stickers_count#one" = "{count} sticker";
 "lng_stickers_count#other" = "{count} stickers";
 "lng_stickers_masks_pack" = "Este es un pack de stickers de máscaras. Puedes usarlas en el editor de fotos de nuestras aplicaciones en móviles.";
+"lng_stickers_group_set" = "Pack de stickers de grupo";
+"lng_stickers_remove_group_set" = "¿Eliminar el pack de stickers de grupo?";
+"lng_stickers_group_from_your" = "Elige desde tus stickers";
 
 "lng_in_dlg_photo" = "Foto";
 "lng_in_dlg_video" = "Vídeo";
 "lng_in_dlg_audio_file" = "Audio";
 "lng_in_dlg_contact" = "Contacto";
 "lng_in_dlg_audio" = "Mensaje de voz";
-"lng_in_dlg_video_message" = "Mensaje de vídeo";
+"lng_in_dlg_video_message" = "Videomensaje";
 "lng_in_dlg_file" = "Archivo";
 "lng_in_dlg_sticker" = "Sticker";
 "lng_in_dlg_sticker_emoji" = "{emoji} Sticker";
@@ -916,6 +951,10 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 "lng_cant_invite_banned" = "Sólo el administrador puede añadir a este usuario.";
 "lng_cant_invite_privacy" = "No puedes añadir a este usuario a grupos por sus ajustes de privacidad.";
 "lng_cant_invite_privacy_channel" = "No puedes añadir a este usuario a canales por sus ajustes de privacidad.";
+"lng_cant_delete_group#one" = "No es posible eliminar manualmente comunidades que tienen más de {count} miembro. Por favor, contacta al soporte de Telegram si quieres eliminar el grupo.";
+"lng_cant_delete_group#other" = "No es posible eliminar manualmente comunidades que tienen más de {count} miembros. Por favor, contacta al soporte de Telegram si quieres eliminar el grupo.";
+"lng_cant_delete_channel#one" = "No es posible eliminar manualmente comunidades que tienen más de {count} miembro. Por favor, contacta al soporte de Telegram si quieres eliminar el canal.";
+"lng_cant_delete_channel#other" = "No es posible eliminar manualmente comunidades que tienen más de {count} miembros. Por favor, contacta al soporte de Telegram si quieres eliminar el canal.";
 "lng_cant_do_this" = "Lo sentimos, esta acción no está disponible.";
 
 "lng_send_button" = "Enviar";
@@ -961,13 +1000,13 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 "lng_typing" = "escribiendo";
 "lng_user_typing" = "{user} está escribiendo";
 "lng_users_typing" = "{user} y {second_user} están escribiendo";
-"lng_many_typing#one" = "{count} está escribiendo";
-"lng_many_typing#other" = "{count} están escribiendo";
+"lng_many_typing#one" = "{count} persona está escribiendo";
+"lng_many_typing#other" = "{count} personas están escribiendo";
 "lng_playing_game" = "jugando";
 "lng_user_playing_game" = "{user} está jugando";
 "lng_users_playing_game" = "{user} y {second_user} están jugando";
-"lng_many_playing_game#one" = "{count} está jugando";
-"lng_many_playing_game#other" = "{count} están jugando";
+"lng_many_playing_game#one" = "{count} persona está jugando";
+"lng_many_playing_game#other" = "{count} personas están jugando";
 "lng_send_action_record_video" = "grabando un vídeo";
 "lng_user_action_record_video" = "{user} está grabando un vídeo";
 "lng_send_action_upload_video" = "enviando un vídeo";
@@ -976,10 +1015,10 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 "lng_user_action_record_audio" = "{user} está grabando un mensaje de voz";
 "lng_send_action_upload_audio" = "enviando un mensaje de voz";
 "lng_user_action_upload_audio" = "{user} está enviando un mensaje de voz";
-"lng_send_action_record_round" = "grabando un mensaje de vídeo";
-"lng_user_action_record_round" = "{user} está grabando un mensaje de vídeo";
-"lng_send_action_upload_round" = "enviando un mensaje de vídeo";
-"lng_user_action_upload_round" = "{user} está enviando un mensaje de vídeo";
+"lng_send_action_record_round" = "grabando un videomensaje";
+"lng_user_action_record_round" = "{user} está grabando un videomensaje";
+"lng_send_action_upload_round" = "enviando un videomensaje";
+"lng_user_action_upload_round" = "{user} está enviando un videomensaje";
 "lng_send_action_upload_photo" = "enviando una foto";
 "lng_user_action_upload_photo" = "{user} está enviando una foto";
 "lng_send_action_upload_file" = "enviando un archivo";
@@ -1163,6 +1202,7 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 "lng_search_found_results#one" = "{count} mensaje encontrado";
 "lng_search_found_results#other" = "{count} mensajes encontrados";
 "lng_search_global_results" = "Resultados de la búsqueda global";
+"lng_search_messages_from" = "Mostrar mensajes de";
 
 "lng_media_save_progress" = "{ready} de {total} {mb}";
 "lng_mediaview_save_as" = "Guardar como...";
@@ -1274,6 +1314,7 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 "lng_rights_edit_admin_header" = "¿Qué puede hacer este administrador?";
 "lng_rights_about_add_admins_yes" = "Este administrador podrá añadir administradores con los mismos (o menos) permisos.";
 "lng_rights_about_add_admins_no" = "Este administrador no podrá añadir administradores.";
+"lng_rights_about_admin_cant_edit" = "No puedes editar los permisos de este administrador.";
 "lng_rights_user_restrictions" = "Restricciones";
 "lng_rights_user_restrictions_header" = "¿Qué puede hacer este usuario?";
 
@@ -1293,8 +1334,14 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 "lng_rights_chat_send_media" = "Enviar multimedia";
 "lng_rights_chat_send_stickers" = "Enviar stickers y GIF";
 "lng_rights_chat_send_links" = "Enviar vista previa de enlaces";
-"lng_rights_chat_banned_until" = "Restringido hasta: {when}";
+"lng_rights_chat_banned_until_header" = "Restringido hasta";
 "lng_rights_chat_banned_forever" = "Siempre";
+"lng_rights_chat_banned_day#one" = "Por {count} día";
+"lng_rights_chat_banned_day#other" = "Por {count} días";
+"lng_rights_chat_banned_week#one" = "Por {count} semana";
+"lng_rights_chat_banned_week#other" = "Por {count} semanas";
+"lng_rights_chat_banned_custom" = "Personalizado";
+"lng_rights_chat_banned_custom_date" = "Hasta el {date}";
 "lng_rights_chat_banned_block" = "Suspender y eliminar del grupo";
 
 "lng_restricted_send_message" = "Los administradores del grupo han restringido que escribas.";
@@ -1320,12 +1367,13 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 "lng_admin_log_filter_messages_edited" = "Mensajes editados";
 "lng_admin_log_filter_messages_pinned" = "Mensajes anclados";
 "lng_admin_log_filter_members_removed" = "Miembros eliminados";
-"lng_admin_log_filter_all_admins" = "Todos los administradores";
+"lng_admin_log_filter_all_admins" = "Todos los usuarios";
 "lng_admin_log_about" = "¿Qué es esto?";
 "lng_admin_log_about_text" = "Esta es una lista de las acciones de servicio realizadas por los miembros y administradores del grupo en las últimas 48 horas.";
-"lng_admin_log_no_results_title" = "No se encontraron eventos";
-"lng_admin_log_no_results_text" = "No se encontraron eventos que coincidan con tu solicitud.";
-"lng_admin_log_no_events_title" = "Aún no hay eventos";
+"lng_admin_log_no_results_title" = "No se encontraron acciones";
+"lng_admin_log_no_results_text" = "No se encontraron acciones que coincidan con tu solicitud.";
+"lng_admin_log_no_results_search_text" = "No se encontraron acciones que contengan “{query}”.";
+"lng_admin_log_no_events_title" = "Aún no hay acciones";
 "lng_admin_log_no_events_text" = "Los miembros y administradores\nno han realizado acciones de \nservicio en las últimas 48 horas.";
 
 "lng_admin_log_empty_text" = "Vacío";
@@ -1343,6 +1391,8 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 "lng_admin_log_previous_link" = "Enlace previo";
 "lng_admin_log_changed_photo_group" = "{from} cambió la foto de grupo";
 "lng_admin_log_changed_photo_channel" = "{from} cambió la foto del canal";
+"lng_admin_log_removed_photo_group" = "{from} eliminó la foto del grupo";
+"lng_admin_log_removed_photo_channel" = "{from} eliminó la foto del canal";
 "lng_admin_log_invites_enabled" = "{from} permitió las invitaciones";
 "lng_admin_log_invites_disabled" = "{from} desactivó las invitaciones";
 "lng_admin_log_signatures_enabled" = "{from} activó las firmas";
@@ -1356,11 +1406,16 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 "lng_admin_log_previous_message" = "Mensaje original";
 "lng_admin_log_deleted_message" = "{from} eliminó un mensaje:";
 "lng_admin_log_participant_joined" = "{from} se unió al grupo";
+"lng_admin_log_participant_joined_channel" = "{from} se unió al canal";
 "lng_admin_log_participant_left" = "{from} dejó el grupo";
+"lng_admin_log_participant_left_channel" = "{from} dejó el canal";
 "lng_admin_log_invited" = "invitó a {user}";
 "lng_admin_log_banned" = "suspendió a {user}";
-"lng_admin_log_restricted" = "cambió las restricciones de {user} hasta el {until}";
+"lng_admin_log_restricted" = "cambió las restricciones de {user} {until}";
 "lng_admin_log_promoted" = "cambió los privilegios de {user}";
+"lng_admin_log_changed_stickers_group" = "{from} cambió el {sticker_set} de grupo";
+"lng_admin_log_changed_stickers_set" = "pack de stickers";
+"lng_admin_log_removed_stickers_group" = "{from} eliminó el pack de stickers";
 "lng_admin_log_user_with_username" = "{name} ({mention})";
 "lng_admin_log_restricted_forever" = "indefinidamente";
 "lng_admin_log_restricted_until" = "hasta el {date}";
@@ -1384,6 +1439,9 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 "lng_topbar_info" = "Información";
 "lng_profile_group_info" = "Información";
 "lng_profile_channel_info" = "Información";
+"lng_channel_add_admins" = "Nuevo administrador";
+"lng_dlg_search_chat" = "Buscar en este chat";
+"lng_dlg_search_channel" = "Buscar en este canal";
 
 // Wnd specific
 

@@ -20,6 +20,8 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 */
 #include "inline_bots/inline_bot_result.h"
 
+#include "data/data_photo.h"
+#include "data/data_document.h"
 #include "inline_bots/inline_bot_layout_item.h"
 #include "inline_bots/inline_bot_send_data.h"
 #include "storage/file_download.h"
@@ -60,7 +62,7 @@ std::unique_ptr<Result> Result::create(uint64 queryId, const MTPBotInlineResult 
 	};
 	Type type = getInlineResultType(mtpData);
 	if (type == Type::Unknown) {
-		return std::unique_ptr<Result>();
+		return nullptr;
 	}
 
 	auto result = std::make_unique<Result>(Creator{ queryId, type });
@@ -100,18 +102,18 @@ std::unique_ptr<Result> Result::create(uint64 queryId, const MTPBotInlineResult 
 	bool badAttachment = (result->_photo && !result->_photo->access) || (result->_document && !result->_document->isValid());
 
 	if (!message) {
-		return std::unique_ptr<Result>();
+		return nullptr;
 	}
 
 	// Ensure required media fields for layouts.
 	if (result->_type == Type::Photo) {
 		if (!result->_photo && result->_content_url.isEmpty()) {
-			return std::unique_ptr<Result>();
+			return nullptr;
 		}
 		result->createPhoto();
 	} else if (result->_type == Type::File || result->_type == Type::Gif || result->_type == Type::Sticker) {
 		if (!result->_document && result->_content_url.isEmpty()) {
-			return std::unique_ptr<Result>();
+			return nullptr;
 		}
 		result->createDocument();
 	}
@@ -136,7 +138,7 @@ std::unique_ptr<Result> Result::create(uint64 queryId, const MTPBotInlineResult 
 
 	case mtpc_botInlineMessageText: {
 		auto &r = message->c_botInlineMessageText();
-		auto entities = r.has_entities() ? entitiesFromMTP(r.ventities.v) : EntitiesInText();
+		auto entities = r.has_entities() ? TextUtilities::EntitiesFromMTP(r.ventities.v) : EntitiesInText();
 		result->sendData = std::make_unique<internal::SendText>(qs(r.vmessage), entities, r.is_no_webpage());
 		if (result->_type == Type::Photo) {
 			result->createPhoto();
@@ -149,6 +151,7 @@ std::unique_ptr<Result> Result::create(uint64 queryId, const MTPBotInlineResult 
 	} break;
 
 	case mtpc_botInlineMessageMediaGeo: {
+		// #TODO layer 72 save period and send live location?..
 		auto &r = message->c_botInlineMessageMediaGeo();
 		if (r.vgeo.type() == mtpc_geoPoint) {
 			result->sendData = std::make_unique<internal::SendGeo>(r.vgeo.c_geoPoint());
@@ -186,7 +189,7 @@ std::unique_ptr<Result> Result::create(uint64 queryId, const MTPBotInlineResult 
 	}
 
 	if (badAttachment || !result->sendData || !result->sendData->isValid()) {
-		return std::unique_ptr<Result>();
+		return nullptr;
 	}
 
 	if (result->_thumb->isNull() && !result->_thumb_url.isEmpty()) {
@@ -279,7 +282,7 @@ bool Result::hasThumbDisplay() const {
 	return false;
 };
 
-void Result::addToHistory(History *history, MTPDmessage::Flags flags, MsgId msgId, UserId fromId, MTPint mtpDate, UserId viaBotId, MsgId replyToId) const {
+void Result::addToHistory(History *history, MTPDmessage::Flags flags, MsgId msgId, UserId fromId, MTPint mtpDate, UserId viaBotId, MsgId replyToId, const QString &postAuthor) const {
 	flags |= MTPDmessage_ClientFlag::f_from_inline_bot;
 
 	MTPReplyMarkup markup = MTPnullMarkup;
@@ -287,7 +290,7 @@ void Result::addToHistory(History *history, MTPDmessage::Flags flags, MsgId msgI
 		flags |= MTPDmessage::Flag::f_reply_markup;
 		markup = *_mtpKeyboard;
 	}
-	sendData->addToHistory(this, history, flags, msgId, fromId, mtpDate, viaBotId, replyToId, markup);
+	sendData->addToHistory(this, history, flags, msgId, fromId, mtpDate, viaBotId, replyToId, postAuthor, markup);
 }
 
 QString Result::getErrorOnSend(History *history) const {

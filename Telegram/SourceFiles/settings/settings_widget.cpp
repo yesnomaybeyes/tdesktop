@@ -25,7 +25,6 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 #include "styles/style_settings.h"
 #include "styles/style_window.h"
 #include "styles/style_boxes.h"
-#include "ui/effects/widget_fade_wrap.h"
 #include "ui/widgets/scroll_area.h"
 #include "ui/widgets/buttons.h"
 #include "mainwindow.h"
@@ -52,13 +51,13 @@ void fillCodes() {
 	Codes.insert(qsl("debugmode"), [] {
 		QString text = cDebug() ? qsl("Do you want to disable DEBUG logs?") : qsl("Do you want to enable DEBUG logs?\n\nAll network events will be logged.");
 		Ui::show(Box<ConfirmBox>(text, [] {
-			App::app()->onSwitchDebugMode();
+			Messenger::Instance().onSwitchDebugMode();
 		}));
 	});
 	Codes.insert(qsl("testmode"), [] {
 		auto text = cTestMode() ? qsl("Do you want to disable TEST mode?") : qsl("Do you want to enable TEST mode?\n\nYou will be switched to test cloud.");
 		Ui::show(Box<ConfirmBox>(text, [] {
-			App::app()->onSwitchTestMode();
+			Messenger::Instance().onSwitchTestMode();
 		}));
 	});
 	Codes.insert(qsl("loadlang"), [] {
@@ -79,7 +78,7 @@ void fillCodes() {
 	Codes.insert(qsl("workmode"), [] {
 		auto text = Global::DialogsModeEnabled() ? qsl("Disable work mode?") : qsl("Enable work mode?");
 		Ui::show(Box<ConfirmBox>(text, [] {
-			App::app()->onSwitchWorkMode();
+			Messenger::Instance().onSwitchWorkMode();
 		}));
 	});
 	Codes.insert(qsl("moderate"), [] {
@@ -145,7 +144,7 @@ void fillCodes() {
 					if (track->failed()) {
 						Ui::show(Box<InformBox>("Could not audio :( Errors in 'log.txt'."));
 					} else {
-						AuthSession::Current().data().setSoundOverride(key, result.paths.front());
+						Auth().data().setSoundOverride(key, result.paths.front());
 						Local::writeUserSettings();
 					}
 				}
@@ -154,7 +153,7 @@ void fillCodes() {
 	}
 	Codes.insert(qsl("sounds_reset"), [] {
 		if (AuthSession::Exists()) {
-			AuthSession::Current().data().clearSoundOverrides();
+			Auth().data().clearSoundOverrides();
 			Local::writeUserSettings();
 			Ui::show(Box<InformBox>("All sound overrides were reset."));
 		}
@@ -210,10 +209,6 @@ void Widget::refreshLang() {
 	update();
 }
 
-void Widget::showFinished() {
-	_inner->showFinished();
-}
-
 void Widget::keyPressEvent(QKeyEvent *e) {
 	codesFeedString(e->text());
 	return LayerWidget::keyPressEvent(e);
@@ -245,7 +240,7 @@ void Widget::parentResized() {
 }
 
 void Widget::resizeUsingInnerHeight(int newWidth, int innerHeight) {
-	if (!App::wnd()) return;
+	if (!parentWidget()) return;
 
 	auto parentSize = parentWidget()->size();
 	auto windowWidth = parentSize.width();

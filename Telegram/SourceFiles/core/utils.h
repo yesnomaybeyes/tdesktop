@@ -21,47 +21,8 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 #pragma once
 
 #include "core/basic_types.h"
-#include <array>
-#include <vector>
-#include <algorithm>
-#include <set>
-#include <gsl/gsl>
-
-// Release build assertions.
-inline void t_noop() {
-}
-[[noreturn]] inline void t_assert_fail(const char *message, const char *file, int32 line) {
-	auto info = qsl("%1 %2:%3").arg(message).arg(file).arg(line);
-	LOG(("Assertion Failed! ") + info);
-	SignalHandlers::setCrashAnnotation("Assertion", info);
-
-	// Crash with access violation and generate crash report.
-	volatile int *t_assert_nullptr = nullptr;
-	*t_assert_nullptr = 0;
-
-	// Silent the possible failure to comply noreturn warning.
-	std::abort();
-}
-#define t_assert_full(condition, message, file, line) ((GSL_UNLIKELY(!(condition))) ? t_assert_fail(message, file, line) : t_noop())
-#define t_assert_c(condition, comment) t_assert_full(condition, "\"" #condition "\" (" comment ")", __FILE__, __LINE__)
-#define t_assert(condition) t_assert_full(condition, "\"" #condition "\"", __FILE__, __LINE__)
-
-// Declare our own versions of Expects() and Ensures().
-// Let them crash with reports and logging.
-#ifdef Expects
-#undef Expects
-#endif // Expects
-#define Expects(condition) t_assert_full(condition, "\"" #condition "\"", __FILE__, __LINE__)
-
-#ifdef Ensures
-#undef Ensures
-#endif // Ensures
-#define Ensures(condition) t_assert_full(condition, "\"" #condition "\"", __FILE__, __LINE__)
-
-#ifdef Unexpected
-#undef Unexpected
-#endif // Unexpected
-#define Unexpected(message) t_assert_fail("Unexpected: " message, __FILE__, __LINE__)
+#include "base/flags.h"
+#include "base/algorithm.h"
 
 // Define specializations for QByteArray for Qt 5.3.2, because
 // QByteArray in Qt 5.3.2 doesn't declare "pointer" subtype.
@@ -83,60 +44,15 @@ inline span<const char> make_span(const QByteArray &cont) {
 
 namespace base {
 
-template <typename T, size_t N>
-inline constexpr size_t array_size(const T(&)[N]) {
-	return N;
-}
-
-template <typename T>
-inline T take(T &source) {
-	return std::exchange(source, T());
-}
-
-namespace internal {
-
-template <typename D, typename T>
-inline constexpr D up_cast_helper(std::true_type, T object) {
-	return object;
-}
-
-template <typename D, typename T>
-inline constexpr D up_cast_helper(std::false_type, T object) {
-	return nullptr;
-}
-
-} // namespace internal
-
 template <typename D, typename T>
 inline constexpr D up_cast(T object) {
 	using DV = std::decay_t<decltype(*D())>;
 	using TV = std::decay_t<decltype(*T())>;
-	return internal::up_cast_helper<D>(std::integral_constant<bool, std::is_base_of<DV, TV>::value || std::is_same<DV, TV>::value>(), object);
-}
-
-template <typename Lambda>
-class scope_guard_helper {
-public:
-	scope_guard_helper(Lambda on_scope_exit) : _handler(std::move(on_scope_exit)) {
+	if constexpr (std::is_base_of_v<DV, TV>) {
+		return object;
+	} else {
+		return nullptr;
 	}
-	void dismiss() {
-		_dismissed = true;
-	}
-	~scope_guard_helper() {
-		if (!_dismissed) {
-			_handler();
-		}
-	}
-
-private:
-	Lambda _handler;
-	bool _dismissed = false;
-
-};
-
-template <typename Lambda>
-scope_guard_helper<Lambda> scope_guard(Lambda on_scope_exit) {
-	return scope_guard_helper<Lambda>(std::move(on_scope_exit));
 }
 
 template <typename Container, typename T>
@@ -244,11 +160,6 @@ reversion_wrapper<Container> reversed(Container &&container) {
 // while "for_const (T *p, v)" won't and "for_const (T *&p, v)" won't compile
 #define for_const(range_declaration, range_expression) for (range_declaration : std::as_const(range_expression))
 
-template <typename Enum>
-inline constexpr QFlags<Enum> qFlags(Enum v) {
-	return QFlags<Enum>(v);
-}
-
 template <typename Lambda>
 inline void InvokeQueued(QObject *context, Lambda &&lambda) {
 	QObject proxy;
@@ -329,7 +240,7 @@ void unixtimeInit();
 void unixtimeSet(TimeId servertime, bool force = false);
 TimeId unixtime();
 TimeId fromServerTime(const MTPint &serverTime);
-void toServerTime(const TimeId &clientTime, MTPint &outServerTime);
+MTPint toServerTime(const TimeId &clientTime);
 uint64 msgid();
 int32 reqid();
 
@@ -393,16 +304,16 @@ private:
 int32 hashCrc32(const void *data, uint32 len);
 
 int32 *hashSha1(const void *data, uint32 len, void *dest); // dest - ptr to 20 bytes, returns (int32*)dest
-inline std::array<char, 20> hashSha1(const void *data, int len) {
+inline std::array<char, 20> hashSha1(const void *data, int size) {
 	auto result = std::array<char, 20>();
-	hashSha1(data, len, result.data());
+	hashSha1(data, size, result.data());
 	return result;
 }
 
 int32 *hashSha256(const void *data, uint32 len, void *dest); // dest - ptr to 32 bytes, returns (int32*)dest
 inline std::array<char, 32> hashSha256(const void *data, int size) {
 	auto result = std::array<char, 32>();
-	hashSha1(data, size, result.data());
+	hashSha256(data, size, result.data());
 	return result;
 }
 
@@ -445,7 +356,7 @@ inline void memsetrnd_bad(T &value) {
 
 class ReadLockerAttempt {
 public:
-	ReadLockerAttempt(gsl::not_null<QReadWriteLock*> lock) : _lock(lock), _locked(_lock->tryLockForRead()) {
+	ReadLockerAttempt(not_null<QReadWriteLock*> lock) : _lock(lock), _locked(_lock->tryLockForRead()) {
 	}
 	ReadLockerAttempt(const ReadLockerAttempt &other) = delete;
 	ReadLockerAttempt &operator=(const ReadLockerAttempt &other) = delete;
@@ -467,7 +378,7 @@ public:
 	}
 
 private:
-	gsl::not_null<QReadWriteLock*> _lock;
+	not_null<QReadWriteLock*> _lock;
 	bool _locked = false;
 
 };
@@ -577,16 +488,6 @@ enum DBIPeerReportSpamStatus {
 	dbiprsRequesting = 5, // requesting the cloud setting right now
 };
 
-template <int Size>
-inline QString strMakeFromLetters(const uint32 (&letters)[Size]) {
-	QString result;
-	result.reserve(Size);
-	for (int32 i = 0; i < Size; ++i) {
-		result.push_back(QChar((((letters[i] >> 16) & 0xFF) << 8) | (letters[i] & 0xFF)));
-	}
-	return result;
-}
-
 class MimeType {
 public:
 	enum class Known {
@@ -639,26 +540,10 @@ enum ForwardWhatMessages {
 	ForwardPressedLinkMessage
 };
 
-enum ShowLayerOption {
-	CloseOtherLayers = 0x00,
-	KeepOtherLayers = 0x01,
-	ShowAfterOtherLayers = 0x03,
-
-	AnimatedShowLayer = 0x00,
-	ForceFastShowLayer = 0x04,
-};
-Q_DECLARE_FLAGS(ShowLayerOptions, ShowLayerOption);
-Q_DECLARE_OPERATORS_FOR_FLAGS(ShowLayerOptions);
-
 static int32 FullArcLength = 360 * 16;
 static int32 QuarterArcLength = (FullArcLength / 4);
 static int32 MinArcLength = (FullArcLength / 360);
 static int32 AlmostFullArcLength = (FullArcLength - MinArcLength);
-
-template <typename T, typename... Args>
-inline QSharedPointer<T> MakeShared(Args&&... args) {
-	return QSharedPointer<T>(new T(std::forward<Args>(args)...));
-}
 
 // This pointer is used for global non-POD variables that are allocated
 // on demand by createIfNull(lambda) and are never automatically freed.
@@ -697,7 +582,7 @@ public:
 		return data();
 	}
 	T &operator*() const {
-		t_assert(!isNull());
+		Assert(!isNull());
 		return *data();
 	}
 	explicit operator bool() const {
@@ -740,7 +625,7 @@ public:
 		return data();
 	}
 	T &operator*() const {
-		t_assert(!isNull());
+		Assert(!isNull());
 		return *data();
 	}
 	explicit operator bool() const {

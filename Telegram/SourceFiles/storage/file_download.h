@@ -25,6 +25,11 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 
 namespace Storage {
 
+constexpr auto kMaxFileInMemory = 10 * 1024 * 1024; // 10 MB max file could be hold in memory
+constexpr auto kMaxVoiceInMemory = 2 * 1024 * 1024; // 2 MB audio is hold in memory and auto loaded
+constexpr auto kMaxStickerInMemory = 2 * 1024 * 1024; // 2 MB stickers hold in memory, auto loaded and displayed inline
+constexpr auto kMaxAnimationInMemory = kMaxFileInMemory; // 10 MB gif and mp4 animations held in memory while playing
+
 class Downloader final {
 public:
 	Downloader();
@@ -100,7 +105,7 @@ public:
 	QByteArray imageFormat(const QSize &shrinkBox = QSize()) const;
 	QPixmap imagePixmap(const QSize &shrinkBox = QSize()) const;
 	QString fileName() const {
-		return _fname;
+		return _filename;
 	}
 	float64 currentProgress() const;
 	virtual int32 currentOffset(bool includeSkipped = false) const = 0;
@@ -142,7 +147,7 @@ signals:
 protected:
 	void readImage(const QSize &shrinkBox) const;
 
-	gsl::not_null<Storage::Downloader*> _downloader;
+	not_null<Storage::Downloader*> _downloader;
 	FileLoader *_prev = nullptr;
 	FileLoader *_next = nullptr;
 	int _priority = 0;
@@ -165,8 +170,8 @@ protected:
 	void loadNext();
 	virtual bool loadPart() = 0;
 
+	QString _filename;
 	QFile _file;
-	QString _fname;
 	bool _fileIsOpen = false;
 
 	LoadToCacheSetting _toCache;
@@ -211,6 +216,12 @@ private:
 		int dcIndex = 0;
 		int offset = 0;
 	};
+	struct CdnFileHash {
+		CdnFileHash(int limit, QByteArray hash) : limit(limit), hash(hash) {
+		}
+		int limit = 0;
+		QByteArray hash;
+	};
 
 	bool tryLoadLocal() override;
 	void cancelRequests() override;
@@ -223,16 +234,28 @@ private:
 	void normalPartLoaded(const MTPupload_File &result, mtpRequestId requestId);
 	void webPartLoaded(const MTPupload_WebFile &result, mtpRequestId requestId);
 	void cdnPartLoaded(const MTPupload_CdnFile &result, mtpRequestId requestId);
-	void reuploadDone(const MTPBool &result, mtpRequestId requestId);
+	void reuploadDone(const MTPVector<MTPCdnFileHash> &result, mtpRequestId requestId);
+	void requestMoreCdnFileHashes();
+	void getCdnFileHashesDone(const MTPVector<MTPCdnFileHash> &result, mtpRequestId requestId);
 
+	bool feedPart(int offset, base::const_byte_span bytes);
 	void partLoaded(int offset, base::const_byte_span bytes);
+
 	bool partFailed(const RPCError &error);
 	bool cdnPartFailed(const RPCError &error, mtpRequestId requestId);
 
 	void placeSentRequest(mtpRequestId requestId, const RequestData &requestData);
 	int finishSentRequestGetOffset(mtpRequestId requestId);
 	void switchToCDN(int offset, const MTPDupload_fileCdnRedirect &redirect);
-	void changeCDNParams(int offset, MTP::DcId dcId, const QByteArray &token, const QByteArray &encryptionKey, const QByteArray &encryptionIV);
+	void addCdnHashes(const QVector<MTPCdnFileHash> &hashes);
+	void changeCDNParams(int offset, MTP::DcId dcId, const QByteArray &token, const QByteArray &encryptionKey, const QByteArray &encryptionIV, const QVector<MTPCdnFileHash> &hashes);
+
+	enum class CheckCdnHashResult {
+		NoHash,
+		Invalid,
+		Good,
+	};
+	CheckCdnHashResult checkCdnFileHash(int offset, base::const_byte_span bytes);
 
 	std::map<mtpRequestId, RequestData> _sentRequests;
 
@@ -253,6 +276,9 @@ private:
 	QByteArray _cdnToken;
 	QByteArray _cdnEncryptionKey;
 	QByteArray _cdnEncryptionIV;
+	std::map<int, CdnFileHash> _cdnFileHashes;
+	std::map<int, QByteArray> _cdnUncheckedParts;
+	mtpRequestId _cdnHashesRequestId = 0;
 
 };
 
@@ -309,7 +335,6 @@ class WebLoadManager : public QObject {
 	Q_OBJECT
 
 public:
-
 	WebLoadManager(QThread *thread);
 
 #ifndef TDESKTOP_DISABLE_NETWORK_PROXY

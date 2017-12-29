@@ -362,9 +362,7 @@ void UpdateChecker::unpackUpdate() {
 
 	quint32 version;
 	{
-		QBuffer buffer(&uncompressed);
-		buffer.open(QIODevice::ReadOnly);
-		QDataStream stream(&buffer);
+		QDataStream stream(uncompressed);
 		stream.setVersion(QDataStream::Qt_5_1);
 
 		stream >> version;
@@ -427,9 +425,10 @@ void UpdateChecker::unpackUpdate() {
 				LOG(("Update Error: cant open file '%1' for writing").arg(tempDirPath + '/' + relativeName));
 				return fatalFail();
 			}
-			if (f.write(fileInnerData) != fileSize) {
+			auto writtenBytes = f.write(fileInnerData);
+			if (writtenBytes != fileSize) {
 				f.close();
-				LOG(("Update Error: cant write file '%1'").arg(tempDirPath + '/' + relativeName));
+				LOG(("Update Error: cant write file '%1', desiredSize: %2, write result: %3").arg(tempDirPath + '/' + relativeName).arg(fileSize).arg(writtenBytes));
 				return fatalFail();
 			}
 			f.close();
@@ -487,7 +486,7 @@ UpdateChecker::~UpdateChecker() {
 
 bool checkReadyUpdate() {
 	QString readyFilePath = cWorkingDir() + qsl("tupdates/temp/ready"), readyPath = cWorkingDir() + qsl("tupdates/temp");
-	if (!QFile(readyFilePath).exists()) {
+	if (!QFile(readyFilePath).exists() || cExeName().isEmpty()) {
 		if (QDir(cWorkingDir() + qsl("tupdates/ready")).exists() || QDir(cWorkingDir() + qsl("tupdates/temp")).exists()) {
 			UpdateChecker::clearAll();
 		}

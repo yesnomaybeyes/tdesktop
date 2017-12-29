@@ -20,6 +20,7 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 */
 #include "codegen/style/generator.h"
 
+#include <set>
 #include <memory>
 #include <functional>
 #include <QtCore/QDir>
@@ -609,10 +610,14 @@ bool Generator::writeStructsForwardDeclarations() {
 	}
 
 	header_->newline();
-	bool result = module_.enumVariables([this](const Variable &value) -> bool {
+	std::set<QString> alreadyDeclaredTypes;
+	bool result = module_.enumVariables([this, &alreadyDeclaredTypes](const Variable &value) -> bool {
 		if (value.value.type().tag == structure::TypeTag::Struct) {
 			if (!module_.findStructInModule(value.value.type().name, module_)) {
-				header_->stream() << "struct " << value.value.type().name.back() << ";\n";
+				if (alreadyDeclaredTypes.find(value.value.type().name.back()) == alreadyDeclaredTypes.end()) {
+					header_->stream() << "struct " << value.value.type().name.back() << ";\n";
+					alreadyDeclaredTypes.emplace(value.value.type().name.back());
+				}
 			}
 		}
 		return true;
@@ -748,8 +753,8 @@ int palette::indexOfColor(style::color c) const {\n\
 }\n\
 \n\
 color palette::colorAtIndex(int index) const {\n\
-	t_assert(_ready);\n\
-	t_assert(index >= 0 && index < kCount);\n\
+	Assert(_ready);\n\
+	Assert(index >= 0 && index < kCount);\n\
 	return _colors[index];\n\
 }\n\
 \n\
@@ -1176,10 +1181,7 @@ QByteArray iconMaskValueSize(int width, int height) {
 	QLatin1String sizeTag("SIZE:");
 	result.append(sizeTag.data(), sizeTag.size());
 	{
-		QBuffer buffer(&result);
-		buffer.open(QIODevice::Append);
-
-		QDataStream stream(&buffer);
+		QDataStream stream(&result, QIODevice::Append);
 		stream.setVersion(QDataStream::Qt_5_1);
 		stream << qint32(width) << qint32(height);
 	}
@@ -1189,9 +1191,11 @@ QByteArray iconMaskValueSize(int width, int height) {
 QByteArray iconMaskValuePng(QString filepath) {
 	QByteArray result;
 
-	auto pathAndModifiers = filepath.split('-');
-	filepath = pathAndModifiers[0];
-	auto modifiers = pathAndModifiers.mid(1);
+	QFileInfo fileInfo(filepath);
+	auto directory = fileInfo.dir();
+	auto nameAndModifiers = fileInfo.fileName().split('-');
+	filepath = directory.filePath(nameAndModifiers[0]);
+	auto modifiers = nameAndModifiers.mid(1);
 
 	QImage png100x(filepath + ".png");
 	QImage png200x(filepath + "@2x.png");

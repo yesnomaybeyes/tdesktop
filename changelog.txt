@@ -1,3 +1,138 @@
+1.2.5 alpha (29.12.17)
+
+- When viewing a photo from an album, you'll see other pictures from the same group as thumbnails in the lower part of the screen.
+- When composing an album paste additional media from the clipboard.
+- Bug fixes and other minor improvements.
+
+1.2.4 alpha (26.12.17)
+
+- Group media into an album when sharing multiple photos and videos.
+- Bug fixes and other minor improvements.
+
+1.2.3 alpha (17.12.17)
+
+- Several crash fixes.
+
+1.2.2 alpha (16.12.17)
+
+- Grouped photos and videos are displayed as albums.
+
+1.2.1 (12.12.17)
+
+- Bug fixes and other minor improvements.
+
+1.2.0 (10.12.17)
+
+- Radically improved navigation. New side panel on the right with quick access to shared media and group members.
+- Saved Messages. Bookmark messages by forwarding them to "Saved Messages". Access them from the Chats list or from the side menu.
+- Pinned Messages. If you are a channel admin, pin messages to focus your subscribers' attention on important announcements.
+- Easily recognize messages from group admins by the new 'admin' badge.
+- Also supported clearing history in supergroups and added a host of minor improvements.
+
+1.1.29 alpha (09.12.17)
+
+- Bug fixes and other minor improvements.
+
+1.1.28 alpha (09.12.17)
+
+- Bug fixes and other minor improvements.
+
+1.1.27 alpha (06.12.17)
+
+- Bookmark messages by forwarding them to "Saved Messages". Access them from the Chats list or from the side menu.
+
+1.1.26 alpha (02.12.17)
+
+- Admin badges in supergroup messages.
+- Fix crashing on launch in OS X 10.6.
+- Bug fixes and other minor improvements.
+
+1.1.25 alpha (30.11.17)
+
+- Bug fixes and other minor improvements.
+
+1.1.24 alpha (29.11.17)
+
+- Radically improved navigation. New side panel on the right with quick access to shared media and group members.
+- Pinned Messages. If you are a channel admin, pin messages to focus your subscribers' attention on important announcements.
+- Also supported clearing history in supergroups and added a host of minor improvements.
+
+1.1.23 (05.09.17)
+
+- See the message author photo and name while searching specific chat messages.
+- Fix "Send To" menu action on Windows.
+
+1.1.22 (04.09.17)
+
+- Bug fixes and other minor improvements.
+
+1.1.21 (03.09.17)
+
+- Bug fixes and other minor improvements.
+
+1.1.20 (03.09.17)
+
+- Groups with unread mentions and replies are now marked with an '@' badge in the chats list.
+- Navigate new mentions and replies in a group using the new '@' button.
+- Mark your stickers as “favorite” to quickly access them from the redesigned sticker panel.
+- Add an official sticker set for your group which all members will be able to use while chatting in your group (100+ member groups only).
+
+1.1.19 (01.08.17)
+
+- Search by messages of specific group members.
+- Bug fixes and other minor improvements.
+
+1.1.18 (27.07.17)
+
+- Bug fixes and other minor improvements.
+
+1.1.17 (26.07.17)
+
+- Bug fixes and other minor improvements.
+
+1.1.16 (26.07.17)
+
+- Autocompletion for emoji. Start typing :e to get suggestions.
+- Fixed a bug with forwarding messages.
+
+1.1.15 (23.07.17)
+
+- Send **bold** and __italic__ text in your messages.
+- Get a share link for posts in public supergroups.
+- Quickly share posts from channels and media messages from bots.
+- Search large supergroup members by name.
+- Search channel members by name for admins.
+- Use search in the service actions log.
+- Ban supergroup members via the right click menu in the service actions log.
+
+1.1.14 alpha (19.07.17)
+
+- Bug fixes and other minor improvements.
+
+1.1.13 alpha (14.07.17)
+
+- Various bug fixes.
+
+1.1.12 alpha (11.07.17)
+
+- Click on forwarded messages bar to change the recipient chat in case you chose a wrong one first.
+- Quickly share posts from channels and media messages from bots.
+- Search in large supergroup members by name.
+- Search in channel members by name if you're a channel admin.
+- Copy links to messages in public supergroups.
+
+1.1.11 alpha (06.07.17)
+
+- Send **bold** and __italic__ text in your messages (in addition to already supported `monospace` and ```multiline monospace```).
+- Search in channel and supergroup admin event log.
+- Ban members from right click menu in supergroup admin event log.
+
+1.1.10 (04.07.17)
+
+- Add event log filter for channel or supergroup event log.
+- Fix search by username in privacy exceptions editor.
+- Fix adding admins in channels.
+
 1.1.9 (30.06.17)
 
 - Supergroups can now have up to 10.000 members.

@@ -20,26 +20,31 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 */
 #pragma once
 
-#include "base/weak_unique_ptr.h"
+#include "base/weak_ptr.h"
 #include "base/timer.h"
 #include "calls/calls_call.h"
 #include "ui/widgets/tooltip.h"
+#include "ui/rp_widget.h"
 
 namespace Ui {
 class IconButton;
 class FlatLabel;
 template <typename Widget>
-class WidgetFadeWrap;
+class FadeWrap;
 } // namespace Ui
 
 namespace Calls {
 
-class Panel : public TWidget, private base::Subscriber, private Ui::AbstractTooltipShower {
+class Panel
+	: public Ui::RpWidget
+	, private base::Subscriber
+	, private Ui::AbstractTooltipShower {
+
 public:
-	Panel(gsl::not_null<Call*> call);
+	Panel(not_null<Call*> call);
 
 	void showAndActivate();
-	void replaceCall(gsl::not_null<Call*> call);
+	void replaceCall(not_null<Call*> call);
 	void hideAndDestroy();
 
 protected:
@@ -51,7 +56,7 @@ protected:
 	void mouseMoveEvent(QMouseEvent *e) override;
 	void leaveEventHook(QEvent *e) override;
 	void leaveToChildEvent(QEvent *e, QWidget *child) override;
-	bool event(QEvent *e) override;
+	bool eventHook(QEvent *e) override;
 
 private:
 	using State = Call::State;
@@ -85,11 +90,11 @@ private:
 	void startDurationUpdateTimer(TimeMs currentDuration);
 	void fillFingerprint();
 	void toggleOpacityAnimation(bool visible);
-	void finishAnimation();
+	void finishAnimating();
 	void destroyDelayed();
 
 	Call *_call = nullptr;
-	gsl::not_null<UserData*> _user;
+	not_null<UserData*> _user;
 
 	bool _useTransparency = true;
 	style::margins _padding;
@@ -103,8 +108,8 @@ private:
 
 	class Button;
 	object_ptr<Button> _answerHangupRedial;
-	object_ptr<Ui::WidgetFadeWrap<Button>> _decline;
-	object_ptr<Ui::WidgetFadeWrap<Button>> _cancel;
+	object_ptr<Ui::FadeWrap<Button>> _decline;
+	object_ptr<Ui::FadeWrap<Button>> _cancel;
 	bool _hangupShown = false;
 	Animation _hangupShownProgress;
 	object_ptr<Ui::IconButton> _mute;

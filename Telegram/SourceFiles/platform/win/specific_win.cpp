@@ -32,6 +32,7 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 #include "storage/localstorage.h"
 #include "passcodewidget.h"
 #include "base/task_queue.h"
+#include "core/crash_reports.h"
 
 #include <Shobjidl.h>
 #include <shellapi.h>
@@ -211,34 +212,6 @@ QString psDownloadPath() {
 	return QStandardPaths::writableLocation(QStandardPaths::DownloadLocation) + '/' + str_const_toString(AppName) + '/';
 }
 
-QString psCurrentExeDirectory(int argc, char *argv[]) {
-	LPWSTR *args;
-	int argsCount;
-	args = CommandLineToArgvW(GetCommandLine(), &argsCount);
-	if (args) {
-		QFileInfo info(QDir::fromNativeSeparators(QString::fromWCharArray(args[0])));
-		if (info.isFile()) {
-			return info.absoluteDir().absolutePath() + '/';
-		}
-		LocalFree(args);
-	}
-	return QString();
-}
-
-QString psCurrentExeName(int argc, char *argv[]) {
-	LPWSTR *args;
-	int argsCount;
-	args = CommandLineToArgvW(GetCommandLine(), &argsCount);
-	if (args) {
-		QFileInfo info(QDir::fromNativeSeparators(QString::fromWCharArray(args[0])));
-		if (info.isFile()) {
-			return info.fileName();
-		}
-		LocalFree(args);
-	}
-	return QString();
-}
-
 void psDoCleanup() {
 	try {
 		psAutoStart(false, true);
@@ -370,6 +343,24 @@ QString SystemCountry() {
 		if (len) {
 			return QString::fromStdWString(std::wstring(wstrCountry));
 		}
+	}
+	return QString();
+}
+
+QString CurrentExecutablePath(int argc, char *argv[]) {
+	WCHAR result[MAX_PATH + 1] = { 0 };
+	auto count = GetModuleFileName(nullptr, result, MAX_PATH + 1);
+	if (count < MAX_PATH + 1) {
+		auto info = QFileInfo(QDir::fromNativeSeparators(QString::fromWCharArray(result)));
+		return info.absoluteFilePath();
+	}
+
+	// Fallback to the first command line argument.
+	auto argsCount = 0;
+	if (auto args = CommandLineToArgvW(GetCommandLine(), &argsCount)) {
+		auto info = QFileInfo(QDir::fromNativeSeparators(QString::fromWCharArray(args[0])));
+		LocalFree(args);
+		return info.absoluteFilePath();
 	}
 	return QString();
 }
@@ -542,15 +533,23 @@ QString SystemLanguage() {
 
 namespace {
 	void _psLogError(const char *str, LSTATUS code) {
-		LPTSTR errorText = NULL, errorTextDefault = L"(Unknown error)";
-		FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_IGNORE_INSERTS, NULL, code, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPTSTR)&errorText, 0, 0);
-		if (!errorText) {
-			errorText = errorTextDefault;
-		}
+		LPWSTR errorTextFormatted = nullptr;
+		auto formatFlags = FORMAT_MESSAGE_FROM_SYSTEM
+			| FORMAT_MESSAGE_ALLOCATE_BUFFER
+			| FORMAT_MESSAGE_IGNORE_INSERTS;
+		FormatMessage(
+			formatFlags,
+			NULL,
+			code,
+			MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+			(LPTSTR)&errorTextFormatted,
+			0,
+			0);
+		auto errorText = errorTextFormatted
+			? errorTextFormatted
+			: L"(Unknown error)";
 		LOG((str).arg(code).arg(QString::fromStdWString(errorText)));
-		if (errorText != errorTextDefault) {
-			LocalFree(errorText);
-		}
+		LocalFree(errorTextFormatted);
 	}
 
 	bool _psOpenRegKey(LPCWSTR key, PHKEY rkey) {
@@ -592,6 +591,9 @@ namespace {
 }
 
 void RegisterCustomScheme() {
+	if (cExeName().isEmpty()) {
+		return;
+	}
 #ifndef TDESKTOP_DISABLE_REGISTER_CUSTOM_SCHEME
 	DEBUG_LOG(("App Info: Checking custom scheme 'tg'..."));
 
@@ -646,47 +648,10 @@ void psNewVersion() {
 	}
 }
 
-void psExecUpdater() {
-	QString targs = qsl("-update -exename \"") + cExeName() + '"';
-	if (cLaunchMode() == LaunchModeAutoStart) targs += qsl(" -autostart");
-	if (cDebug()) targs += qsl(" -debug");
-	if (cStartInTray()) targs += qsl(" -startintray");
-	if (cWriteProtected()) targs += qsl(" -writeprotected \"") + cExeDir() + '"';
-
-	QString updaterPath = cWriteProtected() ? (cWorkingDir() + qsl("tupdates/temp/Updater.exe")) : (cExeDir() + qsl("Updater.exe"));
-
-	QString updater(QDir::toNativeSeparators(updaterPath)), wdir(QDir::toNativeSeparators(cWorkingDir()));
-
-	DEBUG_LOG(("Application Info: executing %1 %2").arg(cExeDir() + "Updater.exe").arg(targs));
-	HINSTANCE r = ShellExecute(0, cWriteProtected() ? L"runas" : 0, updater.toStdWString().c_str(), targs.toStdWString().c_str(), wdir.isEmpty() ? 0 : wdir.toStdWString().c_str(), SW_SHOWNORMAL);
-	if (long(r) < 32) {
-		DEBUG_LOG(("Application Error: failed to execute %1, working directory: '%2', result: %3").arg(updater).arg(wdir).arg(long(r)));
-		psDeleteDir(cWorkingDir() + qsl("tupdates/temp"));
-	}
-}
-
-void psExecTelegram(const QString &crashreport) {
-	QString targs = crashreport.isEmpty() ? qsl("-noupdate") : ('"' + crashreport + '"');
-	if (crashreport.isEmpty()) {
-		if (cRestartingToSettings()) targs += qsl(" -tosettings");
-		if (cLaunchMode() == LaunchModeAutoStart) targs += qsl(" -autostart");
-		if (cDebug()) targs += qsl(" -debug");
-		if (cStartInTray()) targs += qsl(" -startintray");
-		if (cTestMode()) targs += qsl(" -testmode");
-		if (cDataFile() != qsl("data")) targs += qsl(" -key \"") + cDataFile() + '"';
-	}
-	QString telegram(QDir::toNativeSeparators(cExeDir() + cExeName())), wdir(QDir::toNativeSeparators(cWorkingDir()));
-
-	DEBUG_LOG(("Application Info: executing %1 %2").arg(cExeDir() + cExeName()).arg(targs));
-	Logs::closeMain();
-	SignalHandlers::finish();
-	HINSTANCE r = ShellExecute(0, 0, telegram.toStdWString().c_str(), targs.toStdWString().c_str(), wdir.isEmpty() ? 0 : wdir.toStdWString().c_str(), SW_SHOWNORMAL);
-	if (long(r) < 32) {
-		DEBUG_LOG(("Application Error: failed to execute %1, working directory: '%2', result: %3").arg(telegram).arg(wdir).arg(long(r)));
-	}
-}
-
 void _manageAppLnk(bool create, bool silent, int path_csidl, const wchar_t *args, const wchar_t *description) {
+	if (cExeName().isEmpty()) {
+		return;
+	}
 	WCHAR startupFolder[MAX_PATH];
 	HRESULT hr = SHGetFolderPath(0, path_csidl, 0, SHGFP_TYPE_CURRENT, startupFolder);
 	if (SUCCEEDED(hr)) {
@@ -1113,7 +1078,7 @@ void psWriteDump() {
 
 char ImageHlpSymbol64[sizeof(IMAGEHLP_SYMBOL64) + StackEntryMaxNameLength];
 QString psPrepareCrashDump(const QByteArray &crashdump, QString dumpfile) {
-	if (!LoadDbgHelp(true)) {
+	if (!LoadDbgHelp(true) || cExeName().isEmpty()) {
 		return qsl("ERROR: could not init dbghelp.dll!");
 	}
 
@@ -1280,7 +1245,7 @@ QString psPrepareCrashDump(const QByteArray &crashdump, QString dumpfile) {
 void psWriteStackTrace() {
 #ifndef TDESKTOP_DISABLE_CRASH_REPORTS
 	if (!LoadDbgHelp()) {
-		SignalHandlers::dump() << "ERROR: Could not load dbghelp.dll!\n";
+		CrashReports::dump() << "ERROR: Could not load dbghelp.dll!\n";
 		return;
 	}
 
@@ -1337,17 +1302,17 @@ void psWriteStackTrace() {
 		// deeper frame could not be found.
 		// CONTEXT need not to be suplied if imageTyp is IMAGE_FILE_MACHINE_I386!
 		if (!stackWalk64(imageType, hProcess, hThread, &s, &c, ReadProcessMemoryRoutine64, symFunctionTableAccess64, symGetModuleBase64, NULL)) {
-			SignalHandlers::dump() << "ERROR: Call to StackWalk64() failed!\n";
+			CrashReports::dump() << "ERROR: Call to StackWalk64() failed!\n";
 			return;
 		}
 
 		if (s.AddrPC.Offset == s.AddrReturn.Offset) {
-			SignalHandlers::dump() << s.AddrPC.Offset << "\n";
-			SignalHandlers::dump() << "ERROR: StackWalk64() endless callstack!";
+			CrashReports::dump() << s.AddrPC.Offset << "\n";
+			CrashReports::dump() << "ERROR: StackWalk64() endless callstack!";
 			return;
 		}
 		if (s.AddrPC.Offset != 0) { // we seem to have a valid PC
-			SignalHandlers::dump() << s.AddrPC.Offset << "\n";
+			CrashReports::dump() << s.AddrPC.Offset << "\n";
 		}
 
 		if (s.AddrReturn.Offset == 0) {

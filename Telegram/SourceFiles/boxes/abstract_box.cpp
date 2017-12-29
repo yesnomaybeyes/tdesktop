@@ -21,17 +21,16 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 #include "boxes/abstract_box.h"
 
 #include "styles/style_boxes.h"
+#include "styles/style_profile.h"
 #include "storage/localstorage.h"
 #include "lang/lang_keys.h"
-#include "ui/effects/widget_fade_wrap.h"
 #include "ui/widgets/buttons.h"
 #include "ui/widgets/scroll_area.h"
 #include "ui/widgets/labels.h"
+#include "ui/widgets/shadow.h"
+#include "ui/wrap/fade_wrap.h"
 #include "mainwidget.h"
 #include "mainwindow.h"
-
-BoxLayerTitleShadow::BoxLayerTitleShadow(QWidget *parent) : Ui::PlainShadow(parent, st::boxLayerTitleShadow) {
-}
 
 QPointer<Ui::RoundButton> BoxContent::addButton(base::lambda<QString()> textFactory, base::lambda<void()> clickCallback) {
 	return addButton(std::move(textFactory), std::move(clickCallback), st::defaultBoxButton);
@@ -55,17 +54,39 @@ void BoxContent::setInner(object_ptr<TWidget> inner, const style::ScrollArea &st
 			_topShadow->raise();
 			_bottomShadow->raise();
 		} else {
-			_topShadow.create(this, object_ptr<BoxLayerTitleShadow>(this));
-			_bottomShadow.create(this, object_ptr<BoxLayerTitleShadow>(this));
+			_topShadow.create(this);
+			_bottomShadow.create(this);
 		}
-		updateScrollAreaGeometry();
-		connect(_scroll, SIGNAL(scrolled()), this, SLOT(onScroll()));
-		connect(_scroll, SIGNAL(innerResized()), this, SLOT(onInnerResize()));
+		if (!_preparing) {
+			// We didn't set dimensions yet, this will be called from finishPrepare();
+			finishScrollCreate();
+		}
 	} else {
 		getDelegate()->setLayerType(false);
 		_scroll.destroyDelayed();
 		_topShadow.destroyDelayed();
 		_bottomShadow.destroyDelayed();
+	}
+}
+
+void BoxContent::finishPrepare() {
+	_preparing = false;
+	if (_scroll) {
+		finishScrollCreate();
+	}
+	setInnerFocus();
+}
+
+void BoxContent::finishScrollCreate() {
+	Expects(_scroll != nullptr);
+	updateScrollAreaGeometry();
+	connect(_scroll, SIGNAL(scrolled()), this, SLOT(onScroll()));
+	connect(_scroll, SIGNAL(innerResized()), this, SLOT(onInnerResize()));
+}
+
+void BoxContent::scrollToWidget(not_null<QWidget*> widget) {
+	if (_scroll) {
+		_scroll->scrollToWidget(widget);
 	}
 }
 
@@ -105,16 +126,12 @@ void BoxContent::updateShadowsVisibility() {
 	if (!_scroll) return;
 
 	auto top = _scroll->scrollTop();
-	if (top > 0 || _innerTopSkip > 0) {
-		_topShadow->showAnimated();
-	} else {
-		_topShadow->hideAnimated();
-	}
-	if (top < _scroll->scrollTopMax()) {
-		_bottomShadow->showAnimated();
-	} else {
-		_bottomShadow->hideAnimated();
-	}
+	_topShadow->toggle(
+		(top > 0 || _innerTopSkip > 0),
+		anim::type::normal);
+	_bottomShadow->toggle(
+		(top < _scroll->scrollTopMax()),
+		anim::type::normal);
 }
 
 void BoxContent::onScroll() {
@@ -131,7 +148,7 @@ void BoxContent::setInnerTopSkip(int innerTopSkip, bool scrollBottomFixed) {
 	if (_innerTopSkip != innerTopSkip) {
 		auto delta = innerTopSkip - _innerTopSkip;
 		_innerTopSkip = innerTopSkip;
-		if (_scroll) {
+		if (_scroll && width() > 0) {
 			auto scrollTopWas = _scroll->scrollTop();
 			updateScrollAreaGeometry();
 			if (scrollBottomFixed) {
@@ -150,11 +167,11 @@ void BoxContent::setInnerVisible(bool scrollAreaVisible) {
 QPixmap BoxContent::grabInnerCache() {
 	auto isTopShadowVisible = !_topShadow->isHidden();
 	auto isBottomShadowVisible = !_bottomShadow->isHidden();
-	if (isTopShadowVisible) _topShadow->hide();
-	if (isBottomShadowVisible) _bottomShadow->hide();
-	auto result = myGrab(this, _scroll->geometry());
-	if (isTopShadowVisible) _topShadow->show();
-	if (isBottomShadowVisible) _bottomShadow->show();
+	if (isTopShadowVisible) _topShadow->setVisible(false);
+	if (isBottomShadowVisible) _bottomShadow->setVisible(false);
+	auto result = Ui::GrabWidget(this, _scroll->geometry());
+	if (isTopShadowVisible) _topShadow->setVisible(true);
+	if (isBottomShadowVisible) _bottomShadow->setVisible(true);
 	return result;
 }
 
@@ -176,8 +193,12 @@ void BoxContent::updateScrollAreaGeometry() {
 		updateInnerVisibleTopBottom();
 
 		auto top = _scroll->scrollTop();
-		_topShadow->toggleFast(top > 0 || _innerTopSkip > 0);
-		_bottomShadow->toggleFast(top < _scroll->scrollTopMax());
+		_topShadow->toggle(
+			(top > 0 || _innerTopSkip > 0),
+			anim::type::instant);
+		_bottomShadow->toggle(
+			(top < _scroll->scrollTopMax()),
+			anim::type::instant);
 	}
 }
 
@@ -228,7 +249,7 @@ void AbstractBox::paintEvent(QPaintEvent *e) {
 	auto paintTopRounded = clip.intersects(QRect(0, 0, width(), st::boxRadius));
 	auto paintBottomRounded = clip.intersects(QRect(0, height() - st::boxRadius, width(), st::boxRadius));
 	if (paintTopRounded || paintBottomRounded) {
-		auto parts = qFlags(RectPart::None);
+		auto parts = RectPart::None | 0;
 		if (paintTopRounded) parts |= RectPart::FullTop;
 		if (paintBottomRounded) parts |= RectPart::FullBottom;
 		App::roundRect(p, rect(), st::boxBg, BoxCorners, nullptr, parts);
@@ -404,4 +425,20 @@ void AbstractBox::keyPressEvent(QKeyEvent *e) {
 	} else {
 		LayerWidget::keyPressEvent(e);
 	}
+}
+
+BoxContentDivider::BoxContentDivider(QWidget *parent) : RpWidget(parent) {
+}
+
+int BoxContentDivider::resizeGetHeight(int newWidth) {
+	return st::rightsDividerHeight;
+}
+
+void BoxContentDivider::paintEvent(QPaintEvent *e) {
+	Painter p(this);
+	p.fillRect(e->rect(), st::contactsAboutBg);
+	auto dividerFillTop = myrtlrect(0, 0, width(), st::profileDividerTop.height());
+	st::profileDividerTop.fill(p, dividerFillTop);
+	auto dividerFillBottom = myrtlrect(0, height() - st::profileDividerBottom.height(), width(), st::profileDividerBottom.height());
+	st::profileDividerBottom.fill(p, dividerFillBottom);
 }

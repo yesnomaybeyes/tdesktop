@@ -21,7 +21,9 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 #pragma once
 
 #include "history/history_admin_log_item.h"
+#include "history/history_admin_log_section.h"
 #include "ui/widgets/tooltip.h"
+#include "ui/rp_widget.h"
 #include "mtproto/sender.h"
 #include "base/timer.h"
 
@@ -37,36 +39,24 @@ namespace AdminLog {
 
 class SectionMemento;
 
-class LocalIdManager {
+class InnerWidget final
+	: public Ui::RpWidget
+	, public Ui::AbstractTooltipShower
+	, private MTP::Sender
+	, private base::Subscriber {
 public:
-	LocalIdManager() = default;
-	LocalIdManager(const LocalIdManager &other) = delete;
-	LocalIdManager &operator=(const LocalIdManager &other) = delete;
-	LocalIdManager(LocalIdManager &&other) : _counter(std::exchange(other._counter, ServerMaxMsgId)) {
-	}
-	LocalIdManager &operator=(LocalIdManager &&other) {
-		_counter = std::exchange(other._counter, ServerMaxMsgId);
-		return *this;
-	}
-	MsgId next() {
-		return ++_counter;
-	}
+	InnerWidget(
+		QWidget *parent,
+		not_null<Window::Controller*> controller,
+		not_null<ChannelData*> channel);
 
-private:
-	MsgId _counter = ServerMaxMsgId;
+	base::Observable<void> showSearchSignal;
+	base::Observable<int> scrollToSignal;
+	base::Observable<void> cancelledSignal;
 
-};
-
-class InnerWidget final : public TWidget, public Ui::AbstractTooltipShower, private MTP::Sender, private base::Subscriber {
-public:
-	InnerWidget(QWidget *parent, gsl::not_null<Window::Controller*> controller, gsl::not_null<ChannelData*> channel, base::lambda<void(int top)> scrollTo);
-
-	gsl::not_null<ChannelData*> channel() const {
+	not_null<ChannelData*> channel() const {
 		return _channel;
 	}
-
-	// Updates the area that is visible inside the scroll container.
-	void setVisibleTopBottom(int visibleTop, int visibleBottom) override;
 
 	// Set the correct scroll position after being resized.
 	void restoreScrollPosition();
@@ -76,14 +66,13 @@ public:
 		return TWidget::resizeToWidth(newWidth);
 	}
 
-	void saveState(gsl::not_null<SectionMemento*> memento);
-	void restoreState(gsl::not_null<SectionMemento*> memento);
-	void setCancelledCallback(base::lambda<void()> callback) {
-		_cancelledCallback = std::move(callback);
-	}
+	void saveState(not_null<SectionMemento*> memento);
+	void restoreState(not_null<SectionMemento*> memento);
 
-	// Empty "flags" means all events. Empty "admins" means all admins.
-	void applyFilter(MTPDchannelAdminLogEventsFilter::Flags flags, const std::vector<gsl::not_null<UserData*>> &admins);
+	// Empty "flags" means all events.
+	void applyFilter(FilterValue &&value);
+	void applySearch(const QString &query);
+	void showFilter(base::lambda<void(FilterValue &&filter)> callback);
 
 	// AbstractTooltipShower interface
 	QString tooltipText() const override;
@@ -92,6 +81,10 @@ public:
 	~InnerWidget();
 
 protected:
+	void visibleTopBottomUpdated(
+		int visibleTop,
+		int visibleBottom) override;
+
 	void paintEvent(QPaintEvent *e) override;
 	void keyPressEvent(QKeyEvent *e) override;
 	void mousePressEvent(QMouseEvent *e) override;
@@ -127,7 +120,7 @@ private:
 	void mouseActionCancel();
 	void updateSelected();
 	void performDrag();
-	int itemTop(gsl::not_null<const HistoryItem*> item) const;
+	int itemTop(not_null<const HistoryItem*> item) const;
 	void repaintItem(const HistoryItem *item);
 	QPoint mapPointToItem(QPoint point, const HistoryItem *item) const;
 	void handlePendingHistoryResize();
@@ -145,15 +138,22 @@ private:
 	void copySelectedText();
 	TextWithEntities getSelectedText() const;
 	void setToClipboard(const TextWithEntities &forClipboard, QClipboard::Mode mode = QClipboard::Clipboard);
+	void suggestRestrictUser(not_null<UserData*> user);
+	void restrictUser(not_null<UserData*> user, const MTPChannelBannedRights &oldRights, const MTPChannelBannedRights &newRights);
+	void restrictUserDone(not_null<UserData*> user, const MTPChannelBannedRights &rights);
 
+	void requestAdmins();
 	void checkPreloadMore();
 	void updateVisibleTopItem();
 	void preloadMore(Direction direction);
-	void itemsAdded(Direction direction);
+	void itemsAdded(Direction direction, int addedCount);
 	void updateSize();
 	void updateMinMaxIds();
 	void updateEmptyText();
 	void paintEmpty(Painter &p);
+	void clearAfterFilterChange();
+	void clearAndRequestLog();
+	void addEvents(Direction direction, const QVector<MTPChannelAdminLogEvent> &events);
 
 	void toggleScrollDateShown();
 	void repaintScrollDateCallback();
@@ -173,7 +173,7 @@ private:
 	// This function finds all userpics on the left that are displayed and calls template method
 	// for each found userpic (from the top to the bottom) using enumerateItems() method.
 	//
-	// Method has "bool (*Method)(gsl::not_null<HistoryMessage*> message, int userpicTop)" signature
+	// Method has "bool (*Method)(not_null<HistoryMessage*> message, int userpicTop)" signature
 	// if it returns false the enumeration stops immidiately.
 	template <typename Method>
 	void enumerateUserpics(Method method);
@@ -181,16 +181,14 @@ private:
 	// This function finds all date elements that are displayed and calls template method
 	// for each found date element (from the bottom to the top) using enumerateItems() method.
 	//
-	// Method has "bool (*Method)(gsl::not_null<HistoryItem*> item, int itemtop, int dateTop)" signature
+	// Method has "bool (*Method)(not_null<HistoryItem*> item, int itemtop, int dateTop)" signature
 	// if it returns false the enumeration stops immidiately.
 	template <typename Method>
 	void enumerateDates(Method method);
 
-	gsl::not_null<Window::Controller*> _controller;
-	gsl::not_null<ChannelData*> _channel;
-	gsl::not_null<History*> _history;
-	base::lambda<void()> _cancelledCallback;
-	base::lambda<void(int top)> _scrollTo;
+	not_null<Window::Controller*> _controller;
+	not_null<ChannelData*> _channel;
+	not_null<History*> _history;
 	std::vector<HistoryItemOwned> _items;
 	std::map<uint64, HistoryItem*> _itemsByIds;
 	int _itemsTop = 0;
@@ -219,6 +217,7 @@ private:
 	// Don't load anything until the memento was read.
 	bool _upLoaded = true;
 	bool _downLoaded = true;
+	bool _filterChanged = false;
 	Text _emptyText;
 
 	MouseAction _mouseAction = MouseAction::None;
@@ -243,8 +242,11 @@ private:
 
 	ClickHandlerPtr _contextMenuLink;
 
-	MTPDchannelAdminLogEventsFilter::Flags _filterFlags = 0;
-	std::vector<gsl::not_null<UserData*>> _filterAdmins;
+	FilterValue _filter;
+	QString _searchQuery;
+	std::vector<not_null<UserData*>> _admins;
+	std::vector<not_null<UserData*>> _adminsCanEdit;
+	base::lambda<void(FilterValue &&filter)> _showFilterCallback;
 
 };
 

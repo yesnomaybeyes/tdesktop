@@ -20,6 +20,7 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 */
 #pragma once
 
+#include <rpl/event_stream.h>
 #include "window/window_title.h"
 #include "base/timer.h"
 
@@ -49,7 +50,6 @@ public:
 	}
 
 	bool hideNoQuit();
-	void hideMediaview();
 
 	void init();
 	HitTestResult hitTest(const QPoint &p) const;
@@ -70,43 +70,34 @@ public:
 	}
 
 	void reActivateWindow() {
+#if defined Q_OS_LINUX32 || defined Q_OS_LINUX64
 		onReActivate();
 		QTimer::singleShot(200, this, SLOT(onReActivate()));
+#endif // Q_OS_LINUX32 || Q_OS_LINUX64
 	}
 
-	void showPhoto(const PhotoOpenClickHandler *lnk, HistoryItem *item = 0);
-	void showPhoto(PhotoData *photo, HistoryItem *item);
-	void showPhoto(PhotoData *photo, PeerData *item);
-	void showDocument(DocumentData *doc, HistoryItem *item);
-	bool ui_isMediaViewShown();
-
-	QWidget *filedialogParent();
-
 	void showRightColumn(object_ptr<TWidget> widget);
-	bool canExtendWidthBy(int addToWidth);
-	void tryToExtendWidthBy(int addToWidth);
+	int maximalExtendBy() const;
+	bool canExtendNoMove(int extendBy) const;
+
+	// Returns how much could the window get extended.
+	int tryToExtendWidthBy(int addToWidth);
 
 	virtual void updateTrayMenu(bool force = false) {
 	}
-
-	// TODO: rewrite using base::Observable
-	void documentUpdated(DocumentData *doc);
-	virtual void changingMsgId(HistoryItem *row, MsgId newId);
 
 	virtual ~MainWindow();
 
 	TWidget *bodyWidget() {
 		return _body.data();
 	}
-	virtual PeerData *ui_getPeerForMouseAction();
 
 	void launchDrag(std::unique_ptr<QMimeData> data);
 	base::Observable<void> &dragFinished() {
 		return _dragFinished;
 	}
-	base::Observable<void> &widgetGrabbed() {
-		return _widgetGrabbed;
-	}
+
+	rpl::producer<> leaveEvents() const;
 
 public slots:
 	bool minimizeToTray();
@@ -116,6 +107,7 @@ public slots:
 
 protected:
 	void resizeEvent(QResizeEvent *e) override;
+	void leaveEvent(QEvent *e) override;
 
 	void savePosition(Qt::WindowState state = Qt::WindowActive);
 	void handleStateChanged(Qt::WindowState state);
@@ -125,6 +117,9 @@ protected:
 	}
 
 	virtual void updateIsActiveHook() {
+	}
+
+	virtual void handleActiveChangedHook() {
 	}
 
 	void clearWidgets();
@@ -165,8 +160,6 @@ protected:
 
 	void setPositionInited();
 
-	void createMediaView();
-
 private slots:
 	void savePositionByTimer() {
 		savePosition();
@@ -197,10 +190,8 @@ private:
 	bool _wasInactivePress = false;
 	base::Timer _inactivePressTimer;
 
-	object_ptr<MediaView> _mediaView = { nullptr };
-
 	base::Observable<void> _dragFinished;
-	base::Observable<void> _widgetGrabbed;
+	rpl::event_stream<> _leaveEvents;
 
 };
 

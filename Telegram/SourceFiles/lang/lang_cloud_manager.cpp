@@ -32,13 +32,14 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 
 namespace Lang {
 
-CloudManager::CloudManager(Instance &langpack, gsl::not_null<MTP::Instance*> mtproto) : MTP::Sender()
+CloudManager::CloudManager(Instance &langpack, not_null<MTP::Instance*> mtproto) : MTP::Sender()
 , _langpack(langpack) {
 	requestLangPackDifference();
 }
 
 void CloudManager::requestLangPackDifference() {
-	if (_langpack.isCustom() || _langPackRequestId) {
+	request(_langPackRequestId).cancel();
+	if (_langpack.isCustom()) {
 		return;
 	}
 
@@ -115,7 +116,7 @@ void CloudManager::requestLanguageList() {
 	_languagesRequestId = request(MTPlangpack_GetLanguages()).done([this](const MTPVector<MTPLangPackLanguage> &result) {
 		auto languages = Languages();
 		for_const (auto &langData, result.v) {
-			t_assert(langData.type() == mtpc_langPackLanguage);
+			Assert(langData.type() == mtpc_langPackLanguage);
 			auto &language = langData.c_langPackLanguage();
 			languages.push_back({ qs(language.vlang_code), qs(language.vname), qs(language.vnative_name) });
 		}
@@ -171,13 +172,12 @@ bool CloudManager::showOfferSwitchBox() {
 		if (_offerSwitchToId.isEmpty()) {
 			return;
 		}
-		request(_langPackRequestId).cancel();
 		performSwitchAndRestart(_offerSwitchToId);
 	}, [this] {
 		Ui::hideLayer();
 		changeIdAndReInitConnection(DefaultLanguageId());
 		Local::writeLangPack();
-	}), KeepOtherLayers);
+	}), LayerOption::KeepOther);
 	return true;
 }
 
@@ -236,7 +236,7 @@ void CloudManager::switchToLanguage(QString id) {
 			auto cancel = getValue(lng_cancel);
 			Ui::show(Box<ConfirmBox>(text, save, cancel, [this, id] {
 				performSwitchAndRestart(id);
-			}), KeepOtherLayers);
+			}), LayerOption::KeepOther);
 		}).send();
 	}
 }
@@ -244,7 +244,7 @@ void CloudManager::switchToLanguage(QString id) {
 void CloudManager::performSwitchToCustom() {
 	auto filter = qsl("Language files (*.strings)");
 	auto title = qsl("Choose language .strings file");
-	FileDialog::GetOpenPath(title, filter, [weak = base::weak_unique_ptr<CloudManager>(this)](const FileDialog::OpenResult &result) {
+	FileDialog::GetOpenPath(title, filter, [weak = base::make_weak(this)](const FileDialog::OpenResult &result) {
 		if (!weak || result.paths.isEmpty()) {
 			return;
 		}
@@ -267,10 +267,12 @@ void CloudManager::performSwitchToCustom() {
 				Ui::show(Box<ConfirmBox>(text, save, cancel, [weak, filePath] {
 					weak->_langpack.switchToCustomFile(filePath);
 					App::restart();
-				}), KeepOtherLayers);
+				}), LayerOption::KeepOther);
 			}
 		} else {
-			Ui::show(Box<InformBox>("Custom lang failed :(\n\nError: " + loader.errors()), KeepOtherLayers);
+			Ui::show(
+				Box<InformBox>("Custom lang failed :(\n\nError: " + loader.errors()),
+				LayerOption::KeepOther);
 		}
 	});
 }
@@ -312,7 +314,7 @@ void CloudManager::changeIdAndReInitConnection(const QString &id) {
 
 CloudManager &CurrentCloudManager() {
 	auto result = Messenger::Instance().langCloudManager();
-	t_assert(result != nullptr);
+	Assert(result != nullptr);
 	return *result;
 }
 

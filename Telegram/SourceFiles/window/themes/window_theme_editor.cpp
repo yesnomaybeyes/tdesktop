@@ -436,7 +436,7 @@ bool Editor::Inner::readData() {
 		if (!_existingRows->feedDescription(name, description)) {
 			if (row.value.data()[0] == '#') {
 				auto result = readColor(name, row.value.data() + 1, row.value.size() - 1);
-				t_assert(!result.error);
+				Assert(!result.error);
 				_newRows->feed(name, result.color);
 				//if (!_newRows->feedFallbackName(name, str_const_toString(row.fallback))) {
 				//	Unexpected("Row for fallback not found");
@@ -448,7 +448,7 @@ bool Editor::Inner::readData() {
 				} else if (!_newRows->feedCopy(name, copyOf)) {
 					Unexpected("Copy of unknown value in the default palette");
 				}
-				t_assert(row.fallback.size() == 0);
+				Assert(row.fallback.size() == 0);
 			}
 			if (!_newRows->feedDescription(name, description)) {
 				Unexpected("Row for description not found");
@@ -727,7 +727,7 @@ Editor::Editor(QWidget*, const QString &path)
 		_scroll->scrollToY(top, bottom);
 	});
 	_close->setClickedCallback([this] { closeEditor(); });
-	_close->showFast();
+	_close->show(anim::type::instant);
 
 	_select->resizeToWidth(st::windowMinWidth);
 	_select->setQueryChangedCallback([this](const QString &query) { _inner->filterRows(query); _scroll->scrollToY(0); });

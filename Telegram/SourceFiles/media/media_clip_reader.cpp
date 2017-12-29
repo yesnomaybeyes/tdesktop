@@ -20,17 +20,19 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 */
 #include "media/media_clip_reader.h"
 
+#include "data/data_document.h"
+#include "storage/file_download.h"
+#include "media/media_clip_ffmpeg.h"
+#include "media/media_clip_qtgif.h"
+#include "mainwidget.h"
+#include "mainwindow.h"
+
 extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
 #include <libavutil/opt.h>
 #include <libswscale/swscale.h>
 }
-
-#include "media/media_clip_ffmpeg.h"
-#include "media/media_clip_qtgif.h"
-#include "mainwidget.h"
-#include "mainwindow.h"
 
 namespace Media {
 namespace Clip {
@@ -98,7 +100,7 @@ Reader::Reader(const QString &filepath, Callback &&callback, Mode mode, int64 se
 	init(FileLocation(filepath), QByteArray());
 }
 
-Reader::Reader(gsl::not_null<DocumentData*> document, FullMsgId msgId, Callback &&callback, Mode mode, int64 seekMs)
+Reader::Reader(not_null<DocumentData*> document, FullMsgId msgId, Callback &&callback, Mode mode, int64 seekMs)
 : _callback(std::move(callback))
 , _mode(mode)
 , _audioMsgId(document, msgId, (mode == Mode::Video) ? rand_value<uint32>() : 0)
@@ -202,7 +204,7 @@ void Reader::callback(Reader *reader, int32 threadIndex, Notification notificati
 	}
 }
 
-void Reader::start(int32 framew, int32 frameh, int32 outerw, int32 outerh, ImageRoundRadius radius, ImageRoundCorners corners) {
+void Reader::start(int32 framew, int32 frameh, int32 outerw, int32 outerh, ImageRoundRadius radius, RectParts corners) {
 	if (managers.size() <= _threadIndex) error();
 	if (_state == State::Error) return;
 
@@ -222,12 +224,12 @@ void Reader::start(int32 framew, int32 frameh, int32 outerw, int32 outerh, Image
 	}
 }
 
-QPixmap Reader::current(int32 framew, int32 frameh, int32 outerw, int32 outerh, ImageRoundRadius radius, ImageRoundCorners corners, TimeMs ms) {
+QPixmap Reader::current(int32 framew, int32 frameh, int32 outerw, int32 outerh, ImageRoundRadius radius, RectParts corners, TimeMs ms) {
 	Expects(outerw > 0);
 	Expects(outerh > 0);
 
 	auto frame = frameToShow();
-	t_assert(frame != nullptr);
+	Assert(frame != nullptr);
 
 	auto shouldBePaused = !ms;
 	if (!shouldBePaused) {
@@ -279,7 +281,7 @@ QPixmap Reader::current() {
 	Expects(_mode == Mode::Video);
 
 	auto frame = frameToShow();
-	t_assert(frame != nullptr);
+	Assert(frame != nullptr);
 
 	frame->displayed.storeRelease(1);
 	moveToNextShow();
@@ -471,7 +473,7 @@ public:
 	}
 
 	bool renderFrame() {
-		t_assert(frame() != 0 && _request.valid());
+		Assert(frame() != 0 && _request.valid());
 		if (!_implementation->renderFrame(frame()->original, frame()->alpha, QSize(_request.framew, _request.frameh))) {
 			return false;
 		}
@@ -484,7 +486,7 @@ public:
 	}
 
 	bool init() {
-		if (_data.isEmpty() && QFileInfo(_location->name()).size() <= AnimationInMemory) {
+		if (_data.isEmpty() && QFileInfo(_location->name()).size() <= Storage::kMaxAnimationInMemory) {
 			QFile f(_location->name());
 			if (f.open(QIODevice::ReadOnly)) {
 				_data = f.readAll();
@@ -697,7 +699,7 @@ bool Manager::handleProcessResult(ReaderPrivate *reader, ProcessResult result, T
 	if (!reader->_autoPausedGif && reader->_mode == Reader::Mode::Gif && result == ProcessResult::Repaint) {
 		int32 ishowing, iprevious;
 		auto showing = it.key()->frameToShow(&ishowing), previous = it.key()->frameToWriteNext(false, &iprevious);
-		t_assert(previous != nullptr && showing != nullptr && ishowing >= 0 && iprevious >= 0);
+		Assert(previous != nullptr && showing != nullptr && ishowing >= 0 && iprevious >= 0);
 		if (reader->_frames[ishowing].when > 0 && showing->displayed.loadAcquire() <= 0) { // current frame was not shown
 			if (reader->_frames[ishowing].when + WaitBeforeGifPause < ms || (reader->_frames[iprevious].when && previous->displayed.loadAcquire() <= 0)) {
 				reader->_autoPausedGif = true;
@@ -707,7 +709,7 @@ bool Manager::handleProcessResult(ReaderPrivate *reader, ProcessResult result, T
 		}
 	}
 	if (result == ProcessResult::Started || result == ProcessResult::CopyFrame) {
-		t_assert(reader->_frame >= 0);
+		Assert(reader->_frame >= 0);
 		auto frame = it.key()->_frames + reader->_frame;
 		frame->clear();
 		frame->pix = reader->frame()->pix;
@@ -752,7 +754,7 @@ Manager::ResultHandleState Manager::handleResult(ReaderPrivate *reader, ProcessR
 				if (frame) {
 					frame->clear();
 				} else {
-					t_assert(!reader->_request.valid());
+					Assert(!reader->_request.valid());
 				}
 				reader->_frame = index;
 			}
@@ -870,8 +872,8 @@ Manager::~Manager() {
 	clear();
 }
 
-FileLoadTask::Video PrepareForSending(const QString &fname, const QByteArray &data) {
-	auto result = FileLoadTask::Video();
+FileMediaInformation::Video PrepareForSending(const QString &fname, const QByteArray &data) {
+	auto result = FileMediaInformation::Video();
 	auto localLocation = FileLocation(fname);
 	auto localData = QByteArray(data);
 

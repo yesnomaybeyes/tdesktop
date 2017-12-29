@@ -34,17 +34,17 @@ void AutoLockBox::prepare() {
 	auto options = { 60, 300, 3600, 18000 };
 
 	auto group = std::make_shared<Ui::RadiobuttonGroup>(Global::AutoLock());
-	auto y = st::boxOptionListPadding.top();
+	auto y = st::boxOptionListPadding.top() + st::langsButton.margin.top();
 	auto count = int(options.size());
 	_options.reserve(count);
 	for (auto seconds : options) {
 		_options.emplace_back(this, group, seconds, (seconds % 3600) ? lng_passcode_autolock_minutes(lt_count, seconds / 60) : lng_passcode_autolock_hours(lt_count, seconds / 3600), st::langsButton);
-		_options.back()->move(st::boxPadding.left() + st::boxOptionListPadding.left(), y);
+		_options.back()->moveToLeft(st::boxPadding.left() + st::boxOptionListPadding.left(), y);
 		y += _options.back()->heightNoMargins() + st::boxOptionListSkip;
 	}
 	group->setChangedCallback([this](int value) { durationChanged(value); });
 
-	setDimensions(st::langsWidth, st::boxOptionListPadding.top() + count * st::langsButton.height + (count - 1) * st::boxOptionListSkip + st::boxOptionListPadding.bottom() + st::boxPadding.bottom());
+	setDimensions(st::langsWidth, st::boxOptionListPadding.top() + count * _options.back()->heightNoMargins() + (count - 1) * st::boxOptionListSkip + st::boxOptionListPadding.bottom() + st::boxPadding.bottom());
 }
 
 void AutoLockBox::durationChanged(int seconds) {
@@ -52,6 +52,6 @@ void AutoLockBox::durationChanged(int seconds) {
 	Local::writeUserSettings();
 	Global::RefLocalPasscodeChanged().notify();
 
-	AuthSession::Current().checkAutoLock();
+	Auth().checkAutoLock();
 	closeBox();
 }

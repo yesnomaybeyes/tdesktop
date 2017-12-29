@@ -20,7 +20,7 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 */
 #pragma once
 
-#include "ui/twidget.h"
+#include "ui/rp_widget.h"
 #include "ui/effects/panel_animation.h"
 #include "mtproto/sender.h"
 #include "auth_session.h"
@@ -52,15 +52,15 @@ class EmojiListWidget;
 class StickersListWidget;
 class GifsListWidget;
 
-class TabbedSelector : public TWidget, private base::Subscriber {
+class TabbedSelector : public Ui::RpWidget, private base::Subscriber {
 	Q_OBJECT
 
 public:
-	TabbedSelector(QWidget *parent, gsl::not_null<Window::Controller*> controller);
+	TabbedSelector(QWidget *parent, not_null<Window::Controller*> controller);
 
 	void setRoundRadius(int radius);
 	void refreshStickers();
-	void stickersInstalled(uint64 setId);
+	void showMegagroupSet(ChannelData *megagroup);
 	void setCurrentPeer(PeerData *peer);
 
 	void hideFinished();
@@ -85,7 +85,11 @@ public:
 
 	// Float player interface.
 	bool wheelEventFromFloatPlayer(QEvent *e);
-	QRect rectForFloatPlayer();
+	QRect rectForFloatPlayer() const;
+
+	auto showRequests() const {
+		return _showRequests.events();
+	}
 
 	~TabbedSelector();
 
@@ -105,8 +109,6 @@ signals:
 	void photoSelected(PhotoData *photo);
 	void inlineResultSelected(InlineBots::Result *result, UserData *bot);
 
-	void updateStickers();
-
 	void cancelled();
 	void slideFinished();
 	void checkForHide();
@@ -124,10 +126,10 @@ private:
 		SelectorTab type() const {
 			return _type;
 		}
-		gsl::not_null<Inner*> widget() const {
+		not_null<Inner*> widget() const {
 			return _weak;
 		}
-		gsl::not_null<InnerFooter*> footer() const {
+		not_null<InnerFooter*> footer() const {
 			return _footer;
 		}
 
@@ -153,6 +155,7 @@ private:
 
 	void checkRestrictedPeer();
 	bool isRestrictedView();
+	void updateRestrictedLabelGeometry();
 
 	QImage grabForAnimation();
 
@@ -165,21 +168,21 @@ private:
 	void setWidgetToScrollArea();
 	void createTabsSlider();
 	void switchTab();
-	gsl::not_null<Tab*> getTab(SelectorTab type) {
+	not_null<Tab*> getTab(SelectorTab type) {
 		return &_tabs[static_cast<int>(type)];
 	}
-	gsl::not_null<const Tab*> getTab(SelectorTab type) const {
+	not_null<const Tab*> getTab(SelectorTab type) const {
 		return &_tabs[static_cast<int>(type)];
 	}
-	gsl::not_null<Tab*> currentTab() {
+	not_null<Tab*> currentTab() {
 		return getTab(_currentTabType);
 	}
-	gsl::not_null<const Tab*> currentTab() const {
+	not_null<const Tab*> currentTab() const {
 		return getTab(_currentTabType);
 	}
-	gsl::not_null<EmojiListWidget*> emoji() const;
-	gsl::not_null<StickersListWidget*> stickers() const;
-	gsl::not_null<GifsListWidget*> gifs() const;
+	not_null<EmojiListWidget*> emoji() const;
+	not_null<StickersListWidget*> stickers() const;
+	not_null<GifsListWidget*> gifs() const;
 
 	int _roundRadius = 0;
 	int _footerTop = 0;
@@ -200,15 +203,15 @@ private:
 	base::lambda<void(SelectorTab)> _afterShownCallback;
 	base::lambda<void(SelectorTab)> _beforeHidingCallback;
 
+	rpl::event_stream<> _showRequests;
+
 };
 
-class TabbedSelector::Inner : public TWidget {
+class TabbedSelector::Inner : public Ui::RpWidget {
 	Q_OBJECT
 
 public:
-	Inner(QWidget *parent, gsl::not_null<Window::Controller*> controller);
-
-	void setVisibleTopBottom(int visibleTop, int visibleBottom) override;
+	Inner(QWidget *parent, not_null<Window::Controller*> controller);
 
 	int getVisibleTop() const {
 		return _visibleTop;
@@ -216,6 +219,7 @@ public:
 	int getVisibleBottom() const {
 		return _visibleBottom;
 	}
+	void setMinimalHeight(int newWidth, int newMinimalHeight);
 
 	virtual void refreshRecent() = 0;
 	virtual void preloadImages() {
@@ -234,14 +238,19 @@ public:
 signals:
 	void scrollToY(int y);
 	void disableScroll(bool disabled);
-	void saveConfigDelayed(int delay);
 
 protected:
-	gsl::not_null<Window::Controller*> controller() const {
+	void visibleTopBottomUpdated(
+		int visibleTop,
+		int visibleBottom) override;
+	int minimalHeight() const;
+	int resizeGetHeight(int newWidth) override final;
+
+	not_null<Window::Controller*> controller() const {
 		return _controller;
 	}
 
-	virtual int countHeight() = 0;
+	virtual int countDesiredHeight(int newWidth) = 0;
 	virtual InnerFooter *getFooter() const = 0;
 	virtual void processHideFinished() {
 	}
@@ -249,10 +258,11 @@ protected:
 	}
 
 private:
-	gsl::not_null<Window::Controller*> _controller;
+	not_null<Window::Controller*> _controller;
 
 	int _visibleTop = 0;
 	int _visibleBottom = 0;
+	int _minimalHeight = 0;
 
 };
 

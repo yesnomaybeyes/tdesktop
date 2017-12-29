@@ -20,11 +20,14 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 */
 #include "inline_bots/inline_bot_layout_item.h"
 
+#include "data/data_photo.h"
+#include "data/data_document.h"
 #include "core/click_handler_types.h"
 #include "inline_bots/inline_bot_result.h"
 #include "inline_bots/inline_bot_layout_internal.h"
 #include "storage/localstorage.h"
 #include "mainwidget.h"
+#include "ui/empty_userpic.h"
 
 namespace InlineBots {
 namespace Layout {
@@ -105,7 +108,7 @@ void ItemBase::layoutChanged() {
 	}
 }
 
-std::unique_ptr<ItemBase> ItemBase::createLayout(gsl::not_null<Context*> context, Result *result, bool forceThumb) {
+std::unique_ptr<ItemBase> ItemBase::createLayout(not_null<Context*> context, Result *result, bool forceThumb) {
 	using Type = Result::Type;
 
 	switch (result->_type) {
@@ -121,10 +124,10 @@ std::unique_ptr<ItemBase> ItemBase::createLayout(gsl::not_null<Context*> context
 	case Type::Game: return std::make_unique<internal::Game>(context, result); break;
 	case Type::Contact: return std::make_unique<internal::Contact>(context, result); break;
 	}
-	return std::unique_ptr<ItemBase>();
+	return nullptr;
 }
 
-std::unique_ptr<ItemBase> ItemBase::createLayoutGif(gsl::not_null<Context*> context, DocumentData *document) {
+std::unique_ptr<ItemBase> ItemBase::createLayoutGif(not_null<Context*> context, DocumentData *document) {
 	return std::make_unique<internal::Gif>(context, document, true);
 }
 
@@ -151,7 +154,10 @@ ImagePtr ItemBase::getResultThumb() const {
 
 QPixmap ItemBase::getResultContactAvatar(int width, int height) const {
 	if (_result->_type == Result::Type::Contact) {
-		auto result = EmptyUserpic(qHash(_result->_id) % kUserColorsCount, _result->getLayoutTitle()).generate(width);
+		auto result = Ui::EmptyUserpic(
+			Data::PeerUserpicColor(qHash(_result->_id)),
+			_result->getLayoutTitle()
+		).generate(width);
 		if (result.height() != height * cIntRetinaFactor()) {
 			result = result.scaled(QSize(width, height) * cIntRetinaFactor(), Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
 		}
@@ -170,14 +176,14 @@ QString ItemBase::getResultUrl() const {
 
 ClickHandlerPtr ItemBase::getResultUrlHandler() const {
 	if (!_result->_url.isEmpty()) {
-		return MakeShared<UrlClickHandler>(_result->_url);
+		return std::make_shared<UrlClickHandler>(_result->_url);
 	}
 	return ClickHandlerPtr();
 }
 
 ClickHandlerPtr ItemBase::getResultContentUrlHandler() const {
 	if (!_result->_content_url.isEmpty()) {
-		return MakeShared<UrlClickHandler>(_result->_content_url);
+		return std::make_shared<UrlClickHandler>(_result->_content_url);
 	}
 	return ClickHandlerPtr();
 }

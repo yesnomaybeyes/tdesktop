@@ -20,6 +20,8 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 */
 #include "inline_bots/inline_results_widget.h"
 
+#include "data/data_photo.h"
+#include "data/data_document.h"
 #include "styles/style_chat_helpers.h"
 #include "ui/widgets/buttons.h"
 #include "ui/widgets/shadow.h"
@@ -48,7 +50,7 @@ constexpr auto kInlineBotRequestDelay = 400;
 
 } // namespace
 
-Inner::Inner(QWidget *parent, gsl::not_null<Window::Controller*> controller) : TWidget(parent)
+Inner::Inner(QWidget *parent, not_null<Window::Controller*> controller) : TWidget(parent)
 , _controller(controller) {
 	resize(st::emojiPanWidth - st::emojiScroll.width - st::buttonRadius, st::emojiPanMinHeight);
 
@@ -61,7 +63,7 @@ Inner::Inner(QWidget *parent, gsl::not_null<Window::Controller*> controller) : T
 	_updateInlineItems.setSingleShot(true);
 	connect(&_updateInlineItems, SIGNAL(timeout()), this, SLOT(onUpdateInlineItems()));
 
-	subscribe(AuthSession::CurrentDownloaderTaskFinished(), [this] {
+	subscribe(Auth().downloaderTaskFinished(), [this] {
 		update();
 	});
 	subscribe(controller->gifPauseLevelChanged(), [this] {
@@ -80,7 +82,9 @@ Inner::Inner(QWidget *parent, gsl::not_null<Window::Controller*> controller) : T
 	}));
 }
 
-void Inner::setVisibleTopBottom(int visibleTop, int visibleBottom) {
+void Inner::visibleTopBottomUpdated(
+		int visibleTop,
+		int visibleBottom) {
 	_visibleBottom = visibleBottom;
 	if (_visibleTop != visibleTop) {
 		_visibleTop = visibleTop;
@@ -90,7 +94,7 @@ void Inner::setVisibleTopBottom(int visibleTop, int visibleBottom) {
 
 void Inner::checkRestrictedPeer() {
 	if (auto megagroup = _inlineQueryPeer ? _inlineQueryPeer->asMegagroup() : nullptr) {
-		if (megagroup->restrictedRights().is_send_inline()) {
+		if (megagroup->restricted(ChannelRestriction::f_send_inline)) {
 			if (!_restrictedLabel) {
 				_restrictedLabel.create(this, lang(lng_restricted_send_inline), Ui::FlatLabel::InitType::Simple, st::stickersRestrictedLabel);
 				_restrictedLabel->show();
@@ -220,7 +224,7 @@ void Inner::mouseReleaseEvent(QMouseEvent *e) {
 		return;
 	}
 
-	if (dynamic_cast<InlineBots::Layout::SendClickHandler*>(activated.data())) {
+	if (dynamic_cast<InlineBots::Layout::SendClickHandler*>(activated.get())) {
 		int row = _selected / MatrixRowShift, column = _selected % MatrixRowShift;
 		selectInlineResult(row, column);
 	} else {
@@ -262,7 +266,7 @@ void Inner::enterFromChildEvent(QEvent *e, QWidget *child) {
 void Inner::clearSelection() {
 	if (_selected >= 0) {
 		int srow = _selected / MatrixRowShift, scol = _selected % MatrixRowShift;
-		t_assert(srow >= 0 && srow < _rows.size() && scol >= 0 && scol < _rows.at(srow).items.size());
+		Assert(srow >= 0 && srow < _rows.size() && scol >= 0 && scol < _rows.at(srow).items.size());
 		ClickHandler::clearActive(_rows.at(srow).items.at(scol));
 		setCursor(style::cur_default);
 	}
@@ -375,7 +379,7 @@ void Inner::deleteUnusedInlineLayouts() {
 
 Inner::Row &Inner::layoutInlineRow(Row &row, int32 sumWidth) {
 	auto count = int(row.items.size());
-	t_assert(count <= kInlineItemsMaxPerRow);
+	Assert(count <= kInlineItemsMaxPerRow);
 
 	// enumerate items in the order of growing maxWidth()
 	// for that sort item indices by maxWidth()
@@ -470,7 +474,7 @@ int Inner::refreshInlineRows(PeerData *queryPeer, UserData *bot, const CacheEntr
 
 	clearSelection();
 
-	t_assert(_inlineBot != 0);
+	Assert(_inlineBot != 0);
 
 	auto count = int(entry->results.size());
 	auto from = validateExistingInlineRows(entry->results);
@@ -588,7 +592,7 @@ bool Inner::inlineItemVisible(const ItemBase *layout) {
 	}
 
 	int row = position / MatrixRowShift, col = position % MatrixRowShift;
-	t_assert((row < _rows.size()) && (col < _rows[row].items.size()));
+	Assert((row < _rows.size()) && (col < _rows[row].items.size()));
 
 	auto &inlineItems = _rows[row].items;
 	int top = st::stickerPanPadding;
@@ -640,8 +644,10 @@ void Inner::updateSelected() {
 		}
 		if (col < inlineItems.size()) {
 			sel = row * MatrixRowShift + col;
-			inlineItems.at(col)->getState(lnk, cursor, QPoint(sx, sy));
-			lnkhost = inlineItems.at(col);
+			auto result = inlineItems[col]->getState(QPoint(sx, sy), HistoryStateRequest());
+			lnk = result.link;
+			cursor = result.cursor;
+			lnkhost = inlineItems[col];
 		} else {
 			row = col = -1;
 		}
@@ -652,12 +658,12 @@ void Inner::updateSelected() {
 	int scol = (_selected >= 0) ? (_selected % MatrixRowShift) : -1;
 	if (_selected != sel) {
 		if (srow >= 0 && scol >= 0) {
-			t_assert(srow >= 0 && srow < _rows.size() && scol >= 0 && scol < _rows.at(srow).items.size());
+			Assert(srow >= 0 && srow < _rows.size() && scol >= 0 && scol < _rows.at(srow).items.size());
 			_rows[srow].items[scol]->update();
 		}
 		_selected = sel;
 		if (row >= 0 && col >= 0) {
-			t_assert(row >= 0 && row < _rows.size() && col >= 0 && col < _rows.at(row).items.size());
+			Assert(row >= 0 && row < _rows.size() && col >= 0 && col < _rows.at(row).items.size());
 			_rows[row].items[col]->update();
 		}
 		if (_previewShown && _selected >= 0 && _pressed != _selected) {
@@ -711,7 +717,7 @@ void Inner::onSwitchPm() {
 
 } // namespace internal
 
-Widget::Widget(QWidget *parent, gsl::not_null<Window::Controller*> controller) : TWidget(parent)
+Widget::Widget(QWidget *parent, not_null<Window::Controller*> controller) : TWidget(parent)
 , _controller(controller)
 , _contentMaxHeight(st::emojiPanMaxHeight)
 , _contentHeight(_contentMaxHeight)
@@ -811,7 +817,7 @@ void Widget::paintEvent(QPaintEvent *e) {
 	}
 
 	if (showAnimating) {
-		t_assert(_showAnimation != nullptr);
+		Assert(_showAnimation != nullptr);
 		if (auto opacity = _a_opacity.current(_hiding ? 0. : 1.)) {
 			_showAnimation->paintFrame(p, 0, 0, width(), _a_show.current(1.), opacity);
 		}
@@ -868,7 +874,7 @@ void Widget::prepareCache() {
 	auto showAnimation = base::take(_a_show);
 	auto showAnimationData = base::take(_showAnimation);
 	showChildren();
-	_cache = myGrab(this);
+	_cache = Ui::GrabWidget(this);
 	_showAnimation = base::take(showAnimationData);
 	_a_show = base::take(showAnimation);
 	if (_a_show.animating()) {
@@ -897,7 +903,7 @@ void Widget::startShowAnimation() {
 		auto inner = rect().marginsRemoved(st::emojiPanMargins);
 		_showAnimation->setFinalImage(std::move(image), QRect(inner.topLeft() * cIntRetinaFactor(), inner.size() * cIntRetinaFactor()));
 		auto corners = App::cornersMask(ImageRoundRadius::Small);
-		_showAnimation->setCornerMasks(QImage(*corners[0]), QImage(*corners[1]), QImage(*corners[2]), QImage(*corners[3]));
+		_showAnimation->setCornerMasks(corners[0], corners[1], corners[2], corners[3]);
 		_showAnimation->start();
 	}
 	hideChildren();
@@ -905,7 +911,7 @@ void Widget::startShowAnimation() {
 }
 
 QImage Widget::grabForPanelAnimation() {
-	myEnsureResized(this);
+	Ui::SendPendingMoveResizeEvents(this);
 	auto result = QImage(size() * cIntRetinaFactor(), QImage::Format_ARGB32_Premultiplied);
 	result.setDevicePixelRatio(cRetinaFactor());
 	result.fill(Qt::transparent);
@@ -1015,6 +1021,7 @@ void Widget::inlineResultsDone(const MTPmessages_BotResults &result) {
 
 	auto it = _inlineCache.find(_inlineQuery);
 	auto adding = (it != _inlineCache.cend());
+	// #TODO layer 72 feed users
 	if (result.type() == mtpc_messages_botResults) {
 		auto &d = result.c_messages_botResults();
 		auto &v = d.vresults.v;
@@ -1062,13 +1069,7 @@ void Widget::queryInlineBot(UserData *bot, PeerData *peer, QString query) {
 		inlineBotChanged();
 		_inlineBot = bot;
 		force = true;
-		//if (_inlineBot->isBotInlineGeo()) {
-		//	Ui::show(Box<InformBox>(lang(lng_bot_inline_geo_unavailable)));
-		//}
 	}
-	//if (_inlineBot && _inlineBot->isBotInlineGeo()) {
-	//	return;
-	//}
 
 	if (_inlineQuery != query || force) {
 		if (_inlineRequestId) {

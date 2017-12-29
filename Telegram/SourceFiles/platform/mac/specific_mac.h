@@ -25,6 +25,8 @@ inline bool TranslucentWindowsSupported(QPoint globalPosition) {
 	return true;
 }
 
+QString CurrentExecutablePath(int argc, char *argv[]);
+
 namespace ThirdParty {
 
 inline void start() {
@@ -66,8 +68,6 @@ void psActivateProcess(uint64 pid = 0);
 QString psLocalServerPrefix();
 QString psAppDataPath();
 QString psDownloadPath();
-QString psCurrentExeDirectory(int argc, char *argv[]);
-QString psCurrentExeName(int argc, char *argv[]);
 void psAutoStart(bool start, bool silent = false);
 void psSendToMenu(bool send, bool silent = false);
 
@@ -77,9 +77,6 @@ void psBringToBack(QWidget *w);
 
 int psCleanup();
 int psFixPrevious();
-
-void psExecUpdater();
-void psExecTelegram(const QString &crashreport = QString());
 
 bool psShowOpenWithMenu(int x, int y, const QString &file);
 
@@ -122,5 +119,7 @@ QString strNotificationAboutThemeChange();
 QString strNotificationAboutScreenLocked();
 QString strNotificationAboutScreenUnlocked();
 QString strStyleOfInterface();
+QString strTitleWrapClass();
+QString strTitleClass();
 
 bool psLaunchMaps(const LocationCoords &coords);

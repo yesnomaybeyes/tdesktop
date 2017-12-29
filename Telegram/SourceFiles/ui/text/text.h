@@ -25,6 +25,7 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 #include "core/click_handler.h"
 #include "ui/text/text_entity.h"
 #include "ui/emoji_config.h"
+#include "base/flags.h"
 
 static const QChar TextCommand(0x0010);
 enum TextCommands {
@@ -128,11 +129,12 @@ public:
 
 	struct StateRequest {
 		enum class Flag {
-			BreakEverywhere = 0x01,
-			LookupSymbol    = 0x02,
-			LookupLink      = 0x04,
+			BreakEverywhere = (1 << 0),
+			LookupSymbol    = (1 << 1),
+			LookupLink      = (1 << 2),
 		};
-		Q_DECLARE_FLAGS(Flags, Flag);
+		using Flags = base::flags<Flag>;
+		friend inline constexpr auto is_flag_type(Flag) { return true; };
 
 		StateRequest() {
 		}
@@ -163,7 +165,7 @@ public:
 		return getStateElided(rtlpoint(point, outerw), width, request);
 	}
 
-	TextSelection adjustSelection(TextSelection selection, TextSelectType selectType) const WARN_UNUSED_RESULT;
+	[[nodiscard]] TextSelection adjustSelection(TextSelection selection, TextSelectType selectType) const;
 	bool isFullSelection(TextSelection selection) const {
 		return (selection.from == 0) && (selection.to >= _text.size());
 	}
@@ -199,12 +201,10 @@ public:
 	}
 
 	void clear();
-	~Text() {
-		clear();
-	}
+	~Text();
 
 private:
-	using TextBlocks = QVector<ITextBlock*>;
+	using TextBlocks = std::vector<std::unique_ptr<ITextBlock>>;
 	using TextLinks = QVector<ClickHandlerPtr>;
 
 	uint16 countBlockEnd(const TextBlocks::const_iterator &i, const TextBlocks::const_iterator &e) const;
@@ -258,15 +258,6 @@ inline TextSelection unshiftSelection(TextSelection selection, const Text &byTex
 	return unshiftSelection(selection, byText.length());
 }
 
-void initLinkSets();
-const QSet<int32> &validProtocols();
-const QSet<int32> &validTopDomains();
-const QRegularExpression &reDomain();
-const QRegularExpression &reMailName();
-const QRegularExpression &reMailStart();
-const QRegularExpression &reHashtag();
-const QRegularExpression &reBotCommand();
-
 // textcmd
 QString textcmdSkipBlock(ushort w, ushort h);
 QString textcmdStartLink(ushort lnkIndex);
@@ -284,9 +275,9 @@ inline bool chIsSpace(QChar ch, bool rich = false) {
 inline bool chIsDiac(QChar ch) { // diac and variation selectors
 	return (ch.category() == QChar::Mark_NonSpacing) || (ch == 1652) || (ch >= 64606 && ch <= 64611);
 }
-inline bool chIsBad(QChar ch) {
-	return (ch == 0) || (ch >= 8232 && ch < 8237) || (ch >= 65024 && ch < 65040 && ch != 65039) || (ch >= 127 && ch < 160 && ch != 156) || (cPlatform() == dbipMac && ch >= 0x0B00 && ch <= 0x0B7F && chIsDiac(ch) && cIsElCapitan()); // tmp hack see https://bugreports.qt.io/browse/QTBUG-48910
-}
+
+bool chIsBad(QChar ch);
+
 inline bool chIsTrimmed(QChar ch, bool rich = false) {
 	return (!rich || ch != TextCommand) && (chIsSpace(ch) || chIsBad(ch));
 }

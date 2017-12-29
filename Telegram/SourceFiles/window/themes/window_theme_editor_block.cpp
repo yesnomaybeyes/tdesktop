@@ -22,6 +22,7 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 
 #include "styles/style_window.h"
 #include "ui/effects/ripple_animation.h"
+#include "ui/widgets/shadow.h"
 #include "boxes/edit_color_box.h"
 #include "lang/lang_keys.h"
 
@@ -164,7 +165,7 @@ void EditorBlock::Row::fillValueString() {
 void EditorBlock::Row::fillSearchIndex() {
 	_searchWords.clear();
 	_searchStartChars.clear();
-	auto toIndex = _name + ' ' + _copyOf + ' ' + textAccentFold(_description.originalText()) + ' ' + _valueString;
+	auto toIndex = _name + ' ' + _copyOf + ' ' + TextUtilities::RemoveAccents(_description.originalText()) + ' ' + _valueString;
 	auto words = toIndex.toLower().split(SearchSplitter, QString::SkipEmptyParts);
 	for_const (auto &word, words) {
 		_searchWords.insert(word);
@@ -192,7 +193,7 @@ EditorBlock::EditorBlock(QWidget *parent, Type type, Context *context) : TWidget
 			feedDescription(name, added.description);
 
 			auto row = findRow(name);
-			t_assert(row != nullptr);
+			Assert(row != nullptr);
 			auto possibleCopyOf = added.possibleCopyOf;
 			auto copyOf = checkCopyOf(findRowIndex(row), possibleCopyOf) ? possibleCopyOf : QString();
 			removeFromSearch(*row);
@@ -238,7 +239,7 @@ bool EditorBlock::feedCopy(const QString &name, const QString &copyOf) {
 
 void EditorBlock::removeRow(const QString &name, bool removeCopyReferences) {
 	auto it = _indices.find(name);
-	t_assert(it != _indices.cend());
+	Assert(it != _indices.cend());
 
 	auto index = it.value();
 	for (auto i = index + 1, count = static_cast<int>(_data.size()); i != count; ++i) {
@@ -346,11 +347,8 @@ void EditorBlock::scrollToSelected() {
 }
 
 void EditorBlock::searchByQuery(QString query) {
-	auto searchWords = QStringList();
-	if (!query.isEmpty()) {
-		searchWords = textAccentFold(query.trimmed().toLower()).split(SearchSplitter, QString::SkipEmptyParts);
-		query = searchWords.join(' ');
-	}
+	auto words = TextUtilities::PrepareSearchWords(query, &SearchSplitter);
+	query = words.isEmpty() ? QString() : words.join(' ');
 	if (_searchQuery != query) {
 		setSelected(-1);
 		setPressed(-1);
@@ -359,7 +357,7 @@ void EditorBlock::searchByQuery(QString query) {
 		_searchResults.clear();
 
 		auto toFilter = OrderedSet<int>();
-		for_const (auto &word, searchWords) {
+		for_const (auto &word, words) {
 			if (word.isEmpty()) continue;
 
 			auto testToFilter = _searchIndex.value(word[0]);
@@ -371,8 +369,8 @@ void EditorBlock::searchByQuery(QString query) {
 			}
 		}
 		if (!toFilter.isEmpty()) {
-			auto allWordsFound = [&searchWords](const Row &row) {
-				for_const (auto &word, searchWords) {
+			auto allWordsFound = [&words](const Row &row) {
+				for_const (auto &word, words) {
 					if (!row.searchWordsContain(word)) {
 						return false;
 					}

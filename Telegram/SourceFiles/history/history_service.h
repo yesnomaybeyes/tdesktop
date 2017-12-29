@@ -37,6 +37,16 @@ struct HistoryServicePayment : public RuntimeComponent<HistoryServicePayment>, p
 	QString amount;
 };
 
+struct HistoryServiceSelfDestruct : public RuntimeComponent<HistoryServiceSelfDestruct> {
+	enum class Type {
+		Photo,
+		Video,
+	};
+	Type type = Type::Photo;
+	TimeMs timeToLive = 0;
+	TimeMs destructAt = 0;
+};
+
 namespace HistoryLayout {
 class ServiceMessagePainter;
 } // namespace HistoryLayout
@@ -48,10 +58,13 @@ public:
 		QList<ClickHandlerPtr> links;
 	};
 
-	static gsl::not_null<HistoryService*> create(gsl::not_null<History*> history, const MTPDmessageService &message) {
+	static not_null<HistoryService*> create(not_null<History*> history, const MTPDmessage &message) {
 		return _create(history, message);
 	}
-	static gsl::not_null<HistoryService*> create(gsl::not_null<History*> history, MsgId msgId, QDateTime date, const PreparedText &message, MTPDmessage::Flags flags = 0, UserId from = 0, PhotoData *photo = nullptr) {
+	static not_null<HistoryService*> create(not_null<History*> history, const MTPDmessageService &message) {
+		return _create(history, message);
+	}
+	static not_null<HistoryService*> create(not_null<History*> history, MsgId msgId, QDateTime date, const PreparedText &message, MTPDmessage::Flags flags = 0, UserId from = 0, PhotoData *photo = nullptr) {
 		return _create(history, msgId, date, message, flags, from, photo);
 	}
 
@@ -75,7 +88,9 @@ public:
 	bool hasPoint(QPoint point) const override;
 	HistoryTextState getState(QPoint point, HistoryStateRequest request) const override;
 
-	TextSelection adjustSelection(TextSelection selection, TextSelectType type) const override WARN_UNUSED_RESULT {
+	[[nodiscard]] TextSelection adjustSelection(
+			TextSelection selection,
+			TextSelectType type) const override {
 		return _text.adjustSelection(selection, type);
 	}
 
@@ -83,9 +98,9 @@ public:
 	void clickHandlerPressedChanged(const ClickHandlerPtr &p, bool pressed) override;
 
 	void applyEdition(const MTPDmessageService &message) override;
+	TimeMs getSelfDestructIn(TimeMs now) override;
 
-	int32 addToOverview(AddToOverviewMethod method) override;
-	void eraseFromOverview() override;
+	Storage::SharedMediaTypesMask sharedMediaTypes() const override;
 
 	bool needCheck() const override {
 		return false;
@@ -94,7 +109,7 @@ public:
 		return true;
 	}
 	TextWithEntities selectedText(TextSelection selection) const override;
-	QString inDialogsText() const override;
+	QString inDialogsText(DrawInDialog way) const override;
 	QString inReplyText() const override;
 
 	~HistoryService();
@@ -102,12 +117,15 @@ public:
 protected:
 	friend class HistoryLayout::ServiceMessagePainter;
 
-	HistoryService(gsl::not_null<History*> history, const MTPDmessageService &message);
-	HistoryService(gsl::not_null<History*> history, MsgId msgId, QDateTime date, const PreparedText &message, MTPDmessage::Flags flags = 0, UserId from = 0, PhotoData *photo = 0);
+	HistoryService(not_null<History*> history, const MTPDmessage &message);
+	HistoryService(not_null<History*> history, const MTPDmessageService &message);
+	HistoryService(not_null<History*> history, MsgId msgId, QDateTime date, const PreparedText &message, MTPDmessage::Flags flags = 0, UserId from = 0, PhotoData *photo = 0);
 	friend class HistoryItemInstantiated<HistoryService>;
 
 	void initDimensions() override;
 	int resizeContentGetHeight() override;
+
+	void markMediaAsReadHook() override;
 
 	void setServiceText(const PreparedText &prepared);
 
@@ -115,7 +133,7 @@ protected:
 		return textcmdLink(1, _from->name);
 	};
 	ClickHandlerPtr fromLink() const {
-		return peerOpenClickHandler(_from);
+		return _from->createOpenLink();
 	};
 
 	void removeMedia();
@@ -138,8 +156,10 @@ private:
 	void updateDependentText();
 	void clearDependency();
 
+	void createFromMtp(const MTPDmessage &message);
 	void createFromMtp(const MTPDmessageService &message);
 	void setMessageByAction(const MTPmessageAction &action);
+	void setSelfDestruct(HistoryServiceSelfDestruct::Type type, int ttlSeconds);
 
 	PreparedText preparePinnedText();
 	PreparedText prepareGameScoreText();
@@ -149,18 +169,16 @@ private:
 
 class HistoryJoined : public HistoryService, private HistoryItemInstantiated<HistoryJoined> {
 public:
-	static gsl::not_null<HistoryJoined*> create(gsl::not_null<History*> history, const QDateTime &inviteDate, gsl::not_null<UserData*> inviter, MTPDmessage::Flags flags) {
+	static not_null<HistoryJoined*> create(not_null<History*> history, const QDateTime &inviteDate, not_null<UserData*> inviter, MTPDmessage::Flags flags) {
 		return _create(history, inviteDate, inviter, flags);
 	}
 
 protected:
-	HistoryJoined(gsl::not_null<History*> history, const QDateTime &inviteDate, gsl::not_null<UserData*> inviter, MTPDmessage::Flags flags);
+	HistoryJoined(not_null<History*> history, const QDateTime &inviteDate, not_null<UserData*> inviter, MTPDmessage::Flags flags);
 	using HistoryItemInstantiated<HistoryJoined>::_create;
 	friend class HistoryItemInstantiated<HistoryJoined>;
 
 private:
-	static PreparedText GenerateText(gsl::not_null<History*> history, gsl::not_null<UserData*> inviter);
+	static PreparedText GenerateText(not_null<History*> history, not_null<UserData*> inviter);
 
 };
-
-extern TextParseOptions _historySrvOptions;

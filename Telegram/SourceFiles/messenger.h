@@ -22,6 +22,18 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 
 #include "base/observer.h"
 #include "mtproto/auth_key.h"
+#include "base/timer.h"
+
+class AuthSession;
+class AuthSessionData;
+class MainWidget;
+class FileUploader;
+class Translator;
+class MediaView;
+
+namespace Core {
+class Launcher;
+} // namespace Core
 
 namespace App {
 void quit();
@@ -34,16 +46,6 @@ class AuthKey;
 using AuthKeyPtr = std::shared_ptr<AuthKey>;
 using AuthKeysList = std::vector<AuthKeyPtr>;
 } // namespace MTP
-
-class AuthSession;
-class AuthSessionData;
-class MainWidget;
-class FileUploader;
-class Translator;
-
-namespace Local {
-struct StoredAuthSession;
-} // namespace Local
 
 namespace Media {
 namespace Audio {
@@ -61,14 +63,35 @@ class Messenger final : public QObject, public RPCSender, private base::Subscrib
 	Q_OBJECT
 
 public:
-	Messenger();
+	Messenger(not_null<Core::Launcher*> launcher);
 
 	Messenger(const Messenger &other) = delete;
 	Messenger &operator=(const Messenger &other) = delete;
 
 	~Messenger();
 
-	MainWindow *mainWindow();
+	not_null<Core::Launcher*> launcher() const {
+		return _launcher;
+	}
+
+	// Windows interface.
+	MainWindow *getActiveWindow() const;
+	bool closeActiveWindow();
+	bool minimizeActiveWindow();
+	QWidget *getFileDialogParent();
+	QWidget *getGlobalShortcutParent() {
+		return &_globalShortcutParent;
+	}
+
+	// MediaView interface.
+	void checkMediaViewActivation();
+	bool hideMediaView();
+	void showPhoto(not_null<const PhotoOpenClickHandler*> link);
+	void showPhoto(not_null<PhotoData*> photo, HistoryItem *item);
+	void showPhoto(not_null<PhotoData*> photo, not_null<PeerData*> item);
+	void showDocument(not_null<DocumentData*> document, HistoryItem *item);
+	PeerData *ui_getPeerForMouseAction();
+
 	QPoint getPointForCallPanelCenter() const;
 	QImage logo() const {
 		return _logo;
@@ -80,7 +103,7 @@ public:
 	static Messenger *InstancePointer();
 	static Messenger &Instance() {
 		auto result = InstancePointer();
-		t_assert(result != nullptr);
+		Assert(result != nullptr);
 		return *result;
 	}
 
@@ -93,7 +116,7 @@ public:
 	void setMtpMainDcId(MTP::DcId mainDcId);
 	void setMtpKey(MTP::DcId dcId, const MTP::AuthKey::Data &keyData);
 	void setAuthSessionUserId(UserId userId);
-	void setAuthSessionFromStorage(std::unique_ptr<Local::StoredAuthSession> data);
+	void setAuthSessionFromStorage(std::unique_ptr<AuthSessionData> data);
 	AuthSessionData *getAuthSessionData();
 
 	// Serialization.
@@ -135,8 +158,7 @@ public:
 	void checkStartUrl();
 	bool openLocalUrl(const QString &url);
 
-	FileUploader *uploader();
-	void uploadProfilePhoto(const QImage &tosend, const PeerId &peerId);
+	void uploadProfilePhoto(QImage &&tosend, const PeerId &peerId);
 	void regPhotoUpdate(const PeerId &peer, const FullMsgId &msgId);
 	bool isPhotoUpdating(const PeerId &peer);
 	void cancelPhotoUpdate(const PeerId &peer);
@@ -145,7 +167,7 @@ public:
 	void chatPhotoCleared(PeerId peer, const MTPUpdates &updates);
 	void selfPhotoDone(const MTPphotos_Photo &result);
 	void chatPhotoDone(PeerId peerId, const MTPUpdates &updates);
-	bool peerPhotoFail(PeerId peerId, const RPCError &e);
+	bool peerPhotoFailed(PeerId peerId, const RPCError &e);
 	void peerClearPhoto(PeerId peer);
 
 	void writeUserConfigIn(TimeMs ms);
@@ -160,6 +182,9 @@ public:
 		return _passcodedChanged;
 	}
 
+	void registerLeaveSubscription(QWidget *widget);
+	void unregisterLeaveSubscription(QWidget *widget);
+
 	void quitPreventFinished();
 
 	void handleAppActivated();
@@ -169,6 +194,13 @@ public:
 	void call_handleUnreadCounterUpdate();
 	void call_handleDelayedPeerUpdates();
 	void call_handleObservables();
+
+	void callDelayed(int duration, base::lambda_once<void()> &&lambda) {
+		_callDelayedTimer.call(duration, std::move(lambda));
+	}
+
+protected:
+	bool eventFilter(QObject *object, QEvent *event) override;
 
 signals:
 	void peerPhotoDone(PeerId peer);
@@ -194,6 +226,10 @@ private:
 	static void QuitAttempt();
 	void quitDelayed();
 
+	void loggedOut();
+
+	not_null<Core::Launcher*> _launcher;
+
 	QMap<FullMsgId, PeerId> photoUpdates;
 
 	QMap<MTP::DcId, TimeMs> killDownloadSessionTimes;
@@ -203,9 +239,10 @@ private:
 	struct Private;
 	const std::unique_ptr<Private> _private;
 
-	std::unique_ptr<MainWindow> _window;
-	FileUploader *_uploader = nullptr;
+	QWidget _globalShortcutParent;
 
+	std::unique_ptr<MainWindow> _window;
+	std::unique_ptr<MediaView> _mediaView;
 	std::unique_ptr<Lang::Instance> _langpack;
 	std::unique_ptr<Lang::CloudManager> _langCloudManager;
 	std::unique_ptr<Lang::Translator> _translator;
@@ -219,5 +256,19 @@ private:
 	std::unique_ptr<Media::Audio::Instance> _audio;
 	QImage _logo;
 	QImage _logoNoMargin;
+
+	base::DelayedCallTimer _callDelayedTimer;
+
+	struct LeaveSubscription {
+		LeaveSubscription(
+			QPointer<QWidget> pointer,
+			rpl::lifetime &&subscription)
+		: pointer(pointer), subscription(std::move(subscription)) {
+		}
+
+		QPointer<QWidget> pointer;
+		rpl::lifetime subscription;
+	};
+	std::vector<LeaveSubscription> _leaveSubscriptions;
 
 };

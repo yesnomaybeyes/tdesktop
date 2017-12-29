@@ -20,6 +20,8 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 */
 #pragma once
 
+#include "base/flags.h"
+
 namespace Fonts {
 
 void Start();
@@ -27,38 +29,81 @@ QString GetOverride(const QString &familyName);
 
 } // namespace
 
-enum class RectPart {
-	None = 0,
+class TWidget;
 
-	TopLeft = (1 << 0),
-	Top = (1 << 1),
-	TopRight = (1 << 2),
-	Left = (1 << 3),
-	Center = (1 << 4),
-	Right = (1 << 5),
-	BottomLeft = (1 << 6),
-	Bottom = (1 << 7),
+template <typename Object>
+class object_ptr;
+
+namespace Ui {
+
+inline bool InFocusChain(not_null<const QWidget*> widget) {
+	if (auto top = widget->window()) {
+		if (auto focused = top->focusWidget()) {
+			return !widget->isHidden()
+				&& (focused == widget
+					|| widget->isAncestorOf(focused));
+		}
+	}
+	return false;
+}
+
+template <typename ChildWidget>
+inline ChildWidget *AttachParentChild(
+		not_null<QWidget*> parent,
+		const object_ptr<ChildWidget> &child) {
+	if (auto raw = child.data()) {
+		raw->setParent(parent);
+		raw->show();
+		return raw;
+	}
+	return nullptr;
+}
+
+void SendPendingMoveResizeEvents(not_null<QWidget*> target);
+
+QPixmap GrabWidget(
+	not_null<TWidget*> target,
+	QRect rect = QRect(),
+	QColor bg = QColor(255, 255, 255, 0));
+QImage GrabWidgetToImage(
+	not_null<TWidget*> target,
+	QRect rect = QRect(),
+	QColor bg = QColor(255, 255, 255, 0));
+
+} // namespace Ui
+
+enum class RectPart {
+	None        = 0,
+
+	TopLeft     = (1 << 0),
+	Top         = (1 << 1),
+	TopRight    = (1 << 2),
+	Left        = (1 << 3),
+	Center      = (1 << 4),
+	Right       = (1 << 5),
+	BottomLeft  = (1 << 6),
+	Bottom      = (1 << 7),
 	BottomRight = (1 << 8),
 
-	FullTop = TopLeft | Top | TopRight,
+	FullTop     = TopLeft | Top | TopRight,
 	NoTopBottom = Left | Center | Right,
-	FullBottom = BottomLeft | Bottom | BottomRight,
-	NoTop = NoTopBottom | FullBottom,
-	NoBottom = FullTop | NoTopBottom,
+	FullBottom  = BottomLeft | Bottom | BottomRight,
+	NoTop       = NoTopBottom | FullBottom,
+	NoBottom    = FullTop | NoTopBottom,
 
-	FullLeft = TopLeft | Left | BottomLeft,
+	FullLeft    = TopLeft | Left | BottomLeft,
 	NoLeftRight = Top | Center | Bottom,
-	FullRight = TopRight | Right | BottomRight,
-	NoLeft = NoLeftRight | FullRight,
-	NoRight = FullLeft | NoLeftRight,
+	FullRight   = TopRight | Right | BottomRight,
+	NoLeft      = NoLeftRight | FullRight,
+	NoRight     = FullLeft | NoLeftRight,
 
-	CornersMask = TopLeft | TopRight | BottomLeft | BottomRight,
-	SidesMask = Top | Bottom | Left | Right,
+	AllCorners = TopLeft | TopRight | BottomLeft | BottomRight,
+	AllSides   = Top | Bottom | Left | Right,
 
-	Full = FullTop | NoTop,
+	Full        = FullTop | NoTop,
 };
-Q_DECLARE_FLAGS(RectParts, RectPart);
-Q_DECLARE_OPERATORS_FOR_FLAGS(RectParts);
+using RectParts = base::flags<RectPart>;
+inline constexpr auto is_flag_type(RectPart) { return true; };
 
 inline bool IsTopCorner(RectPart corner) {
 	return (corner == RectPart::TopLeft) || (corner == RectPart::TopRight);
@@ -177,8 +222,6 @@ private:
 
 };
 
-class TWidget;
-
 template <typename Base>
 class TWidgetHelper : public Base {
 public:
@@ -244,7 +287,7 @@ public:
 	QRect mapFromGlobal(const QRect &rect) const {
 		return QRect(mapFromGlobal(rect.topLeft()), rect.size());
 	}
-	QRect mapToGlobal(const QRect &rect) {
+	QRect mapToGlobal(const QRect &rect) const {
 		return QRect(mapToGlobal(rect.topLeft()), rect.size());
 	}
 
@@ -301,19 +344,21 @@ public:
 	virtual void grabFinish() {
 	}
 
-	bool inFocusChain() const;
+	bool inFocusChain() const {
+		return Ui::InFocusChain(this);
+	}
 
 	void hideChildren() {
 		for (auto child : children()) {
-			if (auto widget = qobject_cast<QWidget*>(child)) {
-				widget->hide();
+			if (child->isWidgetType()) {
+				static_cast<QWidget*>(child)->hide();
 			}
 		}
 	}
 	void showChildren() {
 		for (auto child : children()) {
-			if (auto widget = qobject_cast<QWidget*>(child)) {
-				widget->show();
+			if (child->isWidgetType()) {
+				static_cast<QWidget*>(child)->show();
 			}
 		}
 	}
@@ -364,7 +409,11 @@ public:
 	}
 
 	// Updates the area that is visible inside the scroll container.
-	virtual void setVisibleTopBottom(int visibleTop, int visibleBottom) {
+	void setVisibleTopBottom(int visibleTop, int visibleBottom) {
+		auto max = height();
+		visibleTopBottomUpdated(
+			snap(visibleTop, 0, max),
+			snap(visibleBottom, 0, max));
 	}
 
 signals:
@@ -372,26 +421,39 @@ signals:
 	void heightUpdated();
 
 protected:
+	void setChildVisibleTopBottom(
+			TWidget *child,
+			int visibleTop,
+			int visibleBottom) {
+		if (child) {
+			auto top = child->y();
+			child->setVisibleTopBottom(
+				visibleTop - top,
+				visibleBottom - top);
+		}
+	}
+
 	// Resizes content and counts natural widget height for the desired width.
 	virtual int resizeGetHeight(int newWidth) {
-		return height();
+		return heightNoMargins();
+	}
+
+	virtual void visibleTopBottomUpdated(
+		int visibleTop,
+		int visibleBottom) {
 	}
 
 };
 
 template <typename Widget>
-QPointer<Widget> weak(Widget *object) {
+QPointer<Widget> make_weak(Widget *object) {
 	return QPointer<Widget>(object);
 }
 
 template <typename Widget>
-QPointer<const Widget> weak(const Widget *object) {
+QPointer<const Widget> make_weak(const Widget *object) {
 	return QPointer<const Widget>(object);
 }
-
-void myEnsureResized(QWidget *target);
-QPixmap myGrab(TWidget *target, QRect rect = QRect(), QColor bg = QColor(255, 255, 255, 0));
-QImage myGrabImage(TWidget *target, QRect rect = QRect(), QColor bg = QColor(255, 255, 255, 0));
 
 class SingleQueuedInvokation : public QObject {
 public:
@@ -417,67 +479,83 @@ private:
 template <typename Object>
 class object_ptr {
 public:
-	object_ptr(std::nullptr_t) {
+	object_ptr(std::nullptr_t) noexcept {
 	}
 
 	// No default constructor, but constructors with at least
 	// one argument are simply make functions.
 	template <typename Parent, typename... Args>
-	explicit object_ptr(Parent &&parent, Args&&... args) : _object(new Object(std::forward<Parent>(parent), std::forward<Args>(args)...)) {
+	explicit object_ptr(Parent &&parent, Args&&... args)
+	: _object(new Object(std::forward<Parent>(parent), std::forward<Args>(args)...)) {
+	}
+	static object_ptr<Object> fromRaw(Object *value) noexcept {
+		object_ptr<Object> result = { nullptr };
+		result._object = value;
+		return result;
 	}
 
 	object_ptr(const object_ptr &other) = delete;
 	object_ptr &operator=(const object_ptr &other) = delete;
-	object_ptr(object_ptr &&other) : _object(base::take(other._object)) {
+	object_ptr(object_ptr &&other) noexcept : _object(base::take(other._object)) {
 	}
-	object_ptr &operator=(object_ptr &&other) {
+	object_ptr &operator=(object_ptr &&other) noexcept {
 		auto temp = std::move(other);
 		destroy();
 		std::swap(_object, temp._object);
 		return *this;
 	}
 
-	template <typename OtherObject, typename = std::enable_if_t<std::is_base_of<Object, OtherObject>::value>>
-	object_ptr(object_ptr<OtherObject> &&other) : _object(base::take(other._object)) {
+	template <
+		typename OtherObject,
+		typename = std::enable_if_t<
+			std::is_base_of_v<Object, OtherObject>>>
+	object_ptr(object_ptr<OtherObject> &&other) noexcept
+	: _object(base::take(other._object)) {
 	}
 
-	template <typename OtherObject, typename = std::enable_if_t<std::is_base_of<Object, OtherObject>::value>>
-	object_ptr &operator=(object_ptr<OtherObject> &&other) {
+	template <
+		typename OtherObject,
+		typename = std::enable_if_t<
+			std::is_base_of_v<Object, OtherObject>>>
+	object_ptr &operator=(object_ptr<OtherObject> &&other) noexcept {
 		_object = base::take(other._object);
 		return *this;
 	}
 
-	object_ptr &operator=(std::nullptr_t) {
+	object_ptr &operator=(std::nullptr_t) noexcept {
 		_object = nullptr;
 		return *this;
 	}
 
 	// So we can pass this pointer to methods like connect().
-	Object *data() const {
-		return static_cast<Object*>(_object);
+	Object *data() const noexcept {
+		return static_cast<Object*>(_object.data());
 	}
-	operator Object*() const {
+	operator Object*() const noexcept {
 		return data();
 	}
 
-	explicit operator bool() const {
+	explicit operator bool() const noexcept {
 		return _object != nullptr;
 	}
 
-	Object *operator->() const {
+	Object *operator->() const noexcept {
 		return data();
 	}
-	Object &operator*() const {
+	Object &operator*() const noexcept {
 		return *data();
 	}
 
 	// Use that instead "= new Object(parent, ...)"
 	template <typename Parent, typename... Args>
-	void create(Parent &&parent, Args&&... args) {
+	Object *create(Parent &&parent, Args&&... args) {
 		destroy();
-		_object = new Object(std::forward<Parent>(parent), std::forward<Args>(args)...);
+		_object = new Object(
+			std::forward<Parent>(parent),
+			std::forward<Args>(args)...);
+		return data();
 	}
-	void destroy() {
+	void destroy() noexcept {
 		delete base::take(_object);
 	}
 	void destroyDelayed() {
@@ -489,7 +567,7 @@ public:
 		}
 	}
 
-	~object_ptr() {
+	~object_ptr() noexcept {
 		if (auto pointer = _object) {
 			if (!pointer->parent()) {
 				destroy();
@@ -498,25 +576,35 @@ public:
 	}
 
 	template <typename ResultType, typename SourceType>
-	friend object_ptr<ResultType> static_object_cast(object_ptr<SourceType> source);
+	friend object_ptr<ResultType> static_object_cast(
+		object_ptr<SourceType> source);
 
 private:
 	template <typename OtherObject>
 	friend class object_ptr;
 
-	QObject *_object = nullptr;
+	QPointer<QObject> _object;
 
 };
 
 template <typename ResultType, typename SourceType>
-inline object_ptr<ResultType> static_object_cast(object_ptr<SourceType> source) {
+inline object_ptr<ResultType> static_object_cast(
+		object_ptr<SourceType> source) {
 	auto result = object_ptr<ResultType>(nullptr);
-	result._object = static_cast<ResultType*>(base::take(source._object));
+	result._object = static_cast<ResultType*>(
+		base::take(source._object).data());
 	return std::move(result);
 }
 
-void sendSynteticMouseEvent(QWidget *widget, QEvent::Type type, Qt::MouseButton button, const QPoint &globalPoint);
+void sendSynteticMouseEvent(
+	QWidget *widget,
+	QEvent::Type type,
+	Qt::MouseButton button,
+	const QPoint &globalPoint);
 
-inline void sendSynteticMouseEvent(QWidget *widget, QEvent::Type type, Qt::MouseButton button) {
+inline void sendSynteticMouseEvent(
+		QWidget *widget,
+		QEvent::Type type,
+		Qt::MouseButton button) {
 	return sendSynteticMouseEvent(widget, type, button, QCursor::pos());
 }

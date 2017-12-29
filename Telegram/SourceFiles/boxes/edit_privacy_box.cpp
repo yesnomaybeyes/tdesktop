@@ -24,31 +24,32 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 #include "ui/widgets/checkbox.h"
 #include "ui/widgets/labels.h"
 #include "ui/widgets/buttons.h"
-#include "ui/effects/widget_slide_wrap.h"
-#include "boxes/peer_list_box.h"
+#include "ui/wrap/slide_wrap.h"
+#include "boxes/peer_list_controllers.h"
 #include "apiwrap.h"
+#include "auth_session.h"
 #include "lang/lang_keys.h"
 
 namespace {
 
 class PrivacyExceptionsBoxController : public ChatsListBoxController {
 public:
-	PrivacyExceptionsBoxController(base::lambda<QString()> titleFactory, const std::vector<gsl::not_null<UserData*>> &selected);
-	void rowClicked(gsl::not_null<PeerListRow*> row) override;
+	PrivacyExceptionsBoxController(base::lambda<QString()> titleFactory, const std::vector<not_null<UserData*>> &selected);
+	void rowClicked(not_null<PeerListRow*> row) override;
 
-	std::vector<gsl::not_null<UserData*>> getResult() const;
+	std::vector<not_null<UserData*>> getResult() const;
 
 protected:
 	void prepareViewHook() override;
-	std::unique_ptr<Row> createRow(gsl::not_null<History*> history) override;
+	std::unique_ptr<Row> createRow(not_null<History*> history) override;
 
 private:
 	base::lambda<QString()> _titleFactory;
-	std::vector<gsl::not_null<UserData*>> _selected;
+	std::vector<not_null<UserData*>> _selected;
 
 };
 
-PrivacyExceptionsBoxController::PrivacyExceptionsBoxController(base::lambda<QString()> titleFactory, const std::vector<gsl::not_null<UserData*>> &selected)
+PrivacyExceptionsBoxController::PrivacyExceptionsBoxController(base::lambda<QString()> titleFactory, const std::vector<not_null<UserData*>> &selected)
 : _titleFactory(std::move(titleFactory))
 , _selected(selected) {
 }
@@ -58,31 +59,32 @@ void PrivacyExceptionsBoxController::prepareViewHook() {
 	delegate()->peerListAddSelectedRows(_selected);
 }
 
-std::vector<gsl::not_null<UserData*>> PrivacyExceptionsBoxController::getResult() const {
+std::vector<not_null<UserData*>> PrivacyExceptionsBoxController::getResult() const {
 	auto peers = delegate()->peerListCollectSelectedRows();
-	auto users = std::vector<gsl::not_null<UserData*>>();
+	auto users = std::vector<not_null<UserData*>>();
 	if (!peers.empty()) {
 		users.reserve(peers.size());
 		for_const (auto peer, peers) {
 			auto user = peer->asUser();
-			t_assert(user != nullptr);
+			Assert(user != nullptr);
 			users.push_back(user);
 		}
 	}
 	return users;
 }
 
-void PrivacyExceptionsBoxController::rowClicked(gsl::not_null<PeerListRow*> row) {
+void PrivacyExceptionsBoxController::rowClicked(not_null<PeerListRow*> row) {
 	delegate()->peerListSetRowChecked(row, !row->checked());
 }
 
-std::unique_ptr<PrivacyExceptionsBoxController::Row> PrivacyExceptionsBoxController::createRow(gsl::not_null<History*> history) {
-	if (auto user = history->peer->asUser()) {
-		if (!user->isSelf()) {
-			return std::make_unique<Row>(history);
-		}
+std::unique_ptr<PrivacyExceptionsBoxController::Row> PrivacyExceptionsBoxController::createRow(not_null<History*> history) {
+	if (history->peer->isSelf()) {
+		return nullptr;
 	}
-	return std::unique_ptr<Row>();
+	if (auto user = history->peer->asUser()) {
+		return std::make_unique<Row>(history);
+	}
+	return nullptr;
 }
 
 } // namespace
@@ -117,7 +119,7 @@ int EditPrivacyBox::resizeGetHeight(int newWidth) {
 	layoutRow(_contacts, st::editPrivacyOptionMargin);
 	layoutRow(_nobody, st::editPrivacyOptionMargin);
 	layoutRow(_warning, st::editPrivacyWarningPadding);
-	layoutRow(_exceptionsTitle, st::editPrivacyPadding);
+	layoutRow(_exceptionsTitle, st::editPrivacyTitlePadding);
 	auto linksTop = top;
 	layoutRow(_alwaysLink, st::editPrivacyPadding);
 	layoutRow(_neverLink, st::editPrivacyPadding);
@@ -145,7 +147,7 @@ int EditPrivacyBox::countDefaultHeight(int newWidth) {
 		if (!_controller->hasOption(option)) {
 			return 0;
 		}
-		return st::editPrivacyOptionMargin.top() + st::defaultBoxCheckbox.height + st::editPrivacyOptionMargin.bottom();
+		return st::editPrivacyOptionMargin.top() + st::defaultCheck.diameter + st::editPrivacyOptionMargin.bottom();
 	};
 	auto labelHeight = [this, newWidth](const QString &text, const style::FlatLabel &st, style::margins padding) {
 		if (text.isEmpty()) {
@@ -165,7 +167,7 @@ int EditPrivacyBox::countDefaultHeight(int newWidth) {
 	height += optionHeight(Option::Contacts);
 	height += optionHeight(Option::Nobody);
 	height += labelHeight(_controller->warning(), st::editPrivacyLabel, st::editPrivacyWarningPadding);
-	height += labelHeight(lang(lng_edit_privacy_exceptions), st::editPrivacyTitle, st::editPrivacyPadding);
+	height += labelHeight(lang(lng_edit_privacy_exceptions), st::editPrivacyTitle, st::editPrivacyTitlePadding);
 	height += linkHeight();
 	height += linkHeight();
 	height += labelHeight(_controller->exceptionsDescription(), st::editPrivacyLabel, st::editPrivacyPadding);
@@ -176,7 +178,7 @@ void EditPrivacyBox::editExceptionUsers(Exception exception) {
 	auto controller = std::make_unique<PrivacyExceptionsBoxController>(base::lambda_guarded(this, [this, exception] {
 		return _controller->exceptionBoxTitle(exception);
 	}), exceptionUsers(exception));
-	auto initBox = [this, exception, controller = controller.get()](PeerListBox *box) {
+	auto initBox = [this, exception, controller = controller.get()](not_null<PeerListBox*> box) {
 		box->addButton(langFactory(lng_settings_save), base::lambda_guarded(this, [this, box, exception, controller] {
 			exceptionUsers(exception) = controller->getResult();
 			exceptionLink(exception)->entity()->setText(exceptionLinkText(exception));
@@ -203,7 +205,9 @@ void EditPrivacyBox::editExceptionUsers(Exception exception) {
 		}));
 		box->addButton(langFactory(lng_cancel), [box] { box->closeBox(); });
 	};
-	Ui::show(Box<PeerListBox>(std::move(controller), std::move(initBox)), KeepOtherLayers);
+	Ui::show(
+		Box<PeerListBox>(std::move(controller), std::move(initBox)),
+		LayerOption::KeepOther);
 }
 
 QString EditPrivacyBox::exceptionLinkText(Exception exception) {
@@ -242,7 +246,7 @@ style::margins EditPrivacyBox::exceptionLinkMargins() const {
 	return st::editPrivacyLinkMargin;
 }
 
-std::vector<gsl::not_null<UserData*>> &EditPrivacyBox::exceptionUsers(Exception exception) {
+std::vector<not_null<UserData*>> &EditPrivacyBox::exceptionUsers(Exception exception) {
 	switch (exception) {
 	case Exception::Always: return _alwaysUsers;
 	case Exception::Never: return _neverUsers;
@@ -250,7 +254,7 @@ std::vector<gsl::not_null<UserData*>> &EditPrivacyBox::exceptionUsers(Exception 
 	Unexpected("Invalid exception value.");
 }
 
-object_ptr<Ui::WidgetSlideWrap<Ui::LinkButton>> &EditPrivacyBox::exceptionLink(Exception exception) {
+object_ptr<Ui::SlideWrap<Ui::LinkButton>> &EditPrivacyBox::exceptionLink(Exception exception) {
 	switch (exception) {
 	case Exception::Always: return _alwaysLink;
 	case Exception::Never: return _neverLink;
@@ -282,9 +286,11 @@ void EditPrivacyBox::createWidgets() {
 		widget.create(this, text, Ui::FlatLabel::InitType::Simple, st);
 	};
 	auto createExceptionLink = [this](Exception exception) {
-		exceptionLink(exception).create(this, object_ptr<Ui::LinkButton>(this, exceptionLinkText(exception)), exceptionLinkMargins(), [this] {
-			resizeGetHeight(width());
-		});
+		exceptionLink(exception).create(this, object_ptr<Ui::LinkButton>(this, exceptionLinkText(exception)), exceptionLinkMargins());
+		exceptionLink(exception)->heightValue(
+		) | rpl::start_with_next([this] {
+			resizeToWidth(width());
+		}, lifetime());
 		exceptionLink(exception)->entity()->setClickedCallback([this, exception] { editExceptionUsers(exception); });
 	};
 
@@ -302,7 +308,7 @@ void EditPrivacyBox::createWidgets() {
 	addButton(langFactory(lng_settings_save), [this] {
 		auto someAreDisallowed = (_option != Option::Everyone) || !_neverUsers.empty();
 		_controller->confirmSave(someAreDisallowed, base::lambda_guarded(this, [this] {
-			App::api()->savePrivacy(_controller->key(), collectResult());
+			Auth().api().savePrivacy(_controller->key(), collectResult());
 			closeBox();
 		}));
 	});
@@ -310,13 +316,21 @@ void EditPrivacyBox::createWidgets() {
 
 	_optionGroup->setChangedCallback([this](Option value) {
 		_option = value;
-		_alwaysLink->toggleAnimated(showExceptionLink(Exception::Always));
-		_neverLink->toggleAnimated(showExceptionLink(Exception::Never));
+		_alwaysLink->toggle(
+			showExceptionLink(Exception::Always),
+			anim::type::normal);
+		_neverLink->toggle(
+			showExceptionLink(Exception::Never),
+			anim::type::normal);
 	});
 
 	showChildren();
-	_alwaysLink->toggleFast(showExceptionLink(Exception::Always));
-	_neverLink->toggleFast(showExceptionLink(Exception::Never));
+	_alwaysLink->toggle(
+		showExceptionLink(Exception::Always),
+		anim::type::instant);
+	_neverLink->toggle(
+		showExceptionLink(Exception::Never),
+		anim::type::instant);
 
 	setDimensions(st::boxWideWidth, resizeGetHeight(st::boxWideWidth));
 }

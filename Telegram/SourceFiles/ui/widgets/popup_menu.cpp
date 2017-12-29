@@ -21,6 +21,7 @@
 #include "platform/platform_specific.h"
 #include "application.h"
 #include "mainwindow.h"
+#include "messenger.h"
 #include "lang/lang_keys.h"
 
 namespace Ui {
@@ -45,6 +46,12 @@ PopupMenu::PopupMenu(QWidget*, QMenu *menu, const style::PopupMenu &st) : TWidge
 }
 
 void PopupMenu::init() {
+	subscribe(Messenger::Instance().passcodedChanged(), [this] {
+		if (App::passcoded()) {
+			hideMenu(true);
+		}
+	});
+
 	_menu->setResizedCallback([this] { handleMenuResize(); });
 	_menu->setActivatedCallback([this](QAction *action, int actionTop, TriggeredSource source) {
 		handleActivated(action, actionTop, source);
@@ -313,7 +320,7 @@ void PopupMenu::prepareCache() {
 	auto showAnimation = base::take(_a_show);
 	auto showAnimationData = base::take(_showAnimation);
 	showChildren();
-	_cache = myGrab(this);
+	_cache = GrabWidget(this);
 	_showAnimation = base::take(showAnimationData);
 	_a_show = base::take(showAnimation);
 }
@@ -362,7 +369,7 @@ void PopupMenu::startShowAnimation() {
 		_showAnimation->setFinalImage(std::move(cache), QRect(_inner.topLeft() * cIntRetinaFactor(), _inner.size() * cIntRetinaFactor()));
 		if (_useTransparency) {
 			auto corners = App::cornersMask(ImageRoundRadius::Small);
-			_showAnimation->setCornerMasks(QImage(*corners[0]), QImage(*corners[1]), QImage(*corners[2]), QImage(*corners[3]));
+			_showAnimation->setCornerMasks(corners[0], corners[1], corners[2], corners[3]);
 		} else {
 			_showAnimation->setSkipShadow(true);
 		}
@@ -389,7 +396,7 @@ void PopupMenu::showAnimationCallback() {
 }
 
 QImage PopupMenu::grabForPanelAnimation() {
-	myEnsureResized(this);
+	SendPendingMoveResizeEvents(this);
 	auto result = QImage(size() * cIntRetinaFactor(), QImage::Format_ARGB32_Premultiplied);
 	result.setDevicePixelRatio(cRetinaFactor());
 	result.fill(Qt::transparent);
@@ -478,11 +485,9 @@ PopupMenu::~PopupMenu() {
 	for (auto submenu : base::take(_submenus)) {
 		delete submenu;
 	}
-#if defined Q_OS_LINUX32 || defined Q_OS_LINUX64
 	if (auto w = App::wnd()) {
 		w->reActivateWindow();
 	}
-#endif
 	if (_destroyedCallback) {
 		_destroyedCallback();
 	}

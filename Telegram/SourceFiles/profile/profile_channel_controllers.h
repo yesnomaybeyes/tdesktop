@@ -20,61 +20,136 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 */
 #pragma once
 
+#include <rpl/variable.h>
 #include "boxes/peer_list_box.h"
 #include "mtproto/sender.h"
-#include "base/weak_unique_ptr.h"
+#include "base/timer.h"
+#include "base/weak_ptr.h"
+#include "info/profile/info_profile_members_controllers.h"
+
+namespace Window {
+class Navigation;
+} // namespace Window
 
 namespace Profile {
 
 // Viewing admins, banned or restricted users list with search.
-class ParticipantsBoxController : public PeerListController, private base::Subscriber, private MTP::Sender, public base::enable_weak_from_this {
+class ParticipantsBoxController
+	: public PeerListController
+	, private base::Subscriber
+	, private MTP::Sender
+	, public base::has_weak_ptr {
 public:
 	enum class Role {
+		Profile,
+		Members,
 		Admins,
 		Restricted,
 		Kicked,
 	};
-	static void Start(gsl::not_null<ChannelData*> channel, Role role);
+	static void Start(
+		not_null<Window::Navigation*> navigation,
+		not_null<ChannelData*> channel,
+		Role role);
 
 	struct Additional {
-		std::map<gsl::not_null<UserData*>, MTPChannelAdminRights> adminRights;
-		std::set<gsl::not_null<UserData*>> adminCanEdit;
-		std::map<gsl::not_null<UserData*>, gsl::not_null<UserData*>> adminPromotedBy;
-		std::map<gsl::not_null<UserData*>, MTPChannelBannedRights> restrictedRights;
-		std::set<gsl::not_null<UserData*>> kicked;
-		std::set<gsl::not_null<UserData*>> external;
-		std::set<gsl::not_null<UserData*>> infoNotLoaded;
+		std::map<not_null<UserData*>, MTPChannelAdminRights> adminRights;
+		std::set<not_null<UserData*>> adminCanEdit;
+		std::map<not_null<UserData*>, not_null<UserData*>> adminPromotedBy;
+		std::map<not_null<UserData*>, MTPChannelBannedRights> restrictedRights;
+		std::set<not_null<UserData*>> kicked;
+		std::map<not_null<UserData*>, not_null<UserData*>> restrictedBy;
+		std::set<not_null<UserData*>> external;
+		std::set<not_null<UserData*>> infoNotLoaded;
 		UserData *creator = nullptr;
 	};
 
-	ParticipantsBoxController(gsl::not_null<ChannelData*> channel, Role role);
+	ParticipantsBoxController(
+		not_null<Window::Navigation*> navigation,
+		not_null<ChannelData*> channel,
+		Role role);
 
 	void addNewItem();
 
 	void prepare() override;
-	void rowClicked(gsl::not_null<PeerListRow*> row) override;
-	void rowActionClicked(gsl::not_null<PeerListRow*> row) override;
+	void rowClicked(not_null<PeerListRow*> row) override;
+	void rowActionClicked(not_null<PeerListRow*> row) override;
+	Ui::PopupMenu *rowContextMenu(
+		not_null<PeerListRow*> row) override;
 	void loadMoreRows() override;
 
-	void peerListSearchAddRow(gsl::not_null<PeerData*> peer) override;
-	std::unique_ptr<PeerListRow> createSearchRow(gsl::not_null<PeerData*> peer) override;
+	void peerListSearchAddRow(not_null<PeerData*> peer) override;
+	std::unique_ptr<PeerListRow> createSearchRow(
+		not_null<PeerData*> peer) override;
+	std::unique_ptr<PeerListRow> createRestoredRow(
+		not_null<PeerData*> peer) override;
 
-	// Callback(gsl::not_null<UserData*>)
+	std::unique_ptr<PeerListState> saveState() const override;
+	void restoreState(std::unique_ptr<PeerListState> state) override;
+
+	// Callback(not_null<UserData*>)
 	template <typename Callback>
-	static void HandleParticipant(const MTPChannelParticipant &participant, Role role, gsl::not_null<Additional*> additional, Callback callback);
+	static void HandleParticipant(
+		const MTPChannelParticipant &participant,
+		Role role,
+		not_null<Additional*> additional,
+		Callback callback);
+
+	rpl::producer<int> onlineCountValue() const override;
+
+protected:
+	virtual std::unique_ptr<PeerListRow> createRow(not_null<UserData*> user) const;
 
 private:
-	void editAdmin(gsl::not_null<UserData*> user);
-	void editAdminDone(gsl::not_null<UserData*> user, const MTPChannelAdminRights &rights);
-	void editRestricted(gsl::not_null<UserData*> user);
-	void editRestrictedDone(gsl::not_null<UserData*> user, const MTPChannelBannedRights &rights);
-	void removeKicked(gsl::not_null<PeerListRow*> row, gsl::not_null<UserData*> user);
-	bool appendRow(gsl::not_null<UserData*> user);
-	bool prependRow(gsl::not_null<UserData*> user);
-	bool removeRow(gsl::not_null<UserData*> user);
-	std::unique_ptr<PeerListRow> createRow(gsl::not_null<UserData*> user) const;
+	using Row = Info::Profile::MemberListRow;
+	using Type = Row::Type;
+	using Rights = Row::Rights;
+	struct SavedState : SavedStateBase {
+		std::unique_ptr<PeerListSearchController::SavedStateBase> searchState;
+		int offset = 0;
+		bool allLoaded = false;
+		bool wasLoading = false;
+		Additional additional;
+		rpl::lifetime lifetime;
+	};
 
-	gsl::not_null<ChannelData*> _channel;
+	static std::unique_ptr<PeerListSearchController> CreateSearchController(
+		not_null<ChannelData*> channel,
+		Role role,
+		not_null<Additional*> additional);
+
+	void setNonEmptyDescription();
+	void setupSortByOnline();
+	void setupListChangeViewers();
+	void sortByOnlineDelayed();
+	void sortByOnline();
+	void showAdmin(not_null<UserData*> user);
+	void editAdminDone(
+		not_null<UserData*> user,
+		const MTPChannelAdminRights &rights);
+	void showRestricted(not_null<UserData*> user);
+	void editRestrictedDone(
+		not_null<UserData*> user,
+		const MTPChannelBannedRights &rights);
+	void removeKicked(not_null<PeerListRow*> row, not_null<UserData*> user);
+	void kickMember(not_null<UserData*> user);
+	void kickMemberSure(not_null<UserData*> user);
+	void removeAdmin(not_null<UserData*> user);
+	void removeAdminSure(not_null<UserData*> user);
+	bool appendRow(not_null<UserData*> user);
+	bool prependRow(not_null<UserData*> user);
+	bool removeRow(not_null<UserData*> user);
+	void refreshCustomStatus(not_null<PeerListRow*> row) const;
+	bool feedMegagroupLastParticipants();
+	void refreshOnlineCount();
+	Type computeType(not_null<UserData*> user) const;
+	void recomputeTypeFor(not_null<UserData*> user);
+	bool canEditAdmin(not_null<UserData*> user) const;
+	bool canRestrictUser(not_null<UserData*> user) const;
+	bool canEditAdminByRights(not_null<UserData*> user) const;
+
+	not_null<Window::Navigation*> _navigation;
+	not_null<ChannelData*> _channel;
 	Role _role = Role::Admins;
 	int _offset = 0;
 	mtpRequestId _loadRequestId = 0;
@@ -83,21 +158,35 @@ private:
 	QPointer<BoxContent> _editBox;
 	QPointer<PeerListBox> _addBox;
 
+	base::Timer _sortByOnlineTimer;
+	rpl::variable<int> _onlineCount = 0;
+
 };
 
-// Banned and restricted users server side search.
-class BannedBoxSearchController : public PeerListSearchController, private MTP::Sender {
+// Members, banned and restricted users server side search.
+class ParticipantsBoxSearchController
+	: public PeerListSearchController
+	, private MTP::Sender {
 public:
 	using Role = ParticipantsBoxController::Role;
 	using Additional = ParticipantsBoxController::Additional;
 
-	BannedBoxSearchController(gsl::not_null<ChannelData*> channel, Role role, gsl::not_null<Additional*> additional);
+	ParticipantsBoxSearchController(not_null<ChannelData*> channel, Role role, not_null<Additional*> additional);
 
 	void searchQuery(const QString &query) override;
 	bool isLoading() override;
 	bool loadMoreRows() override;
 
+	std::unique_ptr<SavedStateBase> saveState() const override;
+	void restoreState(std::unique_ptr<SavedStateBase> state) override;
+
 private:
+	struct SavedState : SavedStateBase {
+		QString query;
+		int offset = 0;
+		bool allLoaded = false;
+		bool wasLoading = false;
+	};
 	struct CacheEntry {
 		MTPchannels_ChannelParticipants result;
 		int requestedCount = 0;
@@ -109,11 +198,14 @@ private:
 
 	void searchOnServer();
 	bool searchInCache();
-	void searchDone(mtpRequestId requestId, const MTPchannels_ChannelParticipants &result, int requestedCount);
+	void searchDone(
+		mtpRequestId requestId,
+		const MTPchannels_ChannelParticipants &result,
+		int requestedCount);
 
-	gsl::not_null<ChannelData*> _channel;
+	not_null<ChannelData*> _channel;
 	Role _role = Role::Restricted;
-	gsl::not_null<Additional*> _additional;
+	not_null<Additional*> _additional;
 
 	base::Timer _timer;
 	QString _query;
@@ -126,40 +218,40 @@ private:
 };
 
 // Adding an admin, banned or restricted user from channel members with search + contacts search + global search.
-class AddParticipantBoxController : public PeerListController, private base::Subscriber, private MTP::Sender, public base::enable_weak_from_this {
+class AddParticipantBoxController : public PeerListController, private base::Subscriber, private MTP::Sender, public base::has_weak_ptr {
 public:
 	using Role = ParticipantsBoxController::Role;
 	using Additional = ParticipantsBoxController::Additional;
 
-	using AdminDoneCallback = base::lambda<void(gsl::not_null<UserData*> user, const MTPChannelAdminRights &adminRights)>;
-	using BannedDoneCallback = base::lambda<void(gsl::not_null<UserData*> user, const MTPChannelBannedRights &bannedRights)>;
-	AddParticipantBoxController(gsl::not_null<ChannelData*> channel, Role role, AdminDoneCallback adminDoneCallback, BannedDoneCallback bannedDoneCallback);
+	using AdminDoneCallback = base::lambda<void(not_null<UserData*> user, const MTPChannelAdminRights &adminRights)>;
+	using BannedDoneCallback = base::lambda<void(not_null<UserData*> user, const MTPChannelBannedRights &bannedRights)>;
+	AddParticipantBoxController(not_null<ChannelData*> channel, Role role, AdminDoneCallback adminDoneCallback, BannedDoneCallback bannedDoneCallback);
 
 	void prepare() override;
-	void rowClicked(gsl::not_null<PeerListRow*> row) override;
+	void rowClicked(not_null<PeerListRow*> row) override;
 	void loadMoreRows() override;
 
-	std::unique_ptr<PeerListRow> createSearchRow(gsl::not_null<PeerData*> peer) override;
+	std::unique_ptr<PeerListRow> createSearchRow(not_null<PeerData*> peer) override;
 
-	// Callback(gsl::not_null<UserData*>)
+	// Callback(not_null<UserData*>)
 	template <typename Callback>
-	static void HandleParticipant(const MTPChannelParticipant &participant, gsl::not_null<Additional*> additional, Callback callback);
+	static void HandleParticipant(const MTPChannelParticipant &participant, not_null<Additional*> additional, Callback callback);
 
 private:
 	template <typename Callback>
-	bool checkInfoLoaded(gsl::not_null<UserData*> user, Callback callback);
+	bool checkInfoLoaded(not_null<UserData*> user, Callback callback);
 
-	void editAdmin(gsl::not_null<UserData*> user, bool sure = false);
-	void editAdminDone(gsl::not_null<UserData*> user, const MTPChannelAdminRights &rights);
-	void editRestricted(gsl::not_null<UserData*> user, bool sure = false);
-	void editRestrictedDone(gsl::not_null<UserData*> user, const MTPChannelBannedRights &rights);
-	void kickUser(gsl::not_null<UserData*> user, bool sure = false);
-	void restrictUserSure(gsl::not_null<UserData*> user, const MTPChannelBannedRights &rights);
-	bool appendRow(gsl::not_null<UserData*> user);
-	bool prependRow(gsl::not_null<UserData*> user);
-	std::unique_ptr<PeerListRow> createRow(gsl::not_null<UserData*> user) const;
+	void showAdmin(not_null<UserData*> user, bool sure = false);
+	void editAdminDone(not_null<UserData*> user, const MTPChannelAdminRights &rights);
+	void showRestricted(not_null<UserData*> user, bool sure = false);
+	void editRestrictedDone(not_null<UserData*> user, const MTPChannelBannedRights &rights);
+	void kickUser(not_null<UserData*> user, bool sure = false);
+	void restrictUserSure(not_null<UserData*> user, const MTPChannelBannedRights &oldRights, const MTPChannelBannedRights &newRights);
+	bool appendRow(not_null<UserData*> user);
+	bool prependRow(not_null<UserData*> user);
+	std::unique_ptr<PeerListRow> createRow(not_null<UserData*> user) const;
 
-	gsl::not_null<ChannelData*> _channel;
+	not_null<ChannelData*> _channel;
 	Role _role = Role::Admins;
 	int _offset = 0;
 	mtpRequestId _loadRequestId = 0;
@@ -177,7 +269,7 @@ public:
 	using Role = ParticipantsBoxController::Role;
 	using Additional = ParticipantsBoxController::Additional;
 
-	AddParticipantBoxSearchController(gsl::not_null<ChannelData*> channel, gsl::not_null<Additional*> additional);
+	AddParticipantBoxSearchController(not_null<ChannelData*> channel, not_null<Additional*> additional);
 
 	void searchQuery(const QString &query) override;
 	bool isLoading() override;
@@ -202,8 +294,8 @@ private:
 	void addChatsContacts();
 	void requestGlobal();
 
-	gsl::not_null<ChannelData*> _channel;
-	gsl::not_null<Additional*> _additional;
+	not_null<ChannelData*> _channel;
+	not_null<Additional*> _additional;
 
 	base::Timer _timer;
 	QString _query;

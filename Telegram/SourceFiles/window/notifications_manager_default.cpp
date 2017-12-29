@@ -176,7 +176,7 @@ void Manager::stopAllHiding() {
 }
 
 void Manager::showNextFromQueue() {
-	auto guard = base::scope_guard([this] {
+	auto guard = gsl::finally([this] {
 		if (_positionsOutdated) {
 			moveWidgets();
 		}
@@ -539,19 +539,20 @@ void Notification::refreshLang() {
 }
 
 void Notification::prepareActionsCache() {
-	auto replyCache = myGrab(_reply);
+	auto replyCache = Ui::GrabWidget(_reply);
 	auto fadeWidth = st::notifyFadeRight.width();
 	auto actionsTop = st::notifyTextTop + st::msgNameFont->height;
-	auto actionsCacheWidth = _reply->width() + _replyPadding + fadeWidth;
-	auto actionsCacheHeight = height() - actionsTop;
-	auto actionsCacheImg = QImage(actionsCacheWidth * cIntRetinaFactor(), actionsCacheHeight * cIntRetinaFactor(), QImage::Format_ARGB32_Premultiplied);
+	auto replyRight = _replyPadding - st::notifyBorderWidth;
+	auto actionsCacheWidth = _reply->width() + replyRight + fadeWidth;
+	auto actionsCacheHeight = height() - actionsTop - st::notifyBorderWidth;
+	auto actionsCacheImg = QImage(QSize(actionsCacheWidth, actionsCacheHeight) * cIntRetinaFactor(), QImage::Format_ARGB32_Premultiplied);
 	actionsCacheImg.setDevicePixelRatio(cRetinaFactor());
 	actionsCacheImg.fill(Qt::transparent);
 	{
 		Painter p(&actionsCacheImg);
 		st::notifyFadeRight.fill(p, rtlrect(0, 0, fadeWidth, actionsCacheHeight, actionsCacheWidth));
 		p.fillRect(rtlrect(fadeWidth, 0, actionsCacheWidth - fadeWidth, actionsCacheHeight, actionsCacheWidth), st::notificationBg);
-		p.drawPixmapRight(_replyPadding, _reply->y() - actionsTop, actionsCacheWidth, replyCache);
+		p.drawPixmapRight(replyRight, _reply->y() - actionsTop, actionsCacheWidth, replyCache);
 	}
 	_buttonsCache = App::pixmapFromImageInPlace(std::move(actionsCacheImg));
 }
@@ -609,9 +610,9 @@ void Notification::paintEvent(QPaintEvent *e) {
 	auto buttonsTop = st::notifyTextTop + st::msgNameFont->height;
 	if (a_actionsOpacity.animating(getms())) {
 		p.setOpacity(a_actionsOpacity.current());
-		p.drawPixmapRight(0, buttonsTop, width(), _buttonsCache);
+		p.drawPixmapRight(st::notifyBorderWidth, buttonsTop, width(), _buttonsCache);
 	} else if (_actionsVisible) {
-		p.drawPixmapRight(0, buttonsTop, width(), _buttonsCache);
+		p.drawPixmapRight(st::notifyBorderWidth, buttonsTop, width(), _buttonsCache);
 	}
 }
 
@@ -663,7 +664,14 @@ void Notification::updateNotifyDisplay() {
 			QRect r(st::notifyPhotoPos.x() + st::notifyPhotoSize + st::notifyTextLeft, st::notifyItemTop + st::msgNameFont->height, itemWidth, 2 * st::dialogsTextFont->height);
 			if (_item) {
 				auto active = false, selected = false;
-				_item->drawInDialog(p, r, active, selected, textCachedFor, itemTextCache);
+				_item->drawInDialog(
+					p,
+					r,
+					active,
+					selected,
+					HistoryItem::DrawInDialog::Normal,
+					textCachedFor,
+					itemTextCache);
 			} else if (_forwardedCount > 1) {
 				p.setFont(st::dialogsTextFont);
 				if (_author) {

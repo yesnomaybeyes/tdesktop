@@ -23,9 +23,22 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 #include "mtproto/connection.h"
 #include "mtproto/dcenter.h"
 #include "mtproto/auth_key.h"
+#include "core/crash_reports.h"
 
 namespace MTP {
 namespace internal {
+namespace {
+
+QString LogIds(const QVector<uint64> &ids) {
+	if (!ids.size()) return "[]";
+	auto idsStr = QString("[%1").arg(*ids.cbegin());
+	for (const auto id : ids) {
+		idsStr += QString(", %2").arg(id);
+	}
+	return idsStr + "]";
+}
+
+} // namespace
 
 void SessionData::setKey(const AuthKeyPtr &key) {
 	if (_authKey != key) {
@@ -86,7 +99,7 @@ void SessionData::clear(Instance *instance) {
 	instance->clearCallbacksDelayed(clearCallbacks);
 }
 
-Session::Session(gsl::not_null<Instance*> instance, ShiftedDcId shiftedDcId) : QObject()
+Session::Session(not_null<Instance*> instance, ShiftedDcId shiftedDcId) : QObject()
 , _instance(instance)
 , data(this)
 , dcWithShift(shiftedDcId) {
@@ -128,8 +141,10 @@ void Session::registerRequest(mtpRequestId requestId, ShiftedDcId dcWithShift) {
 	return _instance->registerRequest(requestId, dcWithShift);
 }
 
-mtpRequestId Session::storeRequest(mtpRequest &request, const RPCResponseHandler &parser) {
-	return _instance->storeRequest(request, parser);
+mtpRequestId Session::storeRequest(
+		mtpRequest &request,
+		RPCResponseHandler &&callbacks) {
+	return _instance->storeRequest(request, std::move(callbacks));
 }
 
 mtpRequest Session::getRequest(mtpRequestId requestId) {
@@ -225,7 +240,9 @@ void Session::needToResumeAndSend() {
 }
 
 void Session::sendPong(quint64 msgId, quint64 pingId) {
-	send(MTP_pong(MTP_long(msgId), MTP_long(pingId)));
+	send(mtpRequestData::serialize(MTPPong(MTP_pong(
+		MTP_long(msgId),
+		MTP_long(pingId)))));
 }
 
 void Session::sendMsgsStateInfo(quint64 msgId, QByteArray data) {
@@ -237,7 +254,8 @@ void Session::sendMsgsStateInfo(quint64 msgId, QByteArray data) {
 		auto dst = gsl::as_writeable_bytes(gsl::make_span(&info[0], info.size()));
 		base::copy_bytes(dst, src);
 	}
-	send(MTPMsgsStateInfo(MTP_msgs_state_info(MTP_long(msgId), MTP_string(std::move(info)))));
+	send(mtpRequestData::serialize(MTPMsgsStateInfo(
+		MTP_msgs_state_info(MTP_long(msgId), MTP_string(std::move(info))))));
 }
 
 void Session::checkRequestsByTimer() {
@@ -271,7 +289,7 @@ void Session::checkRequestsByTimer() {
 	}
 
 	if (stateRequestIds.size()) {
-		DEBUG_LOG(("MTP Info: requesting state of msgs: %1").arg(Logs::vector(stateRequestIds)));
+		DEBUG_LOG(("MTP Info: requesting state of msgs: %1").arg(LogIds(stateRequestIds)));
 		{
 			QWriteLocker locker(data.stateRequestMutex());
 			for (uint32 i = 0, l = stateRequestIds.size(); i < l; ++i) {
@@ -395,13 +413,17 @@ mtpRequestId Session::resend(quint64 msgId, qint64 msCanWait, bool forceContaine
 		QWriteLocker locker(data.haveSentMutex());
 		mtpRequestMap &haveSent(data.haveSentMap());
 
-		mtpRequestMap::iterator i = haveSent.find(msgId);
+		auto i = haveSent.find(msgId);
 		if (i == haveSent.end()) {
 			if (sendMsgStateInfo) {
 				char cantResend[2] = {1, 0};
 				DEBUG_LOG(("Message Info: cant resend %1, request not found").arg(msgId));
 
-				return send(MTP_msgs_state_info(MTP_long(msgId), MTP_string(std::string(cantResend, cantResend + 1))));
+				auto info = std::string(cantResend, cantResend + 1);
+				return send(mtpRequestData::serialize(MTPMsgsStateInfo(
+					MTP_msgs_state_info(
+						MTP_long(msgId),
+						MTP_string(std::move(info))))));
 			}
 			return 0;
 		}
@@ -448,6 +470,30 @@ void Session::resendAll() {
 	for (uint32 i = 0, l = toResend.size(); i < l; ++i) {
 		resend(toResend[i], 10, true);
 	}
+}
+
+mtpRequestId Session::send(
+		mtpRequest &&request,
+		RPCResponseHandler &&callbacks,
+		TimeMs msCanWait,
+		bool needsLayer,
+		bool toMainDC,
+		mtpRequestId after) {
+	DEBUG_LOG(("MTP Info: adding request to toSendMap, msCanWait %1").arg(msCanWait));
+
+	request->msDate = getms(true); // > 0 - can send without container
+	request->needsLayer = needsLayer;
+	if (after) {
+		request->after = getRequest(after);
+	}
+	const auto requestId = storeRequest(request, std::move(callbacks));
+	Assert(requestId != 0);
+
+	const auto signedDcId = toMainDC ? -getDcWithShift() : getDcWithShift();
+	sendPrepared(request, msCanWait);
+	registerRequest(requestId, signedDcId);
+
+	return requestId;
 }
 
 void Session::sendPrepared(const mtpRequest &request, TimeMs msCanWait, bool newRequest) { // returns true, if emit of needToSend() is needed
@@ -552,7 +598,7 @@ void Session::tryToReceive() {
 }
 
 Session::~Session() {
-	t_assert(_connection == nullptr);
+	Assert(_connection == nullptr);
 }
 
 MTPrpcError rpcClientError(const QString &type, const QString &description) {

@@ -29,7 +29,7 @@ switchPmButton: RoundButton(defaultBoxButton) {
 	textTop: 7px;
 }
 stickersRestrictedLabel: FlatLabel(defaultFlatLabel) {
-	width: 320px;
+	minWidth: 200px;
 	align: align(center);
 	textFg: noContactsColor;
 }
@@ -103,7 +103,7 @@ stickersRowDuration: 200;
 
 stickersSettings: icon {{ "emoji_settings", emojiIconFg }};
 stickersTrending: icon {{ "emoji_trending", emojiIconFg }};
-stickersTrendingActive: icon {{ "emoji_trending", emojiIconFgActive }};
+stickersFaved: icon {{ "emoji_faved", emojiIconFg }};
 
 stickersSettingsUnreadSize: 17px;
 stickersSettingsUnreadPosition: point(4px, 5px);
@@ -133,11 +133,13 @@ emojiObjectsActive: icon {{ "emoji_objects", emojiIconFgActive }};
 emojiSymbols: icon {{ "emoji_symbols", emojiIconFg }};
 emojiSymbolsActive: icon {{ "emoji_symbols", emojiIconFgActive }};
 
+emojiFooterHeight: 46px;
+emojiCategorySkip: 4px;
 emojiCategory: IconButton {
 	width: 42px;
-	height: 46px;
+	height: emojiFooterHeight;
 
-	iconPosition: point(11px, 12px);
+	iconPosition: point(-1px, 9px);
 }
 emojiCategoryRecent: IconButton(emojiCategory) { icon: emojiRecent; }
 emojiCategoryPeople: IconButton(emojiCategory) { icon: emojiPeople; }
@@ -152,7 +154,6 @@ emojiPanAnimation: PanelAnimation(defaultPanelAnimation) {
 	fadeBg: emojiPanBg;
 }
 emojiPanPadding: 12px;
-emojiPanSize: size(45px, 41px);
 emojiPanWidth: 345px;
 emojiPanMinHeight: 278px;
 emojiPanMaxHeight: 640px;
@@ -161,6 +162,7 @@ emojiPanShowDuration: 200;
 emojiPanDuration: 200;
 emojiPanHover: windowBgOver;
 emojiPanSlideDuration: 200;
+emojiPanDesiredSize: 45px;
 
 emojiPanHeader: 42px;
 emojiPanHeaderFont: semiboldFont;
@@ -192,14 +194,18 @@ hashtagClose: IconButton {
 	}
 }
 
-stickerPanSize: size(64px, 64px);
+stickerPanWidthMin: 64px;
+stickerPanSize: size(stickerPanWidthMin, stickerPanWidthMin);
 stickerPanPadding: 11px;
-stickerPanDelete: icon {
-	{ "emoji_delete_bg", stickerPanDeleteBg },
-	{ "emoji_delete", stickerPanDeleteFg },
-};
-stickerPanDeleteOpacity: 0.5;
+stickerPanDeleteIconBg: icon {{ "emoji_delete_bg", stickerPanDeleteBg }};
+stickerPanDeleteIconFg: icon {{ "emoji_delete", stickerPanDeleteFg }};
+stickerPanDeleteOpacityBg: 0.3;
+stickerPanDeleteOpacityBgOver: 0.5;
+stickerPanDeleteOpacityFg: 0.8;
+stickerPanDeleteOpacityFgOver: 1.;
 stickerPanRemoveSet: hashtagClose;
+stickerIconWidth: 42px;
+stickerIconHeight: emojiFooterHeight;
 stickerIconPadding: 5px;
 stickerIconOpacity: 0.7;
 stickerIconSel: 2px;
@@ -207,6 +213,11 @@ stickerIconSelColor: emojiIconFgActive;
 stickerIconMove: 400;
 stickerPreviewDuration: 150;
 stickerPreviewMin: 0.1;
+
+stickerGroupCategorySize: 28px;
+stickerGroupCategoryAbout: defaultTextStyle;
+stickerGroupCategoryAddMargin: margins(0px, 10px, 0px, 5px);
+stickerGroupCategoryAdd: stickersTrendingAdd;
 
 stickersToastMaxWidth: 340px;
 stickersToastPadding: margins(16px, 13px, 16px, 12px);
@@ -222,3 +233,37 @@ gifsSearchCancel: contactsSearchCancel;
 gifsSearchCancelPosition: point(1px, 1px);
 gifsSearchIcon: boxFieldSearchIcon;
 gifsSearchIconPosition: point(6px, 7px);
+
+emojiSuggestionsDropdown: InnerDropdown(defaultInnerDropdown) {
+	scroll: ScrollArea(defaultSolidScroll) {
+		deltat: 0px;
+		deltab: 0px;
+		round: 1px;
+		width: 8px;
+		deltax: 3px;
+	}
+	scrollMargin: margins(0px, 5px, 0px, 5px);
+	scrollPadding: margins(0px, 3px, 0px, 3px);
+}
+emojiSuggestionsMenu: Menu(defaultMenu) {
+	itemPadding: margins(48px, 8px, 17px, 7px);
+	widthMax: 512px;
+}
+
+mentionHeight: 40px;
+mentionScroll: ScrollArea(defaultScrollArea) {
+	topsh: 0px;
+	bottomsh: 0px;
+}
+mentionPadding: margins(8px, 5px, 8px, 5px);
+mentionTop: 11px;
+mentionFont: linkFont;
+mentionNameFg: windowFg;
+mentionNameFgOver: windowFgOver;
+mentionPhotoSize: msgPhotoSize;
+mentionBg: windowBg;
+mentionBgOver: windowBgOver;
+mentionFg: windowSubTextFg;
+mentionFgOver: windowSubTextFgOver;
+mentionFgActive: windowActiveTextFg;
+mentionFgOverActive: windowActiveTextFg;

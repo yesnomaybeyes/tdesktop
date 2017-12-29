@@ -23,11 +23,13 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 #include "window/themes/window_theme.h"
 #include "lang/lang_keys.h"
 #include "platform/platform_window_title.h"
+#include "ui/text_options.h"
 #include "styles/style_widgets.h"
 #include "styles/style_window.h"
 #include "styles/style_mediaview.h"
 #include "styles/style_history.h"
 #include "styles/style_dialogs.h"
+#include "styles/style_info.h"
 
 namespace Window {
 namespace Theme {
@@ -212,13 +214,13 @@ void Generator::prepare() {
 
 void Generator::addRow(QString name, int peerIndex, QString date, QString text) {
 	Row row;
-	row.name.setText(st::msgNameStyle, name, _textNameOptions);
+	row.name.setText(st::msgNameStyle, name, Ui::NameTextOptions());
 
 	row.letters = fillLetters(name);
 
 	row.peerIndex = peerIndex;
 	row.date = date;
-	row.text.setRichText(st::dialogsTextStyle, text, _textDlgOptions);
+	row.text.setRichText(st::dialogsTextStyle, text, Ui::DialogTextOptions());
 	_rows.push_back(std::move(row));
 }
 
@@ -267,7 +269,7 @@ int Generator::computeInfoWidth(Status status, QString date) {
 void Generator::addTextBubble(QString text, QString date, Status status) {
 	Bubble bubble;
 	auto skipBlock = computeSkipBlock(status, date);
-	bubble.text.setRichText(st::messageTextStyle, text + textcmdSkipBlock(skipBlock.width(), skipBlock.height()), _historyTextOptions);
+	bubble.text.setRichText(st::messageTextStyle, text + textcmdSkipBlock(skipBlock.width(), skipBlock.height()), Ui::ItemTextDefaultOptions());
 
 	auto width = _history.width() - st::msgMargin.left() - st::msgMargin.right();
 	accumulate_min(width, st::msgPadding.left() + bubble.text.maxWidth() + st::msgPadding.right());
@@ -291,7 +293,7 @@ void Generator::addPhotoBubble(QString image, QString caption, QString date, Sta
 	bubble.photoWidth = convertScale(bubble.photo.width() / 2);
 	bubble.photoHeight = convertScale(bubble.photo.height() / 2);
 	auto skipBlock = computeSkipBlock(status, date);
-	bubble.text.setRichText(st::messageTextStyle, caption + textcmdSkipBlock(skipBlock.width(), skipBlock.height()), _historyTextOptions);
+	bubble.text.setRichText(st::messageTextStyle, caption + textcmdSkipBlock(skipBlock.width(), skipBlock.height()), Ui::ItemTextDefaultOptions());
 
 	auto width = _history.width() - st::msgMargin.left() - st::msgMargin.right();
 	accumulate_min(width, bubble.photoWidth);
@@ -324,7 +326,7 @@ void Generator::generateData() {
 	_rows.back().status = Status::Received;
 	addRow("Davy Jones", 5, "4:00", textcmdLink(1, "Keynote.pdf"));
 
-	_topBarName.setText(st::msgNameStyle, "Eva Summer", _textNameOptions);
+	_topBarName.setText(st::msgNameStyle, "Eva Summer", Ui::NameTextOptions());
 	_topBarStatus = "online";
 	_topBarStatusActive = true;
 
@@ -344,8 +346,8 @@ void Generator::generateData() {
 	_bubbles.back().attached = true;
 	_bubbles.back().tail = true;
 	addTextBubble("Reminds me of a Chinese proverb: the best time to plant a tree was 20 years ago. The second best time is now.", "11:00", Status::None);
-	_bubbles.back().replyName.setText(st::msgNameStyle, "Alex Cassio", _textNameOptions);
-	_bubbles.back().replyText.setText(st::messageTextStyle, "Mark Twain said that " + QString() + QChar(9757) + QChar(55356) + QChar(57339), _textDlgOptions);
+	_bubbles.back().replyName.setText(st::msgNameStyle, "Alex Cassio", Ui::NameTextOptions());
+	_bubbles.back().replyText.setText(st::messageTextStyle, "Mark Twain said that " + QString() + QChar(9757) + QChar(55356) + QChar(57339), Ui::DialogTextOptions());
 }
 
 Generator::Generator(const Instance &theme, const CurrentData &current)
@@ -454,8 +456,10 @@ void Generator::paintTopBar() {
 	st::topBarMenuToggle.icon[_palette].paint(*_p, _topBar.x() + _topBar.width() - right + st::topBarMenuToggle.iconPosition.x(), _topBar.y() + st::topBarMenuToggle.iconPosition.y(), _rect.width());
 	right += st::topBarSearch.width;
 	st::topBarSearch.icon[_palette].paint(*_p, _topBar.x() + _topBar.width() - right + st::topBarSearch.iconPosition.x(), _topBar.y() + st::topBarSearch.iconPosition.y(), _rect.width());
+	right += st::topBarCallSkip + st::topBarCall.width;
+	st::topBarCall.icon[_palette].paint(*_p, _topBar.x() + _topBar.width() - right + st::topBarCall.iconPosition.x(), _topBar.y() + st::topBarCall.iconPosition.y(), _rect.width());
 
-	auto decreaseWidth = st::topBarSearch.width + st::topBarMenuToggle.width;
+	auto decreaseWidth = st::topBarCall.width + st::topBarCallSkip + st::topBarSearch.width + st::topBarMenuToggle.width;
 	auto nameleft = _topBar.x() + st::topBarArrowPadding.right();
 	auto nametop = _topBar.y() + st::topBarArrowPadding.top();
 	auto statustop = _topBar.y() + st::topBarHeight - st::topBarArrowPadding.bottom() - st::dialogsTextFont->height;
@@ -891,7 +895,7 @@ std::unique_ptr<Preview> GeneratePreview(const QString &filepath, const CurrentD
 	auto result = std::make_unique<Preview>();
 	result->path = filepath;
 	if (!LoadFromFile(filepath, &result->instance, &result->content)) {
-		return std::unique_ptr<Preview>();
+		return nullptr;
 	}
 	result->preview = Generator(result->instance, data).generate();
 	return result;

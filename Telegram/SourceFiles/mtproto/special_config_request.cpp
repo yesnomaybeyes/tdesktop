@@ -87,6 +87,9 @@ void SpecialConfigRequest::dnsFinished() {
 	if (!_dnsReply) {
 		return;
 	}
+	if (_dnsReply->error() != QNetworkReply::NoError) {
+		LOG(("Config Error: Failed to get dns response JSON, error: %1 (%2)").arg(_dnsReply->errorString()).arg(_dnsReply->error()));
+	}
 	auto result = _dnsReply->readAll();
 	_dnsReply.release()->deleteLater();
 
@@ -96,7 +99,7 @@ void SpecialConfigRequest::dnsFinished() {
 	auto error = QJsonParseError { 0, QJsonParseError::NoError };
 	auto document = QJsonDocument::fromJson(result, &error);
 	if (error.error != QJsonParseError::NoError) {
-		LOG(("Config Error: Faild to parse dns response JSON, error: %1").arg(error.errorString()));
+		LOG(("Config Error: Failed to parse dns response JSON, error: %1").arg(error.errorString()));
 	} else if (!document.isObject()) {
 		LOG(("Config Error: Not an object received in dns response JSON."));
 	} else {
@@ -154,7 +157,9 @@ bool SpecialConfigRequest::decryptSimpleConfig(const QByteArray &bytes) {
 		return false;
 	}
 
-	auto publicKey = internal::RSAPublicKey(gsl::as_bytes(gsl::make_span(kPublicKey.c_str(), kPublicKey.size())));
+	auto publicKey = internal::RSAPublicKey(gsl::as_bytes(gsl::make_span(
+		kPublicKey.c_str(),
+		kPublicKey.size())));
 	auto decrypted = publicKey.decrypt(gsl::as_bytes(gsl::make_span(decodedBytes)));
 	auto decryptedBytes = gsl::make_span(decrypted);
 
@@ -204,7 +209,7 @@ void SpecialConfigRequest::handleResponse(const QByteArray &bytes) {
 	if (!decryptSimpleConfig(bytes)) {
 		return;
 	}
-	t_assert(_simpleConfig.type() == mtpc_help_configSimple);
+	Assert(_simpleConfig.type() == mtpc_help_configSimple);
 	auto &config = _simpleConfig.c_help_configSimple();
 	auto now = unixtime();
 	if (now < config.vdate.v || now > config.vexpires.v) {
@@ -216,7 +221,7 @@ void SpecialConfigRequest::handleResponse(const QByteArray &bytes) {
 		return;
 	}
 	for (auto &entry : config.vip_port_list.v) {
-		t_assert(entry.type() == mtpc_ipPort);
+		Assert(entry.type() == mtpc_ipPort);
 		auto &ipPort = entry.c_ipPort();
 		auto ip = *reinterpret_cast<const uint32*>(&ipPort.vipv4.v);
 		auto ipString = qsl("%1.%2.%3.%4").arg((ip >> 24) & 0xFF).arg((ip >> 16) & 0xFF).arg((ip >> 8) & 0xFF).arg(ip & 0xFF);

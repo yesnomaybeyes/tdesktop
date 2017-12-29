@@ -25,7 +25,6 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 #include "ui/widgets/scroll_area.h"
 #include "ui/widgets/multi_select.h"
 #include "ui/effects/ripple_animation.h"
-#include "boxes/contacts_box.h"
 #include "countries.h"
 #include "styles/style_boxes.h"
 #include "styles/style_intro.h"
@@ -290,17 +289,17 @@ CountrySelectBox::Inner::Inner(QWidget *parent) : TWidget(parent)
 			countriesAll.push_back(ins);
 		}
 
-		QStringList namesList = QString::fromUtf8(ins->name).toLower().split(QRegularExpression("[\\s\\-]"), QString::SkipEmptyParts);
-		CountryNames &names(countriesNames[i]);
+		auto namesList = QString::fromUtf8(ins->name).toLower().split(QRegularExpression("[\\s\\-]"), QString::SkipEmptyParts);
+		auto &names = countriesNames[i];
 		int l = namesList.size();
 		names.resize(0);
 		names.reserve(l);
 		for (int j = 0, l = namesList.size(); j < l; ++j) {
-			QString name = namesList[j].trimmed();
+			auto name = namesList[j].trimmed();
 			if (!name.length()) continue;
 
-			QChar ch = name[0];
-			CountriesIds &v(countriesByLetter[ch]);
+			auto ch = name[0];
+			auto &v = countriesByLetter[ch];
 			if (v.isEmpty() || v.back() != i) {
 				v.push_back(i);
 			}
@@ -392,7 +391,7 @@ void CountrySelectBox::Inner::mousePressEvent(QMouseEvent *e) {
 		if (_ripples.size() <= _pressed) {
 			_ripples.reserve(_pressed + 1);
 			while (_ripples.size() <= _pressed) {
-				_ripples.push_back(std::unique_ptr<Ui::RippleAnimation>());
+				_ripples.push_back(nullptr);
 			}
 		}
 		if (!_ripples[_pressed]) {
@@ -417,21 +416,8 @@ void CountrySelectBox::Inner::mouseReleaseEvent(QMouseEvent *e) {
 }
 
 void CountrySelectBox::Inner::updateFilter(QString filter) {
-	filter = textSearchKey(filter);
-
-	QStringList f;
-	if (!filter.isEmpty()) {
-		QStringList filterList = filter.split(cWordSplit(), QString::SkipEmptyParts);
-		int l = filterList.size();
-
-		f.reserve(l);
-		for (int i = 0; i < l; ++i) {
-			QString filterName = filterList[i].trimmed();
-			if (filterName.isEmpty()) continue;
-			f.push_back(filterName);
-		}
-		filter = f.join(' ');
-	}
+	auto words = TextUtilities::PrepareSearchWords(filter);
+	filter = words.isEmpty() ? QString() : words.join(' ');
 	if (_filter != filter) {
 		_filter = filter;
 
@@ -441,7 +427,7 @@ void CountrySelectBox::Inner::updateFilter(QString filter) {
 			QChar first = _filter[0].toLower();
 			CountriesIds &ids(countriesByLetter[first]);
 
-			QStringList::const_iterator fb = f.cbegin(), fe = f.cend(), fi;
+			QStringList::const_iterator fb = words.cbegin(), fe = words.cend(), fi;
 
 			countriesFiltered.clear();
 			for (CountriesIds::const_iterator i = ids.cbegin(), e = ids.cend(); i != e; ++i) {

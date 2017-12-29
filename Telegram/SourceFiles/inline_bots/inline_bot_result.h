@@ -21,8 +21,6 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 #pragma once
 
 #include "core/basic_types.h"
-#include "structs.h"
-#include "mtproto/core_types.h"
 
 class FileLoader;
 
@@ -67,7 +65,7 @@ public:
 
 	bool hasThumbDisplay() const;
 
-	void addToHistory(History *history, MTPDmessage::Flags flags, MsgId msgId, UserId fromId, MTPint mtpDate, UserId viaBotId, MsgId replyToId) const;
+	void addToHistory(History *history, MTPDmessage::Flags flags, MsgId msgId, UserId fromId, MTPint mtpDate, UserId viaBotId, MsgId replyToId, const QString &postAuthor) const;
 	QString getErrorOnSend(History *history) const;
 
 	// interface for Layout:: usage

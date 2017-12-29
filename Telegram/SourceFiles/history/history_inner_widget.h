@@ -20,9 +20,10 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 */
 #pragma once
 
+#include "ui/rp_widget.h"
 #include "ui/widgets/tooltip.h"
 #include "ui/widgets/scroll_area.h"
-#include "window/top_bar_widget.h"
+#include "history/history_top_bar_widget.h"
 
 namespace Window {
 class Controller;
@@ -33,11 +34,18 @@ class PopupMenu;
 } // namespace Ui
 
 class HistoryWidget;
-class HistoryInner : public TWidget, public Ui::AbstractTooltipShower, private base::Subscriber {
+class HistoryInner
+	: public Ui::RpWidget
+	, public Ui::AbstractTooltipShower
+	, private base::Subscriber {
 	Q_OBJECT
 
 public:
-	HistoryInner(HistoryWidget *historyWidget, gsl::not_null<Window::Controller*> controller, Ui::ScrollArea *scroll, History *history);
+	HistoryInner(
+		not_null<HistoryWidget*> historyWidget,
+		not_null<Window::Controller*> controller,
+		Ui::ScrollArea *scroll,
+		not_null<History*> history);
 
 	void messagesReceived(PeerData *peer, const QVector<MTPMessage> &messages);
 	void messagesReceivedDown(PeerData *peer, const QVector<MTPMessage> &messages);
@@ -47,7 +55,7 @@ public:
 	void touchScrollUpdated(const QPoint &screenPos);
 	QPoint mapPointToItem(QPoint p, HistoryItem *item);
 
-	void recountHeight();
+	void recountHistoryGeometry();
 	void updateSize();
 
 	void repaintItem(const HistoryItem *item);
@@ -55,10 +63,10 @@ public:
 	bool canCopySelected() const;
 	bool canDeleteSelected() const;
 
-	Window::TopBarWidget::SelectedState getSelectionState() const;
+	HistoryTopBarWidget::SelectedState getSelectionState() const;
 	void clearSelectedItems(bool onlyTextSelection = false);
-	SelectedItemSet getSelectedItems() const;
-	void selectItem(HistoryItem *item);
+	MessageIdsList getSelectedItems() const;
+	void selectItem(not_null<HistoryItem*> item);
 
 	void updateBotInfo(bool recount = true);
 
@@ -91,7 +99,7 @@ public:
 protected:
 	bool focusNextPrevChild(bool next) override;
 
-	bool event(QEvent *e) override; // calls touchEvent when necessary
+	bool eventHook(QEvent *e) override; // calls touchEvent when necessary
 	void touchEvent(QTouchEvent *e);
 	void paintEvent(QPaintEvent *e) override;
 	void mouseMoveEvent(QMouseEvent *e) override;
@@ -125,12 +133,20 @@ private slots:
 	void onScrollDateHideByTimer();
 
 private:
+	class BotAbout;
+	using SelectedItems = std::map<HistoryItem*, TextSelection, std::less<>>;
+
 	enum class MouseAction {
 		None,
 		PrepareDrag,
 		Dragging,
 		PrepareSelect,
 		Selecting,
+	};
+	enum class SelectAction {
+		Select,
+		Deselect,
+		Invert,
 	};
 
 	void mouseActionStart(const QPoint &screenPos, Qt::MouseButton button);
@@ -141,11 +157,12 @@ private:
 
 	void showContextMenu(QContextMenuEvent *e, bool showFromTouch = false);
 
-	void itemRemoved(HistoryItem *item);
+	void itemRemoved(not_null<const HistoryItem*> item);
 	void savePhotoToFile(PhotoData *photo);
 	void saveDocumentToFile(DocumentData *document);
 	void copyContextImage(PhotoData *photo);
-	void showStickerPackInfo();
+	void showStickerPackInfo(DocumentData *document);
+	void toggleFavedSticker(DocumentData *document);
 
 	void touchResetSpeed();
 	void touchUpdateSpeed();
@@ -155,7 +172,14 @@ private:
 	void adjustCurrent(int32 y, History *history) const;
 	HistoryItem *prevItem(HistoryItem *item);
 	HistoryItem *nextItem(HistoryItem *item);
-	void updateDragSelection(HistoryItem *dragSelFrom, HistoryItem *dragSelTo, bool dragSelecting, bool force = false);
+	void updateDragSelection(HistoryItem *dragSelFrom, HistoryItem *dragSelTo, bool dragSelecting);
+	TextSelection itemRenderSelection(
+		not_null<HistoryItem*> item,
+		int selfromy,
+		int seltoy) const;
+	TextSelection computeRenderSelection(
+		not_null<const SelectedItems*> selected,
+		not_null<HistoryItem*> item) const;
 
 	void setToClipboard(const TextWithEntities &forClipboard, QClipboard::Mode mode = QClipboard::Clipboard);
 
@@ -165,7 +189,7 @@ private:
 	void scrollDateHide();
 	void keepScrollDateForNow();
 
-	gsl::not_null<Window::Controller*> _controller;
+	not_null<Window::Controller*> _controller;
 
 	PeerData *_peer = nullptr;
 	History *_migrated = nullptr;
@@ -177,23 +201,6 @@ private:
 	// or at least we don't need to display first _history date (just skip it by height)
 	int _historySkipHeight = 0;
 
-	class BotAbout : public ClickHandlerHost {
-	public:
-		BotAbout(HistoryInner *parent, BotInfo *info) : info(info), _parent(parent) {
-		}
-		BotInfo *info = nullptr;
-		int width = 0;
-		int height = 0;
-		QRect rect;
-
-		// ClickHandlerHost interface
-		void clickHandlerActiveChanged(const ClickHandlerPtr &p, bool active) override;
-		void clickHandlerPressedChanged(const ClickHandlerPtr &p, bool pressed) override;
-
-	private:
-		HistoryInner *_parent;
-
-	};
 	std::unique_ptr<BotAbout> _botAbout;
 
 	HistoryWidget *_widget = nullptr;
@@ -205,11 +212,45 @@ private:
 	bool _firstLoading = false;
 
 	style::cursor _cursor = style::cur_default;
-	using SelectedItems = QMap<HistoryItem*, TextSelection>;
 	SelectedItems _selected;
+
 	void applyDragSelection();
-	void applyDragSelection(SelectedItems *toItems) const;
-	void addSelectionRange(SelectedItems *toItems, int32 fromblock, int32 fromitem, int32 toblock, int32 toitem, History *h) const;
+	void applyDragSelection(not_null<SelectedItems*> toItems) const;
+	void addSelectionRange(
+		not_null<SelectedItems*> toItems,
+		not_null<History*> history,
+		int fromblock,
+		int fromitem,
+		int toblock,
+		int toitem) const;
+	bool isSelected(
+		not_null<SelectedItems*> toItems,
+		not_null<HistoryItem*> item) const;
+	bool isSelectedAsGroup(
+		not_null<SelectedItems*> toItems,
+		not_null<HistoryItem*> item) const;
+	bool goodForSelection(
+		not_null<SelectedItems*> toItems,
+		not_null<HistoryItem*> item,
+		int &totalCount) const;
+	void addToSelection(
+		not_null<SelectedItems*> toItems,
+		not_null<HistoryItem*> item) const;
+	void removeFromSelection(
+		not_null<SelectedItems*> toItems,
+		not_null<HistoryItem*> item) const;
+	void changeSelection(
+		not_null<SelectedItems*> toItems,
+		not_null<HistoryItem*> item,
+		SelectAction action) const;
+	void changeSelectionAsGroup(
+		not_null<SelectedItems*> toItems,
+		not_null<HistoryItem*> item,
+		SelectAction action) const;
+	void forwardItem(not_null<HistoryItem*> item);
+	void forwardAsGroup(not_null<HistoryItem*> item);
+	void deleteItem(not_null<HistoryItem*> item);
+	void deleteAsGroup(not_null<HistoryItem*> item);
 
 	// Does any of the shown histories has this flag set.
 	bool hasPendingResizedItems() const {
@@ -221,6 +262,7 @@ private:
 	QPoint _dragStartPosition;
 	QPoint _mousePosition;
 	HistoryItem *_mouseActionItem = nullptr;
+	HistoryItem *_dragStateItem = nullptr;
 	HistoryCursorState _mouseCursorState = HistoryDefaultCursorState;
 	uint16 _mouseTextSymbol = 0;
 	bool _pressWasInactive = false;
@@ -273,7 +315,7 @@ private:
 	// This function finds all history items that are displayed and calls template method
 	// for each found message (in given direction) in the passed history with passed top offset.
 	//
-	// Method has "bool (*Method)(gsl::not_null<HistoryItem*> item, int itemtop, int itembottom)" signature
+	// Method has "bool (*Method)(not_null<HistoryItem*> item, int itemtop, int itembottom)" signature
 	// if it returns false the enumeration stops immidiately.
 	template <bool TopToBottom, typename Method>
 	void enumerateItemsInHistory(History *history, int historytop, Method method);
@@ -293,7 +335,7 @@ private:
 	// This function finds all userpics on the left that are displayed and calls template method
 	// for each found userpic (from the top to the bottom) using enumerateItems() method.
 	//
-	// Method has "bool (*Method)(gsl::not_null<HistoryMessage*> message, int userpicTop)" signature
+	// Method has "bool (*Method)(not_null<HistoryMessage*> message, int userpicTop)" signature
 	// if it returns false the enumeration stops immidiately.
 	template <typename Method>
 	void enumerateUserpics(Method method);
@@ -301,7 +343,7 @@ private:
 	// This function finds all date elements that are displayed and calls template method
 	// for each found date element (from the bottom to the top) using enumerateItems() method.
 	//
-	// Method has "bool (*Method)(gsl::not_null<HistoryItem*> item, int itemtop, int dateTop)" signature
+	// Method has "bool (*Method)(not_null<HistoryItem*> item, int itemtop, int dateTop)" signature
 	// if it returns false the enumeration stops immidiately.
 	template <typename Method>
 	void enumerateDates(Method method);

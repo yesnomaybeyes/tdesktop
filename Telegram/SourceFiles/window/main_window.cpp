@@ -80,9 +80,8 @@ MainWindow::MainWindow() : QWidget()
 }
 
 bool MainWindow::hideNoQuit() {
-	if (_mediaView && !_mediaView->isHidden()) {
-		hideMediaview();
-		return true;
+	if (App::quitting()) {
+		return false;
 	}
 	if (Global::WorkMode().value() == dbiwmTrayOnly || Global::WorkMode().value() == dbiwmWindowAndTray) {
 		if (minimizeToTray()) {
@@ -100,47 +99,9 @@ bool MainWindow::hideNoQuit() {
 }
 
 void MainWindow::clearWidgets() {
-	Ui::hideLayer(true);
-	if (_mediaView) {
-		hideMediaview();
-		_mediaView->rpcClear();
-		_mediaView->clearData();
-	}
+	Ui::hideLayer(anim::type::instant);
 	clearWidgetsHook();
 	updateGlobalMenu();
-}
-
-void MainWindow::showPhoto(const PhotoOpenClickHandler *lnk, HistoryItem *item) {
-	return (!item && lnk->peer()) ? showPhoto(lnk->photo(), lnk->peer()) : showPhoto(lnk->photo(), item);
-}
-
-void MainWindow::showPhoto(PhotoData *photo, HistoryItem *item) {
-	if (_mediaView->isHidden()) Ui::hideLayer(true);
-	_mediaView->showPhoto(photo, item);
-	_mediaView->activateWindow();
-	_mediaView->setFocus();
-}
-
-void MainWindow::showPhoto(PhotoData *photo, PeerData *peer) {
-	if (_mediaView->isHidden()) Ui::hideLayer(true);
-	_mediaView->showPhoto(photo, peer);
-	_mediaView->activateWindow();
-	_mediaView->setFocus();
-}
-
-void MainWindow::showDocument(DocumentData *doc, HistoryItem *item) {
-	if (cUseExternalVideoPlayer() && doc->isVideo()) {
-		QDesktopServices::openUrl(QUrl("file:///" + doc->location(false).fname));
-	} else {
-		if (_mediaView->isHidden()) Ui::hideLayer(true);
-		_mediaView->showDocument(doc, item);
-		_mediaView->activateWindow();
-		_mediaView->setFocus();
-	}
-}
-
-bool MainWindow::ui_isMediaViewShown() {
-	return _mediaView && !_mediaView->isHidden();
 }
 
 void MainWindow::updateIsActive(int timeout) {
@@ -153,15 +114,6 @@ void MainWindow::updateIsActive(int timeout) {
 
 bool MainWindow::computeIsActive() const {
 	return isActiveWindow() && isVisible() && !(windowState() & Qt::WindowMinimized);
-}
-
-void MainWindow::hideMediaview() {
-	if (_mediaView && !_mediaView->isHidden()) {
-		_mediaView->hide();
-#if defined Q_OS_LINUX32 || defined Q_OS_LINUX64
-		reActivateWindow();
-#endif
-	}
 }
 
 void MainWindow::onReActivate() {
@@ -178,19 +130,14 @@ void MainWindow::onReActivate() {
 	}
 }
 
-QWidget *MainWindow::filedialogParent() {
-	return (_mediaView && _mediaView->isVisible()) ? (QWidget*)_mediaView : (QWidget*)this;
-}
-
-void MainWindow::createMediaView() {
-	_mediaView.create(nullptr);
-}
-
 void MainWindow::updateWindowIcon() {
 	setWindowIcon(_icon);
 }
 
 void MainWindow::init() {
+	Expects(!windowHandle());
+	createWinId();
+
 	initHook();
 	updateWindowIcon();
 
@@ -221,12 +168,12 @@ void MainWindow::handleStateChanged(Qt::WindowState state) {
 }
 
 void MainWindow::handleActiveChanged() {
-	if (isActiveWindow() && _mediaView && !_mediaView->isHidden()) {
-		_mediaView->activateWindow();
-		_mediaView->setFocus();
+	if (isActiveWindow()) {
+		Messenger::Instance().checkMediaViewActivation();
 	}
 	App::CallDelayed(1, this, [this] {
 		updateTrayMenu();
+		handleActiveChangedHook();
 	});
 }
 
@@ -250,32 +197,38 @@ void MainWindow::initSize() {
 	setMinimumWidth(st::windowMinWidth);
 	setMinimumHeight((_title ? _title->height() : 0) + st::windowMinHeight);
 
-	auto pos = cWindowPos();
+	auto position = cWindowPos();
+	DEBUG_LOG(("Window Pos: Initializing first %1, %2, %3, %4 (maximized %5)").arg(position.x).arg(position.y).arg(position.w).arg(position.h).arg(Logs::b(position.maximized)));
+
 	auto avail = QDesktopWidget().availableGeometry();
 	bool maximized = false;
 	auto geom = QRect(avail.x() + (avail.width() - st::windowDefaultWidth) / 2, avail.y() + (avail.height() - st::windowDefaultHeight) / 2, st::windowDefaultWidth, st::windowDefaultHeight);
-	if (pos.w && pos.h) {
+	if (position.w && position.h) {
 		for (auto screen : QGuiApplication::screens()) {
-			if (pos.moncrc == screenNameChecksum(screen->name())) {
+			if (position.moncrc == screenNameChecksum(screen->name())) {
 				auto screenGeometry = screen->geometry();
+				DEBUG_LOG(("Window Pos: Screen found, screen geometry: %1, %2, %3, %4").arg(screenGeometry.x()).arg(screenGeometry.y()).arg(screenGeometry.width()).arg(screenGeometry.height()));
+
 				auto w = screenGeometry.width(), h = screenGeometry.height();
 				if (w >= st::windowMinWidth && h >= st::windowMinHeight) {
-					if (pos.w > w) pos.w = w;
-					if (pos.h > h) pos.h = h;
-					pos.x += screenGeometry.x();
-					pos.y += screenGeometry.y();
-					if (pos.x + st::windowMinWidth <= screenGeometry.x() + screenGeometry.width() &&
-						pos.y + st::windowMinHeight <= screenGeometry.y() + screenGeometry.height()) {
-						geom = QRect(pos.x, pos.y, pos.w, pos.h);
+					if (position.x < 0) position.x = 0;
+					if (position.y < 0) position.y = 0;
+					if (position.w > w) position.w = w;
+					if (position.h > h) position.h = h;
+					position.x += screenGeometry.x();
+					position.y += screenGeometry.y();
+					if (position.x + st::windowMinWidth <= screenGeometry.x() + screenGeometry.width() &&
+						position.y + st::windowMinHeight <= screenGeometry.y() + screenGeometry.height()) {
+						DEBUG_LOG(("Window Pos: Resulting geometry is %1, %2, %3, %4").arg(position.x).arg(position.y).arg(position.w).arg(position.h));
+						geom = QRect(position.x, position.y, position.w, position.h);
 					}
 				}
 				break;
 			}
 		}
-
-		if (pos.y < 0) pos.y = 0;
-		maximized = pos.maximized;
+		maximized = position.maximized;
 	}
+	DEBUG_LOG(("Window Pos: Setting first %1, %2, %3, %4").arg(geom.x()).arg(geom.y()).arg(geom.width()).arg(geom.height()));
 	setGeometry(geom);
 }
 
@@ -308,6 +261,14 @@ void MainWindow::resizeEvent(QResizeEvent *e) {
 	updateControlsGeometry();
 }
 
+rpl::producer<> MainWindow::leaveEvents() const {
+	return _leaveEvents.events();
+}
+
+void MainWindow::leaveEvent(QEvent *e) {
+	_leaveEvents.fire({});
+}
+
 void MainWindow::updateControlsGeometry() {
 	auto bodyTop = 0;
 	auto bodyWidth = width();
@@ -335,39 +296,51 @@ void MainWindow::savePosition(Qt::WindowState state) {
 	if (state == Qt::WindowActive) state = windowHandle()->windowState();
 	if (state == Qt::WindowMinimized || !positionInited()) return;
 
-	auto pos = cWindowPos(), curPos = pos;
+	auto savedPosition = cWindowPos();
+	auto realPosition = savedPosition;
 
 	if (state == Qt::WindowMaximized) {
-		curPos.maximized = 1;
+		realPosition.maximized = 1;
 	} else {
 		auto r = geometry();
-		curPos.x = r.x();
-		curPos.y = r.y();
-		curPos.w = r.width() - (_rightColumn ? _rightColumn->width() : 0);
-		curPos.h = r.height();
-		curPos.maximized = 0;
+		realPosition.x = r.x();
+		realPosition.y = r.y();
+		realPosition.w = r.width() - (_rightColumn ? _rightColumn->width() : 0);
+		realPosition.h = r.height();
+		realPosition.maximized = 0;
+		realPosition.moncrc = 0;
 	}
+	DEBUG_LOG(("Window Pos: Saving position: %1, %2, %3, %4 (maximized %5)").arg(realPosition.x).arg(realPosition.y).arg(realPosition.w).arg(realPosition.h).arg(Logs::b(realPosition.maximized)));
 
-	int px = curPos.x + curPos.w / 2, py = curPos.y + curPos.h / 2;
+	auto centerX = realPosition.x + realPosition.w / 2;
+	auto centerY = realPosition.y + realPosition.h / 2;
 	int minDelta = 0;
-	QScreen *chosen = 0;
+	QScreen *chosen = nullptr;
 	auto screens = QGuiApplication::screens();
 	for (auto screen : QGuiApplication::screens()) {
-		auto delta = (screen->geometry().center() - QPoint(px, py)).manhattanLength();
+		auto delta = (screen->geometry().center() - QPoint(centerX, centerY)).manhattanLength();
 		if (!chosen || delta < minDelta) {
 			minDelta = delta;
 			chosen = screen;
 		}
 	}
 	if (chosen) {
-		curPos.x -= chosen->geometry().x();
-		curPos.y -= chosen->geometry().y();
-		curPos.moncrc = screenNameChecksum(chosen->name());
+		auto screenGeometry = chosen->geometry();
+		DEBUG_LOG(("Window Pos: Screen found, geometry: %1, %2, %3, %4").arg(screenGeometry.x()).arg(screenGeometry.y()).arg(screenGeometry.width()).arg(screenGeometry.height()));
+		realPosition.x -= screenGeometry.x();
+		realPosition.y -= screenGeometry.y();
+		realPosition.moncrc = screenNameChecksum(chosen->name());
 	}
 
-	if (curPos.w >= st::windowMinWidth && curPos.h >= st::windowMinHeight) {
-		if (curPos.x != pos.x || curPos.y != pos.y || curPos.w != pos.w || curPos.h != pos.h || curPos.moncrc != pos.moncrc || curPos.maximized != pos.maximized) {
-			cSetWindowPos(curPos);
+	if (realPosition.w >= st::windowMinWidth && realPosition.h >= st::windowMinHeight) {
+		if (realPosition.x != savedPosition.x
+			|| realPosition.y != savedPosition.y
+			|| realPosition.w != savedPosition.w
+			|| realPosition.h != savedPosition.h
+			|| realPosition.moncrc != savedPosition.moncrc
+			|| realPosition.maximized != savedPosition.maximized) {
+			DEBUG_LOG(("Window Pos: Writing: %1, %2, %3, %4 (maximized %5)").arg(realPosition.x).arg(realPosition.y).arg(realPosition.w).arg(realPosition.h).arg(Logs::b(realPosition.maximized)));
+			cSetWindowPos(realPosition);
 			Local::writeSettings();
 		}
 	}
@@ -404,37 +377,35 @@ void MainWindow::showRightColumn(object_ptr<TWidget> widget) {
 	}
 }
 
-bool MainWindow::canExtendWidthBy(int addToWidth) {
+int MainWindow::maximalExtendBy() const {
 	auto desktop = QDesktopWidget().availableGeometry(this);
-	return (width() + addToWidth) <= desktop.width();
+	return std::max(desktop.width() - geometry().width(), 0);
 }
 
-void MainWindow::tryToExtendWidthBy(int addToWidth) {
+bool MainWindow::canExtendNoMove(int extendBy) const {
 	auto desktop = QDesktopWidget().availableGeometry(this);
-	auto newWidth = qMin(width() + addToWidth, desktop.width());
-	auto newLeft = qMin(x(), desktop.x() + desktop.width() - newWidth);
-	if (x() != newLeft || width() != newWidth) {
-		setGeometry(newLeft, y(), newWidth, height());
+	auto inner = geometry();
+	auto innerRight = (inner.x() + inner.width() + extendBy);
+	auto desktopRight = (desktop.x() + desktop.width());
+	return innerRight <= desktopRight;
+}
+
+int MainWindow::tryToExtendWidthBy(int addToWidth) {
+	auto desktop = QDesktopWidget().availableGeometry(this);
+	auto inner = geometry();
+	accumulate_min(
+		addToWidth,
+		std::max(desktop.width() - inner.width(), 0));
+	auto newWidth = inner.width() + addToWidth;
+	auto newLeft = std::min(
+		inner.x(),
+		desktop.x() + desktop.width() - newWidth);
+	if (inner.x() != newLeft || inner.width() != newWidth) {
+		setGeometry(newLeft, inner.y(), newWidth, inner.height());
 	} else {
 		updateControlsGeometry();
 	}
-}
-
-void MainWindow::documentUpdated(DocumentData *doc) {
-	if (!_mediaView || _mediaView->isHidden()) return;
-	_mediaView->documentUpdated(doc);
-}
-
-void MainWindow::changingMsgId(HistoryItem *row, MsgId newId) {
-	if (!_mediaView || _mediaView->isHidden()) return;
-	_mediaView->changingMsgId(row, newId);
-}
-
-PeerData *MainWindow::ui_getPeerForMouseAction() {
-	if (_mediaView && !_mediaView->isHidden()) {
-		return _mediaView->ui_getPeerForMouseAction();
-	}
-	return nullptr;
+	return addToWidth;
 }
 
 void MainWindow::launchDrag(std::unique_ptr<QMimeData> data) {

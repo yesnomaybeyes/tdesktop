@@ -20,6 +20,7 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 */
 #include "calls/calls_panel.h"
 
+#include "data/data_photo.h"
 #include "calls/calls_emoji_fingerprint.h"
 #include "styles/style_calls.h"
 #include "styles/style_history.h"
@@ -27,7 +28,8 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 #include "ui/widgets/labels.h"
 #include "ui/widgets/shadow.h"
 #include "ui/effects/ripple_animation.h"
-#include "ui/effects/widget_fade_wrap.h"
+#include "ui/wrap/fade_wrap.h"
+#include "ui/empty_userpic.h"
 #include "messenger.h"
 #include "mainwindow.h"
 #include "lang/lang_keys.h"
@@ -61,10 +63,10 @@ protected:
 	QPoint prepareRippleStartPosition() const override;
 
 private:
-	QPoint iconPosition(gsl::not_null<const style::CallButton*> st) const;
+	QPoint iconPosition(not_null<const style::CallButton*> st) const;
 	void mixIconMasks();
 
-	gsl::not_null<const style::CallButton*> _stFrom;
+	not_null<const style::CallButton*> _stFrom;
 	const style::CallButton *_stTo = nullptr;
 	float64 _progress = 0.;
 
@@ -85,10 +87,10 @@ Panel::Button::Button(QWidget *parent, const style::CallButton &stFrom, const st
 	_bgMask = prepareRippleMask();
 	_bgFrom = App::pixmapFromImageInPlace(style::colorizeImage(_bgMask, _stFrom->bg));
 	if (_stTo) {
-		t_assert(_stFrom->button.width == _stTo->button.width);
-		t_assert(_stFrom->button.height == _stTo->button.height);
-		t_assert(_stFrom->button.rippleAreaPosition == _stTo->button.rippleAreaPosition);
-		t_assert(_stFrom->button.rippleAreaSize == _stTo->button.rippleAreaSize);
+		Assert(_stFrom->button.width == _stTo->button.width);
+		Assert(_stFrom->button.height == _stTo->button.height);
+		Assert(_stFrom->button.rippleAreaPosition == _stTo->button.rippleAreaPosition);
+		Assert(_stFrom->button.rippleAreaSize == _stTo->button.rippleAreaSize);
 
 		_bg = QImage(_bgMask.size(), QImage::Format_ARGB32_Premultiplied);
 		_bg.setDevicePixelRatio(cRetinaFactor());
@@ -192,7 +194,7 @@ void Panel::Button::paintEvent(QPaintEvent *e) {
 	}
 }
 
-QPoint Panel::Button::iconPosition(gsl::not_null<const style::CallButton*> st) const {
+QPoint Panel::Button::iconPosition(not_null<const style::CallButton*> st) const {
 	auto result = st->button.iconPosition;
 	if (result.x() < 0) {
 		result.setX((width() - st->button.icon.width()) / 2);
@@ -240,15 +242,18 @@ QImage Panel::Button::prepareRippleMask() const {
 	return Ui::RippleAnimation::ellipseMask(QSize(_stFrom->button.rippleAreaSize, _stFrom->button.rippleAreaSize));
 }
 
-Panel::Panel(gsl::not_null<Call*> call)
+Panel::Panel(not_null<Call*> call)
 : _call(call)
 , _user(call->user())
 , _answerHangupRedial(this, st::callAnswer, &st::callHangup)
-, _decline(this, object_ptr<Button>(this, st::callHangup), st::callPanelDuration)
-, _cancel(this, object_ptr<Button>(this, st::callCancel), st::callPanelDuration)
+, _decline(this, object_ptr<Button>(this, st::callHangup))
+, _cancel(this, object_ptr<Button>(this, st::callCancel))
 , _mute(this, st::callMuteToggle)
 , _name(this, st::callName)
 , _status(this, st::callStatus) {
+	_decline->setDuration(st::callPanelDuration);
+	_cancel->setDuration(st::callPanelDuration);
+
 	setMouseTracking(true);
 	setWindowIcon(Window::CreateIcon());
 	initControls();
@@ -264,20 +269,20 @@ void Panel::showAndActivate() {
 	setFocus();
 }
 
-void Panel::replaceCall(gsl::not_null<Call*> call) {
+void Panel::replaceCall(not_null<Call*> call) {
 	_call = call;
 	_user = call->user();
 	reinitControls();
 	updateControlsGeometry();
 }
 
-bool Panel::event(QEvent *e) {
+bool Panel::eventHook(QEvent *e) {
 	if (e->type() == QEvent::WindowDeactivate) {
 		if (_call && _call->state() == State::Established) {
 			hideDeactivated();
 		}
 	}
-	return TWidget::event(e);
+	return RpWidget::eventHook(e);
 }
 
 void Panel::hideDeactivated() {
@@ -337,8 +342,8 @@ void Panel::initControls() {
 
 	reinitControls();
 
-	_decline->finishAnimation();
-	_cancel->finishAnimation();
+	_decline->finishAnimating();
+	_cancel->finishAnimating();
 }
 
 void Panel::reinitControls() {
@@ -360,13 +365,13 @@ void Panel::initLayout() {
 
 	initGeometry();
 
-	processUserPhoto();
-	subscribe(AuthSession::Current().api().fullPeerUpdated(), [this](PeerData *peer) {
-		if (peer == _user) {
-			processUserPhoto();
-		}
-	});
-	subscribe(AuthSession::CurrentDownloaderTaskFinished(), [this] {
+	Notify::PeerUpdateValue(
+		_user,
+		Notify::PeerUpdate::Flag::PhotoChanged
+	) | rpl::start_with_next(
+		[this] { processUserPhoto(); },
+		lifetime());
+	subscribe(Auth().downloaderTaskFinished(), [this] {
 		refreshUserPhoto();
 	});
 	createDefaultCacheImage();
@@ -383,17 +388,22 @@ void Panel::toggleOpacityAnimation(bool visible) {
 	if (_useTransparency) {
 		if (_animationCache.isNull()) {
 			showControls();
-			_animationCache = myGrab(this);
+			_animationCache = Ui::GrabWidget(this);
 			hideChildren();
 		}
-		_opacityAnimation.start([this] { update(); }, _visible ? 0. : 1., _visible ? 1. : 0., st::callPanelDuration, _visible ? anim::easeOutCirc : anim::easeInCirc);
+		_opacityAnimation.start(
+			[this] { update(); },
+			_visible ? 0. : 1.,
+			_visible ? 1. : 0.,
+			st::callPanelDuration,
+			_visible ? anim::easeOutCirc : anim::easeInCirc);
 	}
 	if (isHidden() && _visible) {
 		show();
 	}
 }
 
-void Panel::finishAnimation() {
+void Panel::finishAnimating() {
 	_animationCache = QPixmap();
 	if (_call) {
 		if (!_visible) {
@@ -409,8 +419,8 @@ void Panel::finishAnimation() {
 void Panel::showControls() {
 	Expects(_call != nullptr);
 	showChildren();
-	_decline->setVisible(!_decline->isHiddenOrHiding());
-	_cancel->setVisible(!_cancel->isHiddenOrHiding());
+	_decline->setVisible(_decline->toggled());
+	_cancel->setVisible(_cancel->toggled());
 }
 
 void Panel::destroyDelayed() {
@@ -434,20 +444,26 @@ void Panel::processUserPhoto() {
 	if (!_user->userpicLoaded()) {
 		_user->loadUserpic(true);
 	}
-	auto photo = (_user->photoId && _user->photoId != UnknownPeerPhotoId) ? App::photo(_user->photoId) : nullptr;
+	const auto photo = _user->userpicPhotoId()
+		? App::photo(_user->userpicPhotoId())
+		: nullptr;
 	if (isGoodUserPhoto(photo)) {
 		photo->full->load(true);
-	} else {
-		if ((_user->photoId == UnknownPeerPhotoId) || (_user->photoId && (!photo || !photo->date))) {
-			App::api()->requestFullPeer(_user);
-		}
+	} else if (_user->userpicPhotoUnknown() || (photo && !photo->date)) {
+		Auth().api().requestFullPeer(_user);
 	}
 	refreshUserPhoto();
 }
 
 void Panel::refreshUserPhoto() {
-	auto photo = (_user->photoId && _user->photoId != UnknownPeerPhotoId) ? App::photo(_user->photoId) : nullptr;
-	if (isGoodUserPhoto(photo) && photo->full->loaded() && (photo->id != _userPhotoId || !_userPhotoFull)) {
+	const auto photo = _user->userpicPhotoId()
+		? App::photo(_user->userpicPhotoId())
+		: nullptr;
+	const auto isNewPhoto = [&](not_null<PhotoData*> photo) {
+		return photo->full->loaded()
+			&& (photo->id != _userPhotoId || !_userPhotoFull);
+	};
+	if (isGoodUserPhoto(photo) && isNewPhoto(photo)) {
 		_userPhotoId = photo->id;
 		_userPhotoFull = true;
 		createUserpicCache(photo->full);
@@ -476,9 +492,12 @@ void Panel::createUserpicCache(ImagePtr image) {
 		filled.setDevicePixelRatio(cRetinaFactor());
 		{
 			Painter p(&filled);
-			EmptyUserpic(_user->colorIndex(), _user->name).paintSquare(p, 0, 0, st::callWidth, st::callWidth);
+			Ui::EmptyUserpic(
+				Data::PeerUserpicColor(_user->id),
+				_user->name
+			).paintSquare(p, 0, 0, st::callWidth, st::callWidth);
 		}
-		Images::prepareRound(filled, ImageRoundRadius::Large, ImageRoundCorner::TopLeft | ImageRoundCorner::TopRight);
+		Images::prepareRound(filled, ImageRoundRadius::Large, RectPart::TopLeft | RectPart::TopRight);
 		_userPhoto = App::pixmapFromImageInPlace(std::move(filled));
 	}
 	refreshCacheImageUserPhoto();
@@ -603,7 +622,7 @@ void Panel::paintEvent(QPaintEvent *e) {
 	if (!_animationCache.isNull()) {
 		auto opacity = _opacityAnimation.current(getms(), _call ? 1. : 0.);
 		if (!_opacityAnimation.animating()) {
-			finishAnimation();
+			finishAnimating();
 			if (!_call || isHidden()) return;
 		} else {
 			Platform::StartTranslucentPaint(p, e);
@@ -718,11 +737,11 @@ void Panel::stateChanged(State state) {
 			&& (state != State::FailedHangingUp)
 			&& (state != State::Failed)) {
 			auto toggleButton = [this](auto &&button, bool visible) {
-				if (isHidden()) {
-					button->toggleFast(visible);
-				} else {
-					button->toggleAnimated(visible);
-				}
+				button->toggle(
+					visible,
+					isHidden()
+						? anim::type::instant
+						: anim::type::normal);
 			};
 			auto incomingWaiting = _call->isIncomingWaiting();
 			if (incomingWaiting) {
@@ -730,7 +749,8 @@ void Panel::stateChanged(State state) {
 			}
 			toggleButton(_decline, incomingWaiting);
 			toggleButton(_cancel, (state == State::Busy));
-			auto hangupShown = _decline->isHiddenOrHiding() && _cancel->isHiddenOrHiding();
+			auto hangupShown = !_decline->toggled()
+				&& !_cancel->toggled();
 			if (_hangupShown != hangupShown) {
 				_hangupShown = hangupShown;
 				_hangupShownProgress.start([this] { updateHangupGeometry(); }, _hangupShown ? 0. : 1., _hangupShown ? 1. : 0., st::callPanelDuration, anim::sineInOut);

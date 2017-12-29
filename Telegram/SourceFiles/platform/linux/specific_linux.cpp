@@ -25,6 +25,7 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 #include "platform/linux/file_utilities_linux.h"
 #include "platform/platform_notifications_manager.h"
 #include "storage/localstorage.h"
+#include "core/crash_reports.h"
 
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -39,6 +40,27 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 
 using namespace Platform;
 using Platform::File::internal::EscapeShell;
+
+namespace Platform {
+
+QString CurrentExecutablePath(int argc, char *argv[]) {
+	constexpr auto kMaxPath = 1024;
+	char result[kMaxPath] = { 0 };
+	auto count = readlink("/proc/self/exe", result, kMaxPath);
+	if (count > 0) {
+		auto filename = QFile::decodeName(result);
+		auto deletedPostfix = qstr(" (deleted)");
+		if (filename.endsWith(deletedPostfix) && !QFileInfo(filename).exists()) {
+			filename.chop(deletedPostfix.size());
+		}
+		return filename;
+	}
+
+	// Fallback to the first command line argument.
+	return argc ? QFile::decodeName(argv[0]) : QString();
+}
+
+} // namespace Platform
 
 namespace {
 
@@ -104,7 +126,7 @@ QString demanglestr(const QString &mangled) {
 
 QStringList addr2linestr(uint64 *addresses, int count) {
 	QStringList result;
-	if (!count) return result;
+	if (!count || cExeName().isEmpty()) return result;
 
 	result.reserve(count);
 	QByteArray cmd = "addr2line -e " + EscapeShell(QFile::encodeName(cExeDir() + cExeName()));
@@ -306,34 +328,6 @@ QString psDownloadPath() {
 	return QStandardPaths::writableLocation(QStandardPaths::DownloadLocation) + '/' + str_const_toString(AppName) + '/';
 }
 
-QString psCurrentExeDirectory(int argc, char *argv[]) {
-	QString first = argc ? QFile::decodeName(argv[0]) : QString();
-	if (!first.isEmpty()) {
-		QFileInfo info(first);
-		if (info.isSymLink()) {
-			info = info.symLinkTarget();
-		}
-		if (info.exists()) {
-			return QDir(info.absolutePath()).absolutePath() + '/';
-		}
-	}
-	return QString();
-}
-
-QString psCurrentExeName(int argc, char *argv[]) {
-	QString first = argc ? QFile::decodeName(argv[0]) : QString();
-	if (!first.isEmpty()) {
-		QFileInfo info(first);
-		if (info.isSymLink()) {
-			info = info.symLinkTarget();
-		}
-		if (info.exists()) {
-			return info.fileName();
-		}
-	}
-	return QString();
-}
-
 void psDoCleanup() {
 	try {
 		psAutoStart(false, true);
@@ -431,7 +425,7 @@ bool _psRunCommand(const QByteArray &command) {
 void psRegisterCustomScheme() {
 #ifndef TDESKTOP_DISABLE_REGISTER_CUSTOM_SCHEME
 	auto home = getHomeDir();
-	if (home.isEmpty() || cBetaVersion()) return; // don't update desktop file for beta version
+	if (home.isEmpty() || cBetaVersion() || cExeName().isEmpty()) return; // don't update desktop file for beta version
 
 #ifndef TDESKTOP_DISABLE_DESKTOP_FILE_GENERATION
 	DEBUG_LOG(("App Info: placing .desktop file"));
@@ -530,87 +524,6 @@ void psRegisterCustomScheme() {
 
 void psNewVersion() {
 	psRegisterCustomScheme();
-}
-
-bool _execUpdater(bool update = true, const QString &crashreport = QString()) {
-	static const int MaxLen = 65536, MaxArgsCount = 128;
-
-	char path[MaxLen] = {0};
-	QByteArray data(QFile::encodeName(cExeDir() + (update ? "Updater" : gExeName)));
-	memcpy(path, data.constData(), data.size());
-
-	char *args[MaxArgsCount] = { 0 };
-	char p_noupdate[] = "-noupdate";
-	char p_autostart[] = "-autostart";
-	char p_debug[] = "-debug";
-	char p_tosettings[] = "-tosettings";
-	char p_key[] = "-key";
-	char p_datafile[MaxLen] = { 0 };
-	char p_path[] = "-workpath";
-	char p_pathbuf[MaxLen] = { 0 };
-	char p_startintray[] = "-startintray";
-	char p_testmode[] = "-testmode";
-	char p_crashreport[] = "-crashreport";
-	char p_crashreportbuf[MaxLen] = { 0 };
-	char p_exe[] = "-exename";
-	char p_exebuf[MaxLen] = { 0 };
-	int argIndex = 0;
-	args[argIndex++] = path;
-	if (!update) {
-		args[argIndex++] = p_noupdate;
-		args[argIndex++] = p_tosettings;
-	}
-	if (cLaunchMode() == LaunchModeAutoStart) args[argIndex++] = p_autostart;
-	if (cDebug()) args[argIndex++] = p_debug;
-	if (cStartInTray()) args[argIndex++] = p_startintray;
-	if (cTestMode()) args[argIndex++] = p_testmode;
-	if (cDataFile() != qsl("data")) {
-		QByteArray dataf = QFile::encodeName(cDataFile());
-		if (dataf.size() < MaxLen) {
-			memcpy(p_datafile, dataf.constData(), dataf.size());
-			args[argIndex++] = p_key;
-			args[argIndex++] = p_datafile;
-		}
-	}
-	QByteArray pathf = QFile::encodeName(cWorkingDir());
-	if (pathf.size() < MaxLen) {
-		memcpy(p_pathbuf, pathf.constData(), pathf.size());
-		args[argIndex++] = p_path;
-		args[argIndex++] = p_pathbuf;
-	}
-	if (!crashreport.isEmpty()) {
-		QByteArray crashreportf = QFile::encodeName(crashreport);
-		if (crashreportf.size() < MaxLen) {
-			memcpy(p_crashreportbuf, crashreportf.constData(), crashreportf.size());
-			args[argIndex++] = p_crashreport;
-			args[argIndex++] = p_crashreportbuf;
-		}
-	}
-	QByteArray exef = QFile::encodeName(cExeName());
-	if (exef.size() > 0 && exef.size() < MaxLen) {
-		memcpy(p_exebuf, exef.constData(), exef.size());
-		args[argIndex++] = p_exe;
-		args[argIndex++] = p_exebuf;
-	}
-
-	Logs::closeMain();
-	SignalHandlers::finish();
-	pid_t pid = fork();
-	switch (pid) {
-	case -1: return false;
-	case 0: execv(path, args); return false;
-	}
-	return true;
-}
-
-void psExecUpdater() {
-	if (!_execUpdater()) {
-		psDeleteDir(cWorkingDir() + qsl("tupdates/temp"));
-	}
-}
-
-void psExecTelegram(const QString &crashreport) {
-	_execUpdater(false, crashreport);
 }
 
 bool psShowOpenWithMenu(int x, int y, const QString &file) {

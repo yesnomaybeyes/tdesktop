@@ -87,18 +87,13 @@ enum {
 	SearchManyPerPage = 100,
 	LinksOverviewPerPage = 12,
 	MediaOverviewStartPerPage = 5,
-	MediaOverviewPreloadCount = 4,
 
 	AudioVoiceMsgMaxLength = 100 * 60, // 100 minutes
 	AudioVoiceMsgUpdateView = 100, // 100ms
 	AudioVoiceMsgChannels = 2, // stereo
 	AudioVoiceMsgBufferSize = 256 * 1024, // 256 Kb buffers (1.3 - 3.0 secs)
-	AudioVoiceMsgInMemory = 2 * 1024 * 1024, // 2 Mb audio is hold in memory and auto loaded
 
-	StickerInMemory = 2 * 1024 * 1024, // 2 Mb stickers hold in memory, auto loaded and displayed inline
 	StickerMaxSize = 2048, // 2048x2048 is a max image size for sticker
-
-	AnimationInMemory = 10 * 1024 * 1024, // 10 Mb gif and mp4 animations held in memory while playing
 
 	MaxZoomLevel = 7, // x8
 	ZoomToScreenLevel = 1024, // just constant
@@ -112,8 +107,6 @@ enum {
 	MaxUsernameLength = 32,
 	UsernameCheckTimeout = 200,
 
-	MaxChannelDescription = 255,
-	MaxGroupChannelTitle = 255,
 	MaxPhotoCaption = 200,
 
 	MaxMessageSize = 4096,
@@ -168,20 +161,6 @@ inline const char *cGUIDStr() {
 #endif // OS_MAC_STORE
 
 	return gGuidStr;
-}
-
-inline const char **cPublicRSAKeys(int &keysCount) {
-	static const char *(keys[]) = {"\
------BEGIN RSA PUBLIC KEY-----\n\
-MIIBCgKCAQEAwVACPi9w23mF3tBkdZz+zwrzKOaaQdr01vAbU4E1pvkfj4sqDsm6\n\
-lyDONS789sVoD/xCS9Y0hkkC3gtL1tSfTlgCMOOul9lcixlEKzwKENj1Yz/s7daS\n\
-an9tqw3bfUV/nqgbhGX81v/+7RFAEd+RwFnK7a+XYl9sluzHRyVVaTTveB2GazTw\n\
-Efzk2DWgkBluml8OREmvfraX3bkHZJTKX4EQSjBbbdJ2ZXIsRrYOXfaA+xayEGB+\n\
-8hdlLmAjbCVfaigxX0CDqWeR1yFL9kwd9P0NsZRPsmoqVwMbMu7mStFai6aIhc3n\n\
-Slv8kg9qv1m6XHVQY3PnEw+QQtqSIXklHwIDAQAB\n\
------END RSA PUBLIC KEY-----"};
-	keysCount = base::array_size(keys);
-	return keys;
 }
 
 struct BuiltInDc {
@@ -306,8 +285,6 @@ enum {
 	DialogsFirstLoad = 20, // first dialogs part size requested
 	DialogsPerPage = 500, // next dialogs part size
 
-	FileLoaderQueueStopTimeout = 5000,
-
     UseBigFilesFrom = 10 * 1024 * 1024, // mtp big files methods used for files greater than 10mb
 
 	UploadPartSize = 32 * 1024, // 32kb for photo
@@ -330,16 +307,10 @@ enum {
 	UpdateChunk = 100 * 1024, // 100kb parts when downloading the update
 	IdleMsecs = 60 * 1000, // after 60secs without user input we think we are idle
 
-	UpdateFullChannelTimeout = 5000, // not more than once in 5 seconds
 	SendViewsTimeout = 1000, // send views each second
 
 	ForwardOnAdd = 100, // how many messages from chat history server should forward to user, that was added to this chat
 };
-
-inline const QRegularExpression &cWordSplit() {
-	static QRegularExpression regexp(qsl("[\\@\\s\\-\\+\\(\\)\\[\\]\\{\\}\\<\\>\\,\\.\\:\\!\\_\\;\\\"\\'\\x0]"));
-	return regexp;
-}
 
 inline const QRegularExpression &cRussianLetters() {
 	static QRegularExpression regexp(QString::fromUtf8("[а-яА-ЯёЁ]"));

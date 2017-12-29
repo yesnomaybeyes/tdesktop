@@ -61,7 +61,7 @@ QAction *Menu::addAction(const QString &text, const QObject *receiver, const cha
 
 QAction *Menu::addAction(const QString &text, base::lambda<void()> callback, const style::icon *icon, const style::icon *iconOver) {
 	auto action = addAction(new QAction(text, this), icon, iconOver);
-	connect(action, SIGNAL(triggered(bool)), base::lambda_slot(action, std::move(callback)), SLOT(action()), Qt::QueuedConnection);
+	connect(action, &QAction::triggered, action, std::move(callback), Qt::QueuedConnection);
 	return action;
 }
 
@@ -112,13 +112,13 @@ void Menu::clearActions() {
 	}
 }
 
-void Menu::finishAnimations() {
+void Menu::finishAnimating() {
 	for (auto &data : _actionsData) {
 		if (data.ripple) {
 			data.ripple.reset();
 		}
 		if (data.toggle) {
-			data.toggle->finishAnimation();
+			data.toggle->finishAnimating();
 		}
 	}
 }
@@ -134,19 +134,19 @@ int Menu::processAction(QAction *action, int index, int width) {
 		int textw = _st.itemFont->width(actionText);
 		int goodw = _st.itemPadding.left() + textw + _st.itemPadding.right();
 		if (data.hasSubmenu) {
-			goodw += _st.itemPadding.left() + _st.arrow.width();
+			goodw += _st.itemPadding.right() + _st.arrow.width();
 		} else if (!actionShortcut.isEmpty()) {
-			goodw += _st.itemPadding.left() + _st.itemFont->width(actionShortcut);
+			goodw += _st.itemPadding.right() + _st.itemFont->width(actionShortcut);
 		}
 		if (action->isCheckable()) {
 			auto updateCallback = [this, index] { updateItem(index); };
-			goodw += _st.itemPadding.left() + _st.itemToggle.diameter + _st.itemToggle.width - _st.itemToggleShift;
 			if (data.toggle) {
 				data.toggle->setUpdateCallback(updateCallback);
-				data.toggle->setToggledAnimated(action->isChecked());
+				data.toggle->setCheckedAnimated(action->isChecked());
 			} else {
 				data.toggle = std::make_unique<ToggleView>(_st.itemToggle, action->isChecked(), updateCallback);
 			}
+			goodw += _st.itemPadding.right() + data.toggle->getSize().width() - _st.itemToggleShift;
 		} else {
 			data.toggle.reset();
 		}
@@ -231,8 +231,8 @@ void Menu::paintEvent(QPaintEvent *e) {
 					p.setPen(selected ? _st.itemFgShortcutOver : (enabled ? _st.itemFgShortcut : _st.itemFgShortcutDisabled));
 					p.drawTextRight(_st.itemPadding.right(), _st.itemPadding.top(), width(), data.shortcut);
 				} else if (data.toggle) {
-					auto toggleSize = _st.itemToggle.diameter + _st.itemToggle.width;
-					data.toggle->paint(p, width() - _st.itemPadding.right() - toggleSize + _st.itemToggleShift, (_itemHeight - _st.itemToggle.diameter) / 2, width(), ms);
+					auto toggleSize = data.toggle->getSize();
+					data.toggle->paint(p, width() - _st.itemPadding.right() - toggleSize.width() + _st.itemToggleShift, (_itemHeight - toggleSize.height()) / 2, width(), ms);
 				}
 			}
 		}

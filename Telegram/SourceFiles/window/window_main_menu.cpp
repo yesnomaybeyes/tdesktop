@@ -22,16 +22,16 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 
 #include "styles/style_window.h"
 #include "styles/style_dialogs.h"
-#include "profile/profile_userpic_button.h"
 #include "window/themes/window_theme.h"
 #include "ui/widgets/buttons.h"
 #include "ui/widgets/labels.h"
 #include "ui/widgets/menu.h"
+#include "ui/special_buttons.h"
+#include "ui/empty_userpic.h"
 #include "mainwindow.h"
 #include "storage/localstorage.h"
-#include "boxes/contacts_box.h"
 #include "boxes/about_box.h"
-#include "boxes/peer_list_box.h"
+#include "boxes/peer_list_controllers.h"
 #include "calls/calls_box_controller.h"
 #include "lang/lang_keys.h"
 #include "core/click_handler_types.h"
@@ -41,7 +41,11 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 
 namespace Window {
 
-MainMenu::MainMenu(QWidget *parent) : TWidget(parent)
+MainMenu::MainMenu(
+	QWidget *parent,
+	not_null<Controller*> controller)
+: TWidget(parent)
+, _controller(controller)
 , _menu(this, st::mainMenu)
 , _telegram(this, st::mainMenuTelegramLabel)
 , _version(this, st::mainMenuVersionLabel) {
@@ -67,13 +71,13 @@ MainMenu::MainMenu(QWidget *parent) : TWidget(parent)
 	refreshMenu();
 
 	_telegram->setRichText(textcmdLink(1, qsl("Telegram Desktop")));
-	_telegram->setLink(1, MakeShared<UrlClickHandler>(qsl("https://desktop.telegram.org")));
+	_telegram->setLink(1, std::make_shared<UrlClickHandler>(qsl("https://desktop.telegram.org")));
 	_version->setRichText(textcmdLink(1, lng_settings_current_version(lt_version, currentVersionText())) + QChar(' ') + QChar(8211) + QChar(' ') + textcmdLink(2, lang(lng_menu_about)));
-	_version->setLink(1, MakeShared<UrlClickHandler>(qsl("https://desktop.telegram.org/changelog")));
-	_version->setLink(2, MakeShared<LambdaClickHandler>([] { Ui::show(Box<AboutBox>()); }));
+	_version->setLink(1, std::make_shared<UrlClickHandler>(qsl("https://desktop.telegram.org/changelog")));
+	_version->setLink(2, std::make_shared<LambdaClickHandler>([] { Ui::show(Box<AboutBox>()); }));
 
-	subscribe(AuthSession::CurrentDownloaderTaskFinished(), [this] { update(); });
-	subscribe(AuthSession::CurrentDownloaderTaskFinished(), [this] { update(); });
+	subscribe(Auth().downloaderTaskFinished(), [this] { update(); });
+	subscribe(Auth().downloaderTaskFinished(), [this] { update(); });
 	subscribe(Notify::PeerUpdated(), Notify::PeerUpdatedHandler(Notify::PeerUpdate::Flag::UserPhoneChanged, [this](const Notify::PeerUpdate &update) {
 		if (update.peer->isSelf()) {
 			updatePhone();
@@ -97,11 +101,14 @@ void MainMenu::refreshMenu() {
 		App::wnd()->onShowNewChannel();
 	}, &st::mainMenuNewChannel, &st::mainMenuNewChannelOver);
 	_menu->addAction(lang(lng_menu_contacts), [] {
-		Ui::show(Box<ContactsBox>());
+		Ui::show(Box<PeerListBox>(std::make_unique<ContactsBoxController>(), [](not_null<PeerListBox*> box) {
+			box->addButton(langFactory(lng_close), [box] { box->closeBox(); });
+			box->addLeftButton(langFactory(lng_profile_add_contact), [] { App::wnd()->onShowAddContact(); });
+		}));
 	}, &st::mainMenuContacts, &st::mainMenuContactsOver);
 	if (Global::PhoneCallsEnabled()) {
 		_menu->addAction(lang(lng_menu_calls), [] {
-			Ui::show(Box<PeerListBox>(std::make_unique<Calls::BoxController>(), [](PeerListBox *box) {
+			Ui::show(Box<PeerListBox>(std::make_unique<Calls::BoxController>(), [](not_null<PeerListBox*> box) {
 				box->addButton(langFactory(lng_close), [box] { box->closeBox(); });
 			}));
 		}, &st::mainMenuCalls, &st::mainMenuCallsOver);
@@ -121,7 +128,7 @@ void MainMenu::refreshMenu() {
 		*_nightThemeAction = action;
 		action->setCheckable(true);
 		action->setChecked(Window::Theme::IsNightTheme());
-		_menu->finishAnimations();
+		_menu->finishAnimating();
 	}
 
 	updatePhone();
@@ -134,7 +141,12 @@ void MainMenu::checkSelf() {
 				App::main()->choosePeer(self->id, ShowAtUnreadMsgId);
 			}
 		};
-		_userpicButton.create(this, self, st::mainMenuUserpicSize);
+		_userpicButton.create(
+			this,
+			_controller,
+			self,
+			Ui::UserpicButton::Role::Custom,
+			st::mainMenuUserpic);
 		_userpicButton->setClickedCallback(showSelfChat);
 		_userpicButton->show();
 		_cloudButton.create(this, st::mainMenuCloudButton);
@@ -142,19 +154,9 @@ void MainMenu::checkSelf() {
 		_cloudButton->show();
 		update();
 		updateControlsGeometry();
-		if (_showFinished) {
-			_userpicButton->showFinished();
-		}
 	} else {
 		_userpicButton.destroy();
 		_cloudButton.destroy();
-	}
-}
-
-void MainMenu::showFinished() {
-	_showFinished = true;
-	if (_userpicButton) {
-		_userpicButton->showFinished();
 	}
 }
 
@@ -198,13 +200,23 @@ void MainMenu::paintEvent(QPaintEvent *e) {
 			p.drawTextLeft(st::mainMenuCoverTextLeft, st::mainMenuCoverStatusTop, width(), _phoneText);
 		}
 		if (_cloudButton) {
-			PainterHighQualityEnabler hq(p);
-			p.setPen(Qt::NoPen);
-			p.setBrush(st::mainMenuCloudBg);
-			auto cloudBg = QRect(_cloudButton->x() + (_cloudButton->width() - st::mainMenuCloudSize) / 2,
+			Ui::EmptyUserpic::PaintSavedMessages(
+				p,
+				_cloudButton->x() + (_cloudButton->width() - st::mainMenuCloudSize) / 2,
 				_cloudButton->y() + (_cloudButton->height() - st::mainMenuCloudSize) / 2,
-				st::mainMenuCloudSize, st::mainMenuCloudSize);
-			p.drawEllipse(cloudBg);
+				width(),
+				st::mainMenuCloudSize,
+				st::mainMenuCloudBg,
+				st::mainMenuCloudFg);
+			//PainterHighQualityEnabler hq(p);
+			//p.setPen(Qt::NoPen);
+			//p.setBrush(st::mainMenuCloudBg);
+			//auto cloudBg = QRect(
+			//	_cloudButton->x() + (_cloudButton->width() - st::mainMenuCloudSize) / 2,
+			//	_cloudButton->y() + (_cloudButton->height() - st::mainMenuCloudSize) / 2,
+			//	st::mainMenuCloudSize,
+			//	st::mainMenuCloudSize);
+			//p.drawEllipse(cloudBg);
 		}
 	}
 	auto other = QRect(0, st::mainMenuCoverHeight, width(), height() - st::mainMenuCoverHeight).intersected(clip);

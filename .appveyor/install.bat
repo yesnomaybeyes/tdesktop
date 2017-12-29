@@ -1,13 +1,9 @@
 @echo off
 
-SET BUILD_DIR=C:\TBuild
+IF "%BUILD_DIR%"=="" SET BUILD_DIR=C:\TBuild
 SET LIB_DIR=%BUILD_DIR%\Libraries
 SET SRC_DIR=%BUILD_DIR%\tdesktop
 SET QT_VERSION=5_6_2
-
-call "C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\vcvarsall.bat" x86
-
-cd %BUILD_DIR%
 
 call:configureBuild
 call:getDependencies
@@ -23,11 +19,22 @@ GOTO:EOF
     echo [INFO] %~1
 GOTO:EOF
 
+:logError
+    echo [ERROR] %~1
+GOTO:EOF
+
 :getDependencies
     call:logInfo "Clone dependencies repository"
     git clone -q --depth 1 --branch=master https://github.com/telegramdesktop/dependencies_windows.git %LIB_DIR%
     cd %LIB_DIR%
-    call prepare.bat
+    git clone https://github.com/Microsoft/Range-V3-VS2015 range-v3
+    if exist prepare.bat (
+        call prepare.bat
+    ) else (
+        call:logError "Error cloning dependencies, trying again"
+        rmdir %LIB_DIR% /S /Q
+        call:getDependencies
+    )
 GOTO:EOF
 
 :setupGYP
@@ -36,7 +43,7 @@ GOTO:EOF
     git clone https://chromium.googlesource.com/external/gyp
     cd gyp
     git checkout a478c1ab51
-    SET PATH=%PATH%;C:\TBuild\Libraries\gyp;C:\TBuild\Libraries\ninja;
+    SET PATH=%PATH%;%BUILD_DIR%\Libraries\gyp;%BUILD_DIR%\Libraries\ninja;
     cd %SRC_DIR%
     git submodule init
     git submodule update
@@ -71,6 +78,10 @@ GOTO:EOF
 
     echo %BUILD_VERSION% | findstr /C:"disable_unity_integration">nul && (
         set TDESKTOP_BUILD_DEFINES=%TDESKTOP_BUILD_DEFINES%,TDESKTOP_DISABLE_UNITY_INTEGRATION
+    )
+
+    echo %BUILD_VERSION% | findstr /C:"disable_gtk_integration">nul && (
+        set TDESKTOP_BUILD_DEFINES=%TDESKTOP_BUILD_DEFINES%,TDESKTOP_DISABLE_GTK_INTEGRATION
     )
 
     if not "%TDESKTOP_BUILD_DEFINES%" == "" (

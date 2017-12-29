@@ -22,6 +22,7 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 
 #include "media/media_audio.h"
 #include "media/media_child_ffmpeg_loader.h"
+#include "storage/file_download.h"
 
 namespace Media {
 namespace Clip {
@@ -148,7 +149,7 @@ ReaderImplementation::ReadResult FFMpegReaderImplementation::readNextFrame() {
 }
 
 void FFMpegReaderImplementation::processReadFrame() {
-	int64 duration = av_frame_get_pkt_duration(_frame);
+	int64 duration = _frame->pkt_duration;
 	int64 framePts = _frame->pts;
 	TimeMs frameMs = (framePts * 1000LL * _fmtContext->streams[_streamId]->time_base.num) / _fmtContext->streams[_streamId]->time_base.den;
 	_currentFrameDelay = _nextFrameDelay;
@@ -399,9 +400,11 @@ bool FFMpegReaderImplementation::start(Mode mode, TimeMs &positionMs) {
 		}
 	}
 	if (positionMs > 0) {
-		auto ts = (positionMs * _fmtContext->streams[_streamId]->time_base.den) / (1000LL * _fmtContext->streams[_streamId]->time_base.num);
-		if (av_seek_frame(_fmtContext, _streamId, ts, 0) < 0) {
-			if (av_seek_frame(_fmtContext, _streamId, ts, AVSEEK_FLAG_BACKWARD) < 0) {
+		const auto timeBase = _fmtContext->streams[_streamId]->time_base;
+		const auto timeStamp = (positionMs * timeBase.den)
+			/ (1000LL * timeBase.num);
+		if (av_seek_frame(_fmtContext, _streamId, timeStamp, 0) < 0) {
+			if (av_seek_frame(_fmtContext, _streamId, timeStamp, AVSEEK_FLAG_BACKWARD) < 0) {
 				return false;
 			}
 		}
@@ -414,8 +417,7 @@ bool FFMpegReaderImplementation::start(Mode mode, TimeMs &positionMs) {
 	}
 
 	if (hasAudio()) {
-		auto position = (positionMs * soundData->frequency) / 1000LL;
-		Player::mixer()->play(_audioMsgId, std::move(soundData), position);
+		Player::mixer()->play(_audioMsgId, std::move(soundData), positionMs);
 	}
 
 	if (readResult == PacketResult::Ok) {
@@ -427,9 +429,11 @@ bool FFMpegReaderImplementation::start(Mode mode, TimeMs &positionMs) {
 
 bool FFMpegReaderImplementation::inspectAt(TimeMs &positionMs) {
 	if (positionMs > 0) {
-		auto ts = (positionMs * _fmtContext->streams[_streamId]->time_base.den) / (1000LL * _fmtContext->streams[_streamId]->time_base.num);
-		if (av_seek_frame(_fmtContext, _streamId, ts, 0) < 0) {
-			if (av_seek_frame(_fmtContext, _streamId, ts, AVSEEK_FLAG_BACKWARD) < 0) {
+		const auto timeBase = _fmtContext->streams[_streamId]->time_base;
+		const auto timeStamp = (positionMs * timeBase.den)
+			/ (1000LL * timeBase.num);
+		if (av_seek_frame(_fmtContext, _streamId, timeStamp, 0) < 0) {
+			if (av_seek_frame(_fmtContext, _streamId, timeStamp, AVSEEK_FLAG_BACKWARD) < 0) {
 				return false;
 			}
 		}
@@ -454,7 +458,7 @@ bool FFMpegReaderImplementation::isGifv() const {
 	if (_hasAudioStream) {
 		return false;
 	}
-	if (dataSize() > AnimationInMemory) {
+	if (dataSize() > Storage::kMaxAnimationInMemory) {
 		return false;
 	}
 	if (_codecContext->codec_id != AV_CODEC_ID_H264) {

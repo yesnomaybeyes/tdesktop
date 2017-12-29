@@ -20,6 +20,8 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 */
 #pragma once
 
+#include "base/flags.h"
+
 class FileLoader;
 class mtpFileLoader;
 
@@ -39,16 +41,6 @@ enum class ImageRoundRadius {
 	Small,
 	Ellipse,
 };
-enum class ImageRoundCorner {
-	None        = 0x00,
-	TopLeft     = 0x01,
-	TopRight    = 0x02,
-	BottomLeft  = 0x04,
-	BottomRight = 0x08,
-	All         = 0x0f,
-};
-Q_DECLARE_FLAGS(ImageRoundCorners, ImageRoundCorner);
-Q_DECLARE_OPERATORS_FOR_FLAGS(ImageRoundCorners);
 
 inline uint32 packInt(int32 a) {
 	return (a < 0) ? uint32(int64(a) + 0x100000000LL) : uint32(a);
@@ -111,6 +103,30 @@ public:
 	}
 	uint64 secret() const {
 		return _secret;
+	}
+
+	static StorageImageLocation FromMTP(
+			int32 width,
+			int32 height,
+			const MTPFileLocation &location) {
+		if (location.type() == mtpc_fileLocation) {
+			const auto &data = location.c_fileLocation();
+			return StorageImageLocation(width, height, data);
+		}
+		return StorageImageLocation(width, height, 0, 0, 0, 0);
+	}
+	static StorageImageLocation FromMTP(const MTPPhotoSize &size) {
+		switch (size.type()) {
+		case mtpc_photoSize: {
+			const auto &data = size.c_photoSize();
+			return FromMTP(data.vw.v, data.vh.v, data.vlocation);
+		} break;
+		case mtpc_photoCachedSize: {
+			const auto &data = size.c_photoCachedSize();
+			return FromMTP(data.vw.v, data.vh.v, data.vlocation);
+		} break;
+		}
+		return StorageImageLocation();
 	}
 
 	static StorageImageLocation Null;
@@ -179,28 +195,41 @@ inline bool operator!=(const WebFileImageLocation &a, const WebFileImageLocation
 namespace Images {
 
 QImage prepareBlur(QImage image);
-void prepareRound(QImage &image, ImageRoundRadius radius, ImageRoundCorners corners = ImageRoundCorner::All);
-void prepareRound(QImage &image, QImage **cornerMasks, ImageRoundCorners corners = ImageRoundCorner::All);
+void prepareRound(
+	QImage &image,
+	ImageRoundRadius radius,
+	RectParts corners = RectPart::AllCorners,
+	QRect target = QRect());
+void prepareRound(
+	QImage &image,
+	QImage *cornerMasks,
+	RectParts corners = RectPart::AllCorners,
+	QRect target = QRect());
 void prepareCircle(QImage &image);
 QImage prepareColored(style::color add, QImage image);
 QImage prepareOpaque(QImage image);
 
 enum class Option {
-	None = 0x000,
-	Smooth = 0x001,
-	Blurred = 0x002,
-	Circled = 0x004,
-	RoundedLarge = 0x008,
-	RoundedSmall = 0x010,
-	RoundedTopLeft = 0x020,
-	RoundedTopRight = 0x040,
-	RoundedBottomLeft = 0x080,
-	RoundedBottomRight = 0x100,
-	Colored = 0x200,
-	TransparentBackground = 0x400,
+	None                  = 0,
+	Smooth                = (1 << 0),
+	Blurred               = (1 << 1),
+	Circled               = (1 << 2),
+	RoundedLarge          = (1 << 3),
+	RoundedSmall          = (1 << 4),
+	RoundedTopLeft        = (1 << 5),
+	RoundedTopRight       = (1 << 6),
+	RoundedBottomLeft     = (1 << 7),
+	RoundedBottomRight    = (1 << 8),
+	RoundedAll            = (None
+		| RoundedTopLeft
+		| RoundedTopRight
+		| RoundedBottomLeft
+		| RoundedBottomRight),
+	Colored               = (1 << 9),
+	TransparentBackground = (1 << 10),
 };
-Q_DECLARE_FLAGS(Options, Option);
-Q_DECLARE_OPERATORS_FOR_FLAGS(Options);
+using Options = base::flags<Option>;
+inline constexpr auto is_flag_type(Option) { return true; };
 
 QImage prepare(QImage img, int w, int h, Options options, int outerw, int outerh, const style::color *colored = nullptr);
 
@@ -244,12 +273,12 @@ public:
 	}
 
 	const QPixmap &pix(int32 w = 0, int32 h = 0) const;
-	const QPixmap &pixRounded(int32 w = 0, int32 h = 0, ImageRoundRadius radius = ImageRoundRadius::None, ImageRoundCorners corners = ImageRoundCorner::All) const;
+	const QPixmap &pixRounded(int32 w = 0, int32 h = 0, ImageRoundRadius radius = ImageRoundRadius::None, RectParts corners = RectPart::AllCorners) const;
 	const QPixmap &pixBlurred(int32 w = 0, int32 h = 0) const;
 	const QPixmap &pixColored(style::color add, int32 w = 0, int32 h = 0) const;
 	const QPixmap &pixBlurredColored(style::color add, int32 w = 0, int32 h = 0) const;
-	const QPixmap &pixSingle(int32 w, int32 h, int32 outerw, int32 outerh, ImageRoundRadius radius, ImageRoundCorners corners = ImageRoundCorner::All, const style::color *colored = nullptr) const;
-	const QPixmap &pixBlurredSingle(int32 w, int32 h, int32 outerw, int32 outerh, ImageRoundRadius radius, ImageRoundCorners corners = ImageRoundCorner::All) const;
+	const QPixmap &pixSingle(int32 w, int32 h, int32 outerw, int32 outerh, ImageRoundRadius radius, RectParts corners = RectPart::AllCorners, const style::color *colored = nullptr) const;
+	const QPixmap &pixBlurredSingle(int32 w, int32 h, int32 outerw, int32 outerh, ImageRoundRadius radius, RectParts corners = RectPart::AllCorners) const;
 	const QPixmap &pixCircled(int32 w = 0, int32 h = 0) const;
 	const QPixmap &pixBlurredCircled(int32 w = 0, int32 h = 0) const;
 	QPixmap pixNoCache(int w = 0, int h = 0, Images::Options options = 0, int outerw = -1, int outerh = -1, const style::color *colored = nullptr) const;
@@ -547,7 +576,7 @@ class PsFileBookmark;
 class ReadAccessEnabler {
 public:
 	ReadAccessEnabler(const PsFileBookmark *bookmark);
-	ReadAccessEnabler(const QSharedPointer<PsFileBookmark> &bookmark);
+	ReadAccessEnabler(const std::shared_ptr<PsFileBookmark> &bookmark);
 	bool failed() const {
 		return _failed;
 	}
@@ -580,7 +609,7 @@ public:
 	qint32 size;
 
 private:
-	QSharedPointer<PsFileBookmark> _bookmark;
+	std::shared_ptr<PsFileBookmark> _bookmark;
 
 };
 inline bool operator==(const FileLocation &a, const FileLocation &b) {

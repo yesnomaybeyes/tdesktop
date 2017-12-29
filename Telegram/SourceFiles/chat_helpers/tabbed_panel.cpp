@@ -25,6 +25,7 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 #include "chat_helpers/tabbed_selector.h"
 #include "window/window_controller.h"
 #include "mainwindow.h"
+#include "messenger.h"
 
 namespace ChatHelpers {
 namespace {
@@ -34,10 +35,20 @@ constexpr auto kDelayedHideTimeoutMs = 3000;
 
 } // namespace
 
-TabbedPanel::TabbedPanel(QWidget *parent, gsl::not_null<Window::Controller*> controller) : TabbedPanel(parent, controller, object_ptr<TabbedSelector>(nullptr, controller)) {
+TabbedPanel::TabbedPanel(
+	QWidget *parent,
+	not_null<Window::Controller*> controller)
+: TabbedPanel(
+	parent,
+	controller,
+	object_ptr<TabbedSelector>(nullptr, controller)) {
 }
 
-TabbedPanel::TabbedPanel(QWidget *parent, gsl::not_null<Window::Controller*> controller, object_ptr<TabbedSelector> selector) : TWidget(parent)
+TabbedPanel::TabbedPanel(
+	QWidget *parent,
+	not_null<Window::Controller*> controller,
+	object_ptr<TabbedSelector> selector)
+: RpWidget(parent)
 , _controller(controller)
 , _selector(std::move(selector)) {
 	_selector->setParent(this);
@@ -52,6 +63,10 @@ TabbedPanel::TabbedPanel(QWidget *parent, gsl::not_null<Window::Controller*> con
 			_controller->disableGifPauseReason(Window::GifPauseReason::SavedGifs);
 		}
 	});
+	_selector->showRequests(
+	) | rpl::start_with_next([this] {
+		this->showFromSelector();
+	}, lifetime());
 
 	resize(QRect(0, 0, st::emojiPanWidth, st::emojiPanMaxHeight).marginsAdded(innerPadding()).size());
 
@@ -143,7 +158,7 @@ void TabbedPanel::paintEvent(QPaintEvent *e) {
 	}
 
 	if (showAnimating) {
-		t_assert(_showAnimation != nullptr);
+		Assert(_showAnimation != nullptr);
 		if (auto opacity = _a_opacity.current(_hiding ? 0. : 1.)) {
 			_showAnimation->paintFrame(p, 0, 0, width(), _a_show.current(1.), opacity);
 		}
@@ -164,6 +179,7 @@ void TabbedPanel::moveByBottom() {
 }
 
 void TabbedPanel::enterEventHook(QEvent *e) {
+	Messenger::Instance().registerLeaveSubscription(this);
 	showAnimated();
 }
 
@@ -175,6 +191,7 @@ bool TabbedPanel::preventAutoHide() const {
 }
 
 void TabbedPanel::leaveEventHook(QEvent *e) {
+	Messenger::Instance().unregisterLeaveSubscription(this);
 	if (preventAutoHide()) {
 		return;
 	}
@@ -238,7 +255,7 @@ void TabbedPanel::prepareCache() {
 	auto showAnimation = base::take(_a_show);
 	auto showAnimationData = base::take(_showAnimation);
 	showChildren();
-	_cache = myGrab(this);
+	_cache = Ui::GrabWidget(this);
 	_showAnimation = base::take(showAnimationData);
 	_a_show = base::take(showAnimation);
 	if (_a_show.animating()) {
@@ -265,7 +282,7 @@ void TabbedPanel::startShowAnimation() {
 		auto inner = rect().marginsRemoved(st::emojiPanMargins);
 		_showAnimation->setFinalImage(std::move(image), QRect(inner.topLeft() * cIntRetinaFactor(), inner.size() * cIntRetinaFactor()));
 		auto corners = App::cornersMask(ImageRoundRadius::Small);
-		_showAnimation->setCornerMasks(QImage(*corners[0]), QImage(*corners[1]), QImage(*corners[2]), QImage(*corners[3]));
+		_showAnimation->setCornerMasks(corners[0], corners[1], corners[2], corners[3]);
 		_showAnimation->start();
 	}
 	hideChildren();
@@ -279,7 +296,7 @@ QImage TabbedPanel::grabForAnimation() {
 	auto showAnimation = base::take(_a_show);
 
 	showChildren();
-	myEnsureResized(this);
+	Ui::SendPendingMoveResizeEvents(this);
 
 	auto result = QImage(size() * cIntRetinaFactor(), QImage::Format_ARGB32_Premultiplied);
 	result.setDevicePixelRatio(cRetinaFactor());
@@ -376,11 +393,7 @@ bool TabbedPanel::eventFilter(QObject *obj, QEvent *e) {
 	return false;
 }
 
-void TabbedPanel::stickersInstalled(uint64 setId) {
-	if (isDestroying()) {
-		return;
-	}
-	_selector->stickersInstalled(setId);
+void TabbedPanel::showFromSelector() {
 	if (isHidden()) {
 		moveByBottom();
 		startShowAnimation();

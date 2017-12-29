@@ -21,6 +21,7 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 #include "storage/serialize_document.h"
 
 #include "storage/serialize_common.h"
+#include "chat_helpers/stickers.h"
 
 namespace {
 
@@ -37,7 +38,7 @@ namespace Serialize {
 void Document::writeToStream(QDataStream &stream, DocumentData *document) {
 	stream << quint64(document->id) << quint64(document->_access) << qint32(document->date);
 	stream << qint32(document->_version);
-	stream << document->name << document->mime << qint32(document->_dc) << qint32(document->size);
+	stream << document->filename() << document->mimeString() << qint32(document->_dc) << qint32(document->size);
 	stream << qint32(document->dimensions.width()) << qint32(document->dimensions.height());
 	stream << qint32(document->type);
 	if (auto sticker = document->sticker()) {
@@ -92,7 +93,7 @@ DocumentData *Document::readFromStreamHelper(int streamAppVersion, QDataStream &
 		if (typeOfSet == StickerSetTypeEmpty) {
 			attributes.push_back(MTP_documentAttributeSticker(MTP_flags(0), MTP_string(alt), MTP_inputStickerSetEmpty(), MTPMaskCoords()));
 		} else if (info) {
-			if (info->setId == Stickers::DefaultSetId || info->setId == Stickers::CloudRecentSetId || info->setId == Stickers::CustomSetId) {
+			if (info->setId == Stickers::DefaultSetId || info->setId == Stickers::CloudRecentSetId || info->setId == Stickers::FavedSetId || info->setId == Stickers::CustomSetId) {
 				typeOfSet = StickerSetTypeEmpty;
 			}
 
@@ -148,7 +149,7 @@ int Document::sizeInStream(DocumentData *document) {
 	// id + access + date + version
 	result += sizeof(quint64) + sizeof(quint64) + sizeof(qint32) + sizeof(qint32);
 	// + namelen + name + mimelen + mime + dc + size
-	result += stringSize(document->name) + stringSize(document->mime) + sizeof(qint32) + sizeof(qint32);
+	result += stringSize(document->filename()) + stringSize(document->mimeString()) + sizeof(qint32) + sizeof(qint32);
 	// + width + height
 	result += sizeof(qint32) + sizeof(qint32);
 	// + type

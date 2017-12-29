@@ -20,6 +20,18 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 */
 #pragma once
 
+struct HistoryMessageEdited;
+
+namespace base {
+template <typename Enum>
+class enum_mask;
+} // namespace base
+
+namespace Storage {
+enum class SharedMediaType : char;
+using SharedMediaTypesMask = base::enum_mask<SharedMediaType>;
+} // namespace Storage
+
 enum class MediaInBubbleState {
 	None,
 	Top,
@@ -29,7 +41,7 @@ enum class MediaInBubbleState {
 
 class HistoryMedia : public HistoryElement {
 public:
-	HistoryMedia(gsl::not_null<HistoryItem*> parent) : _parent(parent) {
+	HistoryMedia(not_null<HistoryItem*> parent) : _parent(parent) {
 	}
 
 	virtual HistoryMediaType type() const = 0;
@@ -42,7 +54,7 @@ public:
 	// Example: "[link1-start]You:[link1-end] [link1-start]Photo,[link1-end] caption text"
 	virtual QString inDialogsText() const {
 		auto result = notificationText();
-		return result.isEmpty() ? QString() : textcmdLink(1, textClean(result));
+		return result.isEmpty() ? QString() : textcmdLink(1, TextUtilities::Clean(result));
 	}
 	virtual TextWithEntities selectedText(TextSelection selection) const = 0;
 
@@ -51,7 +63,9 @@ public:
 	}
 
 	virtual bool isDisplayed() const {
-		return true;
+		return !_parent->isHiddenByGroup();
+	}
+	virtual void updateNeedBubbleState() {
 	}
 	virtual bool isAboveMessage() const {
 		return false;
@@ -59,8 +73,11 @@ public:
 	virtual bool hasTextForCopy() const {
 		return false;
 	}
+	virtual bool allowsFastShare() const {
+		return false;
+	}
 	virtual void initDimensions() = 0;
-	virtual void updateMessageId() {
+	virtual void refreshParentId(not_null<HistoryItem*> realParent) {
 	}
 	virtual int resizeGetHeight(int width) {
 		_width = qMin(width, _maxw);
@@ -71,35 +88,41 @@ public:
 	virtual void updatePressed(QPoint point) {
 	}
 
-	virtual int32 addToOverview(AddToOverviewMethod method) {
-		return 0;
-	}
-	virtual void eraseFromOverview() {
-	}
+	virtual Storage::SharedMediaTypesMask sharedMediaTypes() const;
 
 	// if we are in selecting items mode perhaps we want to
 	// toggle selection instead of activating the pressed link
-	virtual bool toggleSelectionByHandlerClick(const ClickHandlerPtr &p) const = 0;
+	virtual bool toggleSelectionByHandlerClick(
+		const ClickHandlerPtr &p) const = 0;
 
 	// if we press and drag on this media should we drag the item
-	virtual bool dragItem() const WARN_UNUSED_RESULT {
+	[[nodiscard]] virtual bool dragItem() const {
 		return false;
 	}
 
-	virtual TextSelection adjustSelection(TextSelection selection, TextSelectType type) const WARN_UNUSED_RESULT {
+	[[nodiscard]] virtual TextSelection adjustSelection(
+			TextSelection selection,
+			TextSelectType type) const {
 		return selection;
 	}
-	virtual bool consumeMessageText(const TextWithEntities &textWithEntities) WARN_UNUSED_RESULT {
+	[[nodiscard]] virtual bool consumeMessageText(
+			const TextWithEntities &textWithEntities) {
 		return false;
 	}
-	virtual uint16 fullSelectionLength() const WARN_UNUSED_RESULT {
+	[[nodiscard]] virtual uint16 fullSelectionLength() const {
 		return 0;
 	}
-	TextSelection skipSelection(TextSelection selection) const WARN_UNUSED_RESULT {
-		return internal::unshiftSelection(selection, fullSelectionLength());
+	[[nodiscard]] TextSelection skipSelection(
+			TextSelection selection) const {
+		return internal::unshiftSelection(
+			selection,
+			fullSelectionLength());
 	}
-	TextSelection unskipSelection(TextSelection selection) const WARN_UNUSED_RESULT {
-		return internal::shiftSelection(selection, fullSelectionLength());
+	[[nodiscard]] TextSelection unskipSelection(
+			TextSelection selection) const {
+		return internal::shiftSelection(
+			selection,
+			fullSelectionLength());
 	}
 
 	// if we press and drag this link should we drag the item
@@ -113,9 +136,14 @@ public:
 	virtual bool uploading() const {
 		return false;
 	}
-	virtual std::unique_ptr<HistoryMedia> clone(HistoryItem *newParent) const = 0;
+	virtual std::unique_ptr<HistoryMedia> clone(
+		not_null<HistoryItem*> newParent,
+		not_null<HistoryItem*> realParent) const = 0;
 
-	virtual DocumentData *getDocument() {
+	virtual PhotoData *getPhoto() const {
+		return nullptr;
+	}
+	virtual DocumentData *getDocument() const {
 		return nullptr;
 	}
 	virtual Media::Clip::Reader *getClipReader() {
@@ -136,8 +164,38 @@ public:
 
 	virtual void attachToParent() {
 	}
-
 	virtual void detachFromParent() {
+	}
+
+	virtual bool canBeGrouped() const {
+		return false;
+	}
+	virtual QSize sizeForGrouping() const {
+		Unexpected("Grouping method call.");
+	}
+	virtual void drawGrouped(
+			Painter &p,
+			const QRect &clip,
+			TextSelection selection,
+			TimeMs ms,
+			const QRect &geometry,
+			RectParts corners,
+			not_null<uint64*> cacheKey,
+			not_null<QPixmap*> cache) const {
+		Unexpected("Grouping method call.");
+	}
+	virtual HistoryTextState getStateGrouped(
+			const QRect &geometry,
+			QPoint point,
+			HistoryStateRequest request) const {
+		Unexpected("Grouping method call.");
+	}
+	virtual std::unique_ptr<HistoryMedia> takeLastFromGroup() {
+		return nullptr;
+	}
+	virtual bool applyGroup(
+			const std::vector<not_null<HistoryItem*>> &others) {
+		return others.empty();
 	}
 
 	virtual void updateSentMedia(const MTPMessageMedia &media) {
@@ -169,6 +227,13 @@ public:
 	}
 	virtual bool hideForwardedFrom() const {
 		return false;
+	}
+
+	virtual bool overrideEditedDate() const {
+		return false;
+	}
+	virtual HistoryMessageEdited *displayedEditBadge() const {
+		Unexpected("displayedEditBadge() on non-grouped media.");
 	}
 
 	// An attach media in a web page can provide an
@@ -212,17 +277,7 @@ public:
 	}
 
 protected:
-	int32 addToOneOverview(MediaOverviewType type, AddToOverviewMethod method) {
-		if (_parent->history()->addToOverview(type, _parent->id, method)) {
-			return (1 << type);
-		}
-		return 0;
-	}
-	void eraseFromOneOverview(MediaOverviewType type) {
-		_parent->history()->eraseFromOverview(type, _parent->id);
-	}
-
-	gsl::not_null<HistoryItem*> _parent;
+	not_null<HistoryItem*> _parent;
 	int _width = 0;
 	MediaInBubbleState _inBubbleState = MediaInBubbleState::None;
 

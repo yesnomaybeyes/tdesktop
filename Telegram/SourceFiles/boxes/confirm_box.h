@@ -25,6 +25,7 @@ Copyright (c) 2014-2017 John Preston, https://desktop.telegram.org
 namespace Ui {
 class Checkbox;
 class FlatLabel;
+class EmptyUserpic;
 } // namespace Ui
 
 class InformBox;
@@ -46,8 +47,6 @@ public:
 	// ClickHandlerHost interface
 	void clickHandlerActiveChanged(const ClickHandlerPtr &p, bool active) override;
 	void clickHandlerPressedChanged(const ClickHandlerPtr &p, bool pressed) override;
-
-	void closeHook() override;
 
 protected:
 	void prepare() override;
@@ -100,7 +99,7 @@ public:
 
 class MaxInviteBox : public BoxContent {
 public:
-	MaxInviteBox(QWidget*, const QString &link);
+	MaxInviteBox(QWidget*, not_null<ChannelData*> channel);
 
 protected:
 	void prepare() override;
@@ -114,10 +113,11 @@ protected:
 private:
 	void updateSelected(const QPoint &cursorGlobalPosition);
 
+	not_null<ChannelData*> _channel;
+
 	Text _text;
 	int32 _textWidth, _textHeight;
 
-	QString _link;
 	QRect _invitationLink;
 	bool _linkOver = false;
 
@@ -165,7 +165,7 @@ private:
 	MsgId _msgId;
 
 	object_ptr<Ui::FlatLabel> _text;
-	object_ptr<Ui::Checkbox> _notify;
+	object_ptr<Ui::Checkbox> _notify = { nullptr };
 
 	mtpRequestId _requestId = 0;
 
@@ -173,8 +173,11 @@ private:
 
 class DeleteMessagesBox : public BoxContent, public RPCSender {
 public:
-	DeleteMessagesBox(QWidget*, HistoryItem *item, bool suggestModerateActions);
-	DeleteMessagesBox(QWidget*, const SelectedItemSet &selected);
+	DeleteMessagesBox(
+		QWidget*,
+		not_null<HistoryItem*> item,
+		bool suggestModerateActions);
+	DeleteMessagesBox(QWidget*, MessageIdsList &&selected);
 
 protected:
 	void prepare() override;
@@ -185,8 +188,8 @@ protected:
 private:
 	void deleteAndClear();
 
-	QVector<FullMsgId> _ids;
-	bool _singleItem = false;
+	const MessageIdsList _ids;
+	const bool _singleItem = false;
 	UserData *_moderateFrom = nullptr;
 	ChannelData *_moderateInChannel = nullptr;
 	bool _moderateBan = false;
@@ -203,6 +206,7 @@ private:
 class ConfirmInviteBox : public BoxContent, public RPCSender {
 public:
 	ConfirmInviteBox(QWidget*, const QString &title, bool isChannel, const MTPChatPhoto &photo, int count, const QVector<UserData*> &participants);
+	~ConfirmInviteBox();
 
 protected:
 	void prepare() override;
@@ -214,7 +218,7 @@ private:
 	object_ptr<Ui::FlatLabel> _title;
 	object_ptr<Ui::FlatLabel> _status;
 	ImagePtr _photo;
-	EmptyUserpic _photoEmpty;
+	std::unique_ptr<Ui::EmptyUserpic> _photoEmpty;
 	QVector<UserData*> _participants;
 
 	int _userWidth = 0;
