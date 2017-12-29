@@ -46,7 +46,8 @@ public:
 	SendFilesBox(
 		QWidget*,
 		Storage::PreparedList &&list,
-		CompressConfirm compressed);
+		CompressConfirm compressed,
+		QString captionFromHistory);
 
 	void setConfirmedCallback(
 		base::lambda<void(
@@ -104,6 +105,7 @@ private:
 	Storage::PreparedList _list;
 
 	CompressConfirm _compressConfirm = CompressConfirm::None;
+	QString _captionFromHistory = QString();
 
 	base::lambda<void(
 		Storage::PreparedList &&list,

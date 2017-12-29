@@ -1327,8 +1327,10 @@ void SendFilesBox::AlbumPreview::mouseReleaseEvent(QMouseEvent *e) {
 SendFilesBox::SendFilesBox(
 	QWidget*,
 	Storage::PreparedList &&list,
-	CompressConfirm compressed)
+	CompressConfirm compressed,
+	QString captionFromHistory)
 : _list(std::move(list))
+, _captionFromHistory(captionFromHistory)
 , _compressConfirm(compressed) {
 }
 
@@ -1556,6 +1558,12 @@ void SendFilesBox::setupCaption() {
 	_caption.create(this, st::confirmCaptionArea, FieldPlaceholder(_list));
 	_caption->setMaxLength(MaxPhotoCaption);
 	_caption->setCtrlEnterSubmit(Ui::CtrlEnterSubmit::Both);
+
+	_caption->setText(_captionFromHistory);
+	QTextCursor tmpCursor = _caption->textCursor();
+	tmpCursor.movePosition(QTextCursor::End);
+	_caption->setTextCursor(tmpCursor);
+
 	connect(_caption, &Ui::InputArea::resized, this, [this] {
 		captionResized();
 	});

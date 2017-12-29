@@ -4033,7 +4033,7 @@ bool HistoryWidget::confirmSendingFiles(
 		? CompressConfirm::None
 		: compressed;
 
-	auto box = Box<SendFilesBox>(std::move(list), boxCompressConfirm);
+	auto box = Box<SendFilesBox>(std::move(list), boxCompressConfirm, _field->toPlainText());
 	box->setConfirmedCallback(base::lambda_guarded(this, [=](
 			Storage::PreparedList &&list,
 			SendFilesWay way,
@@ -4048,6 +4048,7 @@ bool HistoryWidget::confirmSendingFiles(
 		const auto album = (way == SendFilesWay::Album)
 			? std::make_shared<SendingAlbum>()
 			: nullptr;
+		_field->setText("");
 		uploadFilesAfterConfirmation(
 			std::move(list),
 			type,
