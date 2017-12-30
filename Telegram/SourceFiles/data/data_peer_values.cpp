@@ -278,7 +278,9 @@ QString OnlineTextFull(not_null<UserData*> user, TimeId now) {
 
 	//check minutes
 	int32 minutes = (now - user->onlineTill) / 60;
-	if (minutes < 60) {
+	if (!minutes) {
+		return lang(lng_status_lastseen_now);
+	} else if (minutes < 60) {
 		return lng_status_lastseen_minutes(lt_count, minutes);
 	}
 
