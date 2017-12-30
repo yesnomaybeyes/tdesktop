@@ -1331,6 +1331,7 @@ SendFilesBox::SendFilesBox(
 	QString captionFromHistory)
 : _list(std::move(list))
 , _captionFromHistory(captionFromHistory)
+, _compressConfirmInitial(compressed)
 , _compressConfirm(compressed) {
 }
 
@@ -1436,15 +1437,7 @@ void SendFilesBox::prepare() {
 }
 
 void SendFilesBox::initSendWay() {
-	_albumVideosCount = _list.albumIsPossible
-		? ranges::count(
-			_list.files,
-			Storage::PreparedFile::AlbumType::Video,
-			[](const Storage::PreparedFile &file) { return file.type; })
-		: 0;
-	_albumPhotosCount = _list.albumIsPossible
-		? (_list.files.size() - _albumVideosCount)
-		: 0;
+	refreshAlbumMediaCount();
 	const auto value = [&] {
 		if (_compressConfirm == CompressConfirm::None) {
 			return SendFilesWay::Files;
@@ -1475,6 +1468,18 @@ void SendFilesBox::initSendWay() {
 		}
 		setInnerFocus();
 	});
+}
+
+void SendFilesBox::refreshAlbumMediaCount() {
+	_albumVideosCount = _list.albumIsPossible
+		? ranges::count(
+			_list.files,
+			Storage::PreparedFile::AlbumType::Video,
+			[](const Storage::PreparedFile &file) { return file.type; })
+		: 0;
+	_albumPhotosCount = _list.albumIsPossible
+		? (_list.files.size() - _albumVideosCount)
+		: 0;
 }
 
 void SendFilesBox::preparePreview() {
@@ -1644,6 +1649,9 @@ bool SendFilesBox::addFiles(not_null<const QMimeData*> data) {
 		return false;
 	} else if (_list.files.size() > 1 && !_albumPreview) {
 		return false;
+	} else if (_list.files.front().type
+		== Storage::PreparedFile::AlbumType::None) {
+		return false;
 	}
 	applyAlbumOrder();
 	delete base::take(_preview);
@@ -1654,6 +1662,9 @@ bool SendFilesBox::addFiles(not_null<const QMimeData*> data) {
 		_sendWay->setValue(SendFilesWay::Album);
 	}
 	_list.mergeToEnd(std::move(list));
+
+	_compressConfirm = _compressConfirmInitial;
+	refreshAlbumMediaCount();
 	preparePreview();
 	updateControlsGeometry();
 	return true;
