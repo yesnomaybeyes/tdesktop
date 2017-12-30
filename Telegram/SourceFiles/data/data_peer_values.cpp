@@ -275,6 +275,13 @@ QString OnlineTextFull(not_null<UserData*> user, TimeId now) {
 	}
 	const auto onlineFull = ::date(user->onlineTill);
 	const auto nowFull = ::date(now);
+
+	//check minutes
+	int32 minutes = (now - user->onlineTill) / 60;
+	if (minutes < 60) {
+		return lng_status_lastseen_minutes(lt_count, minutes);
+	}
+
 	if (onlineFull.date() == nowFull.date()) {
 		const auto onlineTime = onlineFull.time().toString(cTimeFormat());
 		return lng_status_lastseen_today(lt_time, onlineTime);
