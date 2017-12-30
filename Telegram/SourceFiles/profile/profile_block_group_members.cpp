@@ -285,7 +285,7 @@ void GroupMembersWidget::updateItemStatusText(Item *item) {
 			member->onlineTextTill = _now + 86400;
 		} else {
 			member->statusHasOnlineColor = Data::OnlineTextActive(member->onlineTill, _now);
-			member->statusText = Data::OnlineText(member->onlineTill, _now);
+			member->statusText = Data::OnlineTextFull(user, _now);
 			const auto changeInMs = Data::OnlineChangeTimeout(
 				member->onlineTill,
 				_now);

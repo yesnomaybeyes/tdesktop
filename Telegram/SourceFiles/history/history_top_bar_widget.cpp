@@ -630,7 +630,7 @@ void HistoryTopBarWidget::updateOnlineDisplay() {
 	const auto now = unixtime();
 	bool titlePeerTextOnline = false;
 	if (const auto user = _historyPeer->asUser()) {
-		text = Data::OnlineText(user, now);
+		text = Data::OnlineTextFull(user, now);
 		titlePeerTextOnline = Data::OnlineTextActive(user, now);
 	} else if (const auto chat = _historyPeer->asChat()) {
 		if (!chat->amIn()) {
