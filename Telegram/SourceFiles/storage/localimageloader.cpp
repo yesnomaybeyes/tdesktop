@@ -516,12 +516,22 @@ void FileLoadTask::process() {
 			auto flags = MTPDdocumentAttributeVideo::Flags(0);
 			attributes.push_back(MTP_documentAttributeVideo(MTP_flags(flags), MTP_int(video->duration), MTP_int(coverWidth), MTP_int(coverHeight)));
 
-			auto cover = (coverWidth > 90 || coverHeight > 90)
-				? video->thumbnail.scaled(90, 90, Qt::KeepAspectRatio, Qt::SmoothTransformation)
+			double koef = double(coverWidth) / double(coverHeight);
+			int maxSide = 90;
+			if (coverWidth > coverHeight) {
+				maxSide = qRound(koef * 400 / (koef + 1));
+			} else {
+				maxSide = qRound(400 / (koef + 1));
+			}
+
+			LOG(("Max Side is " + QString::number(maxSide)));
+
+			auto cover = (coverWidth > maxSide || coverHeight > maxSide)
+				? video->thumbnail.scaled(maxSide, maxSide, Qt::KeepAspectRatio, Qt::SmoothTransformation)
 				: std::move(video->thumbnail);
 			{
 				auto thumbFormat = QByteArray("JPG");
-				auto thumbQuality = 87;
+				auto thumbQuality = 100;
 
 				QBuffer buffer(&thumbdata);
 				cover.save(&buffer, thumbFormat, thumbQuality);
