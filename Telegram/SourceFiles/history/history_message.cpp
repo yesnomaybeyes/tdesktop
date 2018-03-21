@@ -732,8 +732,6 @@ void HistoryMessage::refreshSentMedia(const MTPMessageMedia *media) {
 	refreshMedia(media);
 	if (wasGrouped) {
 		Auth().data().groups().refreshMessage(this);
-	} else {
-		Auth().data().requestItemViewRefresh(this);
 	}
 }
 
@@ -957,7 +955,9 @@ Storage::SharedMediaTypesMask HistoryMessage::sharedMediaTypes() const {
 void HistoryMessage::setText(const TextWithEntities &textWithEntities) {
 	for_const (auto &entity, textWithEntities.entities) {
 		auto type = entity.type();
-		if (type == EntityInTextUrl || type == EntityInTextCustomUrl || type == EntityInTextEmail) {
+		if (type == EntityInTextUrl
+			|| type == EntityInTextCustomUrl
+			|| type == EntityInTextEmail) {
 			_flags |= MTPDmessage_ClientFlag::f_has_text_links;
 			break;
 		}
@@ -970,6 +970,14 @@ void HistoryMessage::setText(const TextWithEntities &textWithEntities) {
 			st::messageTextStyle,
 			textWithEntities,
 			Ui::ItemTextOptions(this));
+		if (!textWithEntities.text.isEmpty() && _text.isEmpty()) {
+			// If server has allowed some text that we've trim-ed entirely,
+			// just replace it with something so that UI won't look buggy.
+			_text.setMarkedText(
+				st::messageTextStyle,
+				{ QString::fromUtf8("\xF0\x9F\x98\x94"), EntitiesInText() },
+				Ui::ItemTextOptions(this));
+		}
 		_textWidth = -1;
 		_textHeight = 0;
 	}
