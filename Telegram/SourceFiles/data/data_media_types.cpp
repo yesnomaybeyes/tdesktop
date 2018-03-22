@@ -103,9 +103,9 @@ TextWithEntities WithCaptionClipboardText(
 		TextWithEntities &&caption) {
 	TextWithEntities result;
 	result.text.reserve(5 + attachType.size() + caption.text.size());
-	result.text.append(qstr("[ ")).append(attachType).append(qstr(" ]"));
+	//result.text.append(qstr("[ ")).append(attachType).append(qstr(" ]"));
 	if (!caption.text.isEmpty()) {
-		result.text.append(qstr("\n"));
+		//result.text.append(qstr("\n"));
 		TextUtilities::Append(result, std::move(caption));
 	}
 	return result;
