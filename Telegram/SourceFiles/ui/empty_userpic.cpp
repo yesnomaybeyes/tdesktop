@@ -49,9 +49,7 @@ void EmptyUserpic::paint(
 		int outerWidth,
 		int size) const {
 	paint(p, x, y, outerWidth, size, [&p, x, y, size] {
-		QStringList args = QApplication::arguments();
-		int index = args.indexOf("-square-avatars");
-		if (index >= 0) {
+		if (Global::SquareAvatars()) {
 			p.drawRect(x, y, size, size);
 		} else {
 			p.drawEllipse(x, y, size, size);
@@ -96,9 +94,7 @@ void EmptyUserpic::PaintSavedMessages(
 	p.setBrush(bg);
 	p.setPen(Qt::NoPen);
 
-	QStringList args = QApplication::arguments();
-	int index = args.indexOf("-square-avatars");
-	if (index >= 0) {
+	if (Global::SquareAvatars()) {
 		p.drawRect(x, y, size, size);
 	} else {
 		p.drawEllipse(x, y, size, size);

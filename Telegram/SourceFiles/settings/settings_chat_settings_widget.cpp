@@ -167,6 +167,10 @@ void ChatSettingsWidget::createControls() {
 
 	createChildRow(_automaticMediaDownloadSettings, marginSmall, lang(lng_media_auto_settings), SLOT(onAutomaticMediaDownloadSettings()));
 	createChildRow(_manageStickerSets, marginSmall, lang(lng_stickers_you_have), SLOT(onManageStickerSets()));
+
+	createChildRow(_forkLabel, marginSkip, "", "", LabeledLink::Type::Primary, SLOT(toggleSquareAvatars()));
+	createChildRow(_forkLabel, marginSkip, "Fork Settings", "", LabeledLink::Type::Primary, SLOT(toggleSquareAvatars()));
+	createChildRow(_squareAvatars, marginSkip, "Square avatars", [this](bool) { toggleSquareAvatars(); }, Global::SquareAvatars());
 }
 
 void ChatSettingsWidget::toggleReplaceEmoji() {
@@ -176,6 +180,11 @@ void ChatSettingsWidget::toggleReplaceEmoji() {
 
 void ChatSettingsWidget::toggleSuggestStickersByEmoji() {
 	Global::SetSuggestStickersByEmoji(_suggestByEmoji->checked());
+	Local::writeUserSettings();
+}
+
+void ChatSettingsWidget::toggleSquareAvatars() {
+	Global::SetSquareAvatars(_squareAvatars->checked());
 	Local::writeUserSettings();
 }
 

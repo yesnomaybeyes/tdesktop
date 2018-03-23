@@ -552,6 +552,7 @@ struct Data {
 	QByteArray DownloadPathBookmark;
 	base::Observable<void> DownloadPathChanged;
 
+	bool SquareAvatars = true;
 	bool SuggestStickersByEmoji = true;
 	bool SoundNotify = true;
 	bool DesktopNotify = true;
@@ -675,6 +676,7 @@ DefineVar(Global, QString, DownloadPath);
 DefineVar(Global, QByteArray, DownloadPathBookmark);
 DefineRefVar(Global, base::Observable<void>, DownloadPathChanged);
 
+DefineVar(Global, bool, SquareAvatars);
 DefineVar(Global, bool, SuggestStickersByEmoji);
 DefineVar(Global, bool, SoundNotify);
 DefineVar(Global, bool, DesktopNotify);

@@ -96,9 +96,13 @@ private:
 	void toggleReplaceEmoji();
 	void toggleSuggestStickersByEmoji();
 
+	void toggleSquareAvatars();
+
 	Ui::Checkbox *_replaceEmoji = nullptr;
 	Ui::Checkbox *_suggestByEmoji = nullptr;
 	Ui::Checkbox *_dontAskDownloadPath = nullptr;
+	Ui::Checkbox *_squareAvatars = nullptr;
+	LabeledLink *_forkLabel = nullptr;
 
 #ifndef OS_WIN_STORE
 	Ui::SlideWrap<DownloadPathState> *_downloadPath = nullptr;

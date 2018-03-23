@@ -133,9 +133,7 @@ QImage createCircleMask(int size, QColor bg, QColor fg) {
 		p.setPen(Qt::NoPen);
 		p.setBrush(fg);
 		
-		QStringList args = QApplication::arguments();
-		int index = args.indexOf("-square-avatars");
-		if (index >= 0) {
+		if (Global::SquareAvatars()) {
 			p.drawRect(0, 0, realSize, realSize);
 		} else {
 			p.drawEllipse(0, 0, realSize, realSize);

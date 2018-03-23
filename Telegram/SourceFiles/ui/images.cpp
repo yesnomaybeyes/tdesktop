@@ -39,9 +39,7 @@ const QPixmap &circleMask(int width, int height) {
 			p.setBrush(Qt::white);
 			p.setPen(Qt::NoPen);
 
-			QStringList args = QApplication::arguments();
-			int index = args.indexOf("-square-avatars");
-			if (index >= 0) {
+			if (Global::SquareAvatars()) {
 				p.drawRect(0, 0, width, height);
 			} else {
 				p.drawEllipse(0, 0, width, height);
