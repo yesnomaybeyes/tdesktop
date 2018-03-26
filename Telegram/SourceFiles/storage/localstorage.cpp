@@ -2215,10 +2215,6 @@ void _writeMap(WriteMapWhen when) {
 
 	EncryptedDescriptor mapData(mapSize);
 
-	if (mapSize > 30 * 1024 * 1024) {
-		CrashReports::ClearAnnotation("MapSize");
-	}
-
 	if (!_draftsMap.isEmpty()) {
 		mapData.stream << quint32(lskDraft) << quint32(_draftsMap.size());
 		for (DraftsMap::const_iterator i = _draftsMap.cbegin(), e = _draftsMap.cend(); i != e; ++i) {
@@ -2286,6 +2282,10 @@ void _writeMap(WriteMapWhen when) {
 	map.writeEncrypted(mapData);
 
 	_mapChanged = false;
+
+	if (mapSize > 30 * 1024 * 1024) {
+		CrashReports::ClearAnnotation("MapSize");
+	}
 }
 
 } // namespace
