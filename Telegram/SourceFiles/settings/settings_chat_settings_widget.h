@@ -94,11 +94,13 @@ private:
 	void createControls();
 
 	void toggleReplaceEmoji();
+	void toggleSuggestEmoji();
 	void toggleSuggestStickersByEmoji();
 
 	void toggleSquareAvatars();
 
 	Ui::Checkbox *_replaceEmoji = nullptr;
+	Ui::Checkbox *_suggestEmoji = nullptr;
 	Ui::Checkbox *_suggestByEmoji = nullptr;
 	Ui::Checkbox *_dontAskDownloadPath = nullptr;
 	Ui::Checkbox *_squareAvatars = nullptr;
