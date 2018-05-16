@@ -305,9 +305,12 @@ void Filler::addUserActions(not_null<UserData*> user) {
 	_addAction(
 		lang(lng_profile_clear_history),
 		ClearHistoryHandler(user));
+
 	if (!user->isInaccessible() && user != App::self()) {
 		addBlockUser(user);
 	}
+
+	_addAction(QString("Go to first message"), GoToFirstMessageHandler(user));
 }
 
 void Filler::addChatActions(not_null<ChatData*> chat) {
@@ -327,6 +330,8 @@ void Filler::addChatActions(not_null<ChatData*> chat) {
 	_addAction(
 		lang(lng_profile_clear_history),
 		ClearHistoryHandler(_peer));
+
+	_addAction(QString("Go to first message"), GoToFirstMessageHandler(chat));
 }
 
 void Filler::addChannelActions(not_null<ChannelData*> channel) {
@@ -382,6 +387,8 @@ void Filler::addChannelActions(not_null<ChannelData*> channel) {
 			});
 		}
 	}
+
+	_addAction(QString("Go to first message"), GoToFirstMessageHandler(channel));
 }
 
 void Filler::fill() {
@@ -708,6 +715,12 @@ base::lambda<void()> ClearHistoryHandler(not_null<PeerData*> peer) {
 				st::attentionBoxButton,
 				std::move(callback)),
 			LayerOption::KeepOther);
+	};
+}
+
+base::lambda<void()> GoToFirstMessageHandler(not_null<PeerData*> peer) {
+	return [peer] {
+		App::main()->ui_showPeerHistory(peer->id, Window::SectionShow::Way::ClearStack, MsgId(1));
 	};
 }
 

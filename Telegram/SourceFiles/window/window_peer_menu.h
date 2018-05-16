@@ -54,6 +54,8 @@ void PeerMenuAddChannelMembers(not_null<ChannelData*> channel);
 base::lambda<void()> ClearHistoryHandler(not_null<PeerData*> peer);
 base::lambda<void()> DeleteAndLeaveHandler(not_null<PeerData*> peer);
 
+base::lambda<void()> GoToFirstMessageHandler(not_null<PeerData*> peer);
+
 QPointer<Ui::RpWidget> ShowForwardMessagesBox(
 	MessageIdsList &&items,
 	base::lambda_once<void()> &&successCallback = nullptr);
