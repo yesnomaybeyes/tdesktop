@@ -20,7 +20,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "mainwindow.h"
 #include "lang/lang_keys.h"
 #include "media/media_audio.h"
-#include "ui/widgets/input_fields.h"
 #include "mtproto/dc_options.h"
 #include "messenger.h"
 #include "application.h"
@@ -2690,8 +2689,10 @@ void writeDrafts(const PeerId &peer, const MessageDraft &localDraft, const Messa
 			_writeMap(WriteMapWhen::Fast);
 		}
 
-		auto msgTags = Ui::FlatTextarea::serializeTagsList(localDraft.textWithTags.tags);
-		auto editTags = Ui::FlatTextarea::serializeTagsList(editDraft.textWithTags.tags);
+		auto msgTags = TextUtilities::SerializeTags(
+			localDraft.textWithTags.tags);
+		auto editTags = TextUtilities::SerializeTags(
+			editDraft.textWithTags.tags);
 
 		int size = sizeof(quint64);
 		size += Serialize::stringSize(localDraft.textWithTags.text) + Serialize::bytearraySize(msgTags) + 2 * sizeof(qint32);
@@ -2797,8 +2798,12 @@ void readDraftsWithCursors(History *h) {
 		return;
 	}
 
-	msgData.tags = Ui::FlatTextarea::deserializeTagsList(msgTagsSerialized, msgData.text.size());
-	editData.tags = Ui::FlatTextarea::deserializeTagsList(editTagsSerialized, editData.text.size());
+	msgData.tags = TextUtilities::DeserializeTags(
+		msgTagsSerialized,
+		msgData.text.size());
+	editData.tags = TextUtilities::DeserializeTags(
+		editTagsSerialized,
+		editData.text.size());
 
 	MessageCursor msgCursor, editCursor;
 	_readDraftCursors(peer, msgCursor, editCursor);
@@ -2807,13 +2812,21 @@ void readDraftsWithCursors(History *h) {
 		if (msgData.text.isEmpty() && !msgReplyTo) {
 			h->clearLocalDraft();
 		} else {
-			h->setLocalDraft(std::make_unique<Data::Draft>(msgData, msgReplyTo, msgCursor, msgPreviewCancelled));
+			h->setLocalDraft(std::make_unique<Data::Draft>(
+				msgData,
+				msgReplyTo,
+				msgCursor,
+				msgPreviewCancelled));
 		}
 	}
 	if (!editMsgId) {
 		h->clearEditDraft();
 	} else {
-		h->setEditDraft(std::make_unique<Data::Draft>(editData, editMsgId, editCursor, editPreviewCancelled));
+		h->setEditDraft(std::make_unique<Data::Draft>(
+			editData,
+			editMsgId,
+			editCursor,
+			editPreviewCancelled));
 	}
 }
 

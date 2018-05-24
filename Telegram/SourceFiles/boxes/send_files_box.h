@@ -18,7 +18,7 @@ class Radioenum;
 template <typename Enum>
 class RadioenumGroup;
 class RoundButton;
-class InputArea;
+class InputField;
 struct GroupMediaLayout;
 } // namespace Ui
 
@@ -33,14 +33,14 @@ public:
 	SendFilesBox(
 		QWidget*,
 		Storage::PreparedList &&list,
-		CompressConfirm compressed,
-		QString captionFromHistory);
+		const TextWithTags &caption,
+		CompressConfirm compressed);
 
 	void setConfirmedCallback(
 		base::lambda<void(
 			Storage::PreparedList &&list,
 			SendFilesWay way,
-			const QString &caption,
+			TextWithTags &&caption,
 			bool ctrlShiftEnter)> callback) {
 		_confirmedCallback = std::move(callback);
 	}
@@ -95,17 +95,16 @@ private:
 
 	CompressConfirm _compressConfirmInitial = CompressConfirm::None;
 	CompressConfirm _compressConfirm = CompressConfirm::None;
-	QString _captionFromHistory = QString();
 
 	base::lambda<void(
 		Storage::PreparedList &&list,
 		SendFilesWay way,
-		const QString &caption,
+		TextWithTags &&caption,
 		bool ctrlShiftEnter)> _confirmedCallback;
 	base::lambda<void()> _cancelledCallback;
 	bool _confirmed = false;
 
-	object_ptr<Ui::InputArea> _caption = { nullptr };
+	object_ptr<Ui::InputField> _caption = { nullptr };
 	object_ptr<Ui::Radioenum<SendFilesWay>> _sendAlbum = { nullptr };
 	object_ptr<Ui::Radioenum<SendFilesWay>> _sendPhotos = { nullptr };
 	object_ptr<Ui::Radioenum<SendFilesWay>> _sendFiles = { nullptr };
