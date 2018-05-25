@@ -14,6 +14,8 @@ class UserData;
 
 namespace Ui {
 
+class PopupMenu;
+
 void InsertEmojiAtCursor(QTextCursor cursor, EmojiPtr emoji);
 
 struct InstantReplaces {
@@ -199,6 +201,8 @@ public:
 		int till,
 		const QString &tag,
 		const QString &edge = QString());
+	void toggleSelectionMarkdown(const QString &tag);
+	void clearSelectionMarkdown();
 
 	const QString &getLastText() const {
 		return _lastTextWithTags.text;
@@ -313,6 +317,7 @@ private:
 	void keyPressEventInner(QKeyEvent *e);
 	void contextMenuEventInner(QContextMenuEvent *e);
 	void dropEventInner(QDropEvent *e);
+	void inputMethodEventInner(QInputMethodEvent *e);
 
 	QMimeData *createMimeDataFromSelectionInner() const;
 	bool canInsertFromMimeDataInner(const QMimeData *source) const;
@@ -340,6 +345,11 @@ private:
 
 	bool processMarkdownReplaces(const QString &appended);
 	bool processMarkdownReplace(const QString &tag);
+	void addMarkdownActions(not_null<QMenu*> menu);
+	void addMarkdownMenuAction(
+		not_null<QMenu*> menu,
+		not_null<QAction*> action);
+	bool handleMarkdownKey(QKeyEvent *e);
 
 	// We don't want accidentally detach InstantReplaces map.
 	// So we access it only by const reference from this method.
@@ -356,11 +366,13 @@ private:
 	int _minHeight = -1;
 	int _maxHeight = -1;
 	bool _forcePlaceholderHidden = false;
+	bool _reverseMarkdownReplacement = false;
 
 	object_ptr<Inner> _inner;
 
 	TextWithTags _lastTextWithTags;
 	std::vector<PossibleTag> _textAreaPossibleTags;
+	QString _lastPreEditText;
 
 	// Tags list which we should apply while setText() call or insert from mime data.
 	TagList _insertedTags;
@@ -410,6 +422,7 @@ private:
 
 	bool _correcting = false;
 	MimeDataHook _mimeDataHook;
+	base::unique_qptr<Ui::PopupMenu> _contextMenu;
 
 	QTextCharFormat _defaultCharFormat;
 

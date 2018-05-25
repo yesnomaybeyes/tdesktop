@@ -39,9 +39,34 @@ const auto kNewlineChars = QString("\r\n")
 	+ QChar(0xfdd1) // QTextEndOfFrame
 	+ QChar(QChar::ParagraphSeparator)
 	+ QChar(QChar::LineSeparator);
+const auto kClearFormatSequence = QKeySequence("ctrl+shift+n");
+const auto kMonospaceSequence = QKeySequence("ctrl+shift+m");
 
 bool IsNewline(QChar ch) {
 	return (kNewlineChars.indexOf(ch) >= 0);
+}
+
+QString GetFullSimpleTextTag(const TextWithTags &textWithTags) {
+	const auto &text = textWithTags.text;
+	const auto &tags = textWithTags.tags;
+	const auto tag = (tags.size() == 1) ? tags[0] : TextWithTags::Tag();
+	auto from = 0;
+	auto till = int(text.size());
+	for (; from != till; ++from) {
+		if (!IsNewline(text[from]) && !chIsSpace(text[from])) {
+			break;
+		}
+	}
+	while (till != from) {
+		if (!IsNewline(text[till - 1]) && !chIsSpace(text[till - 1])) {
+			break;
+		}
+		--till;
+	}
+	return ((tag.offset <= from)
+		&& (tag.offset + tag.length >= till))
+		? (tag.id == kTagPre ? kTagCode : tag.id)
+		: QString();
 }
 
 class TagAccumulator {
@@ -159,7 +184,7 @@ const std::map<QString, std::vector<int>> &TagFinishIndices() {
 		{ kTagBold, { kTagBoldIndex, kTagCodeIndex, kTagPreIndex } },
 		{ kTagItalic, { kTagItalicIndex, kTagCodeIndex, kTagPreIndex } },
 		{ kTagCode, { kTagCodeIndex, kTagPreIndex } },
-		{ kTagPre, { kTagCodeIndex, kTagPreIndex } },
+		{ kTagPre, { kTagPreIndex } },
 	};
 	return cached;
 }
@@ -335,8 +360,8 @@ private:
 					continue;
 				}
 			}
-			if (item.position + tagLength + 1 < length) {
-				const auto after = text[item.position + tagLength + 1];
+			if (item.position + tagLength < length) {
+				const auto after = text[item.position + tagLength];
 				if (expression.badAfter.indexOf(after) >= 0) {
 					continue;
 				}
@@ -670,6 +695,9 @@ protected:
 	}
 	void dropEvent(QDropEvent *e) override {
 		return outer()->dropEventInner(e);
+	}
+	void inputMethodEvent(QInputMethodEvent *e) override {
+		return outer()->inputMethodEventInner(e);
 	}
 
 	bool canInsertFromMimeData(const QMimeData *source) const override {
@@ -1159,9 +1187,9 @@ QVariant InputField::loadResource(int type, const QUrl &name) {
 }
 
 void InputField::updatePalette() {
-	auto p = palette();
+	auto p = _inner->palette();
 	p.setColor(QPalette::Text, _st.textFg->c);
-	setPalette(p);
+	_inner->setPalette(p);
 }
 
 void InputField::onTouchTimer() {
@@ -2042,9 +2070,7 @@ void InputField::setPlaceholderHidden(bool forcePlaceholderHidden) {
 
 void InputField::startPlaceholderAnimation() {
 	const auto textLength = [&] {
-		const auto layout = textCursor().block().layout();
-		return getTextWithTags().text.size()
-			+ (layout ? layout->preeditAreaText().size() : 0);
+		return getTextWithTags().text.size() + _lastPreEditText.size();
 	};
 	const auto placeholderShifted = _forcePlaceholderHidden
 		|| (_focused && _st.placeholderScale > 0.)
@@ -2194,6 +2220,14 @@ void InputField::keyPressEventInner(QKeyEvent *e) {
 			&& _submitSettings != SubmitSettings::None
 			&& _submitSettings != SubmitSettings::CtrlEnter);
 	bool enter = (e->key() == Qt::Key_Enter || e->key() == Qt::Key_Return);
+	if (e->key() == Qt::Key_Left
+		|| e->key() == Qt::Key_Right
+		|| e->key() == Qt::Key_Up
+		|| e->key() == Qt::Key_Down
+		|| e->key() == Qt::Key_Home
+		|| e->key() == Qt::Key_End) {
+		_reverseMarkdownReplacement = false;
+	}
 
 	if (macmeta && e->key() == Qt::Key_Backspace) {
 		QTextCursor tc(textCursor()), start(tc);
@@ -2219,6 +2253,8 @@ void InputField::keyPressEventInner(QKeyEvent *e) {
 		}
 	} else if (e->key() == Qt::Key_Search || e == QKeySequence::Find) {
 		e->ignore();
+	} else if (handleMarkdownKey(e)) {
+		e->accept();
 	} else if (_customUpDown && (e->key() == Qt::Key_Up || e->key() == Qt::Key_Down)) {
 		e->ignore();
 #ifdef Q_OS_MAC
@@ -2265,13 +2301,49 @@ void InputField::keyPressEventInner(QKeyEvent *e) {
 	}
 }
 
+bool InputField::handleMarkdownKey(QKeyEvent *e) {
+	if (!_markdownEnabled) {
+		return false;
+	}
+	const auto matches = [&](const QKeySequence &sequence) {
+		const auto searchKey = (e->modifiers() | e->key())
+			& ~(Qt::KeypadModifier | Qt::GroupSwitchModifier);
+		const auto events = QKeySequence(searchKey);
+		return sequence.matches(events) == QKeySequence::ExactMatch;
+	};
+	if (e == QKeySequence::Bold) {
+		toggleSelectionMarkdown(kTagBold);
+	} else if (e == QKeySequence::Italic) {
+		toggleSelectionMarkdown(kTagItalic);
+	} else if (matches(kMonospaceSequence)) {
+		toggleSelectionMarkdown(kTagCode);
+	} else if (matches(kClearFormatSequence)) {
+		clearSelectionMarkdown();
+	} else {
+		return false;
+	}
+	return true;
+}
+
+void InputField::inputMethodEventInner(QInputMethodEvent *e) {
+	const auto preedit = e->preeditString();
+	if (_lastPreEditText != preedit) {
+		_lastPreEditText = preedit;
+		startPlaceholderAnimation();
+	}
+	const auto text = e->commitString();
+	_inner->QTextEdit::inputMethodEvent(e);
+	if (!processMarkdownReplaces(text)) {
+		processInstantReplaces(text);
+	}
+}
+
 const InstantReplaces &InputField::instantReplaces() const {
 	return _mutableInstantReplaces;
 }
 
 bool InputField::processMarkdownReplaces(const QString &appended) {
-	if (appended.size() != 1
-		|| !_markdownEnabled) {
+	if (appended.size() != 1 || !_markdownEnabled) {
 		return false;
 	}
 	const auto ch = appended[0];
@@ -2320,6 +2392,13 @@ void InputField::processInstantReplaces(const QString &appended) {
 		return;
 	}
 	const auto position = textCursor().position();
+	for (const auto &tag : _textAreaPossibleTags) {
+		if (tag.start < position
+			&& tag.start + tag.length >= position
+			&& (tag.tag == kTagCode || tag.tag == kTagPre)) {
+			return;
+		}
+	}
 	const auto typed = getTextWithTagsPart(
 		std::max(position - replaces.maxLength, 0),
 		position - 1).text;
@@ -2366,6 +2445,10 @@ void InputField::commitInstantReplacement(
 	}
 
 	auto cursor = textCursor();
+	const auto currentTag = cursor.charFormat().property(kTagProperty);
+	if (currentTag == kTagPre || currentTag == kTagCode) {
+		return;
+	}
 	cursor.setPosition(from);
 	cursor.setPosition(till, QTextCursor::KeepAnchor);
 
@@ -2492,7 +2575,10 @@ bool InputField::commitMarkdownReplacement(
 	cursor.setPosition(from);
 	cursor.setPosition(till, QTextCursor::KeepAnchor);
 	auto format = _defaultCharFormat;
-	format.setProperty(kReplaceTagId, tag);
+	if (!edge.isEmpty()) {
+		format.setProperty(kReplaceTagId, edge);
+		_reverseMarkdownReplacement = true;
+	}
 	_insertedTagsAreFromMime = false;
 	cursor.insertText(insert, format);
 	_insertedTags.clear();
@@ -2500,6 +2586,53 @@ bool InputField::commitMarkdownReplacement(
 	cursor.setCharFormat(_defaultCharFormat);
 	_inner->setTextCursor(cursor);
 	return true;
+}
+
+void InputField::toggleSelectionMarkdown(const QString &tag) {
+	_reverseMarkdownReplacement = false;
+	const auto cursor = textCursor();
+	const auto anchor = cursor.anchor();
+	const auto position = cursor.position();
+	const auto from = std::min(anchor, position);
+	const auto till = std::max(anchor, position);
+	if (from == till) {
+		return;
+	}
+	if (tag.isEmpty()
+		|| GetFullSimpleTextTag(getTextWithTagsPart(from, till)) == tag) {
+		RemoveDocumentTags(_st, document(), from, till);
+		return;
+	}
+	const auto commitTag = [&] {
+		if (tag != kTagCode) {
+			return tag;
+		}
+		const auto leftForBlock = [&] {
+			if (!from) {
+				return true;
+			}
+			const auto text = getTextWithTagsPart(from - 1, from + 1).text;
+			return text.isEmpty()
+				|| IsNewline(text[0])
+				|| IsNewline(text[text.size() - 1]);
+		}();
+		const auto rightForBlock = [&] {
+			const auto text = getTextWithTagsPart(till - 1, till + 1).text;
+			return text.isEmpty()
+				|| IsNewline(text[0])
+				|| IsNewline(text[text.size() - 1]);
+		}();
+		return (leftForBlock && rightForBlock) ? kTagPre : kTagCode;
+	}();
+	commitMarkdownReplacement(from, till, commitTag);
+	auto restorePosition = textCursor();
+	restorePosition.setPosition(anchor);
+	restorePosition.setPosition(position, QTextCursor::KeepAnchor);
+	setTextCursor(restorePosition);
+}
+
+void InputField::clearSelectionMarkdown() {
+	toggleSelectionMarkdown(QString());
 }
 
 bool InputField::revertFormatReplace() {
@@ -2538,7 +2671,8 @@ bool InputField::revertFormatReplace() {
 			ApplyTagFormat(format, current);
 			replaceCursor.insertText(what.toString(), format);
 			return true;
-		} else if (current.hasProperty(kReplaceTagId)) {
+		} else if (_reverseMarkdownReplacement
+			&& current.hasProperty(kReplaceTagId)) {
 			const auto tag = current.property(kReplaceTagId).toString();
 			if (tag.isEmpty()) {
 				return false;
@@ -2592,8 +2726,96 @@ bool InputField::revertFormatReplace() {
 
 void InputField::contextMenuEventInner(QContextMenuEvent *e) {
 	if (const auto menu = _inner->createStandardContextMenu()) {
-		(new Ui::PopupMenu(nullptr, menu))->popup(e->globalPos());
+		addMarkdownActions(menu);
+		_contextMenu = base::make_unique_q<Ui::PopupMenu>(nullptr, menu);
+		_contextMenu->popup(e->globalPos());
 	}
+}
+
+void InputField::addMarkdownActions(not_null<QMenu*> menu) {
+	if (!_markdownEnabled) {
+		return;
+	}
+	const auto formatting = new QAction(lang(lng_menu_formatting), menu);
+	addMarkdownMenuAction(menu, formatting);
+
+	const auto submenu = new QMenu(menu);
+	formatting->setMenu(submenu);
+
+	const auto cursor = textCursor();
+	const auto from = std::min(cursor.anchor(), cursor.position());
+	const auto till = std::max(cursor.anchor(), cursor.position());
+	const auto textWithTags = getTextWithTagsPart(from, till);
+	const auto &text = textWithTags.text;
+	const auto &tags = textWithTags.tags;
+	formatting->setDisabled(text.isEmpty());
+	if (text.isEmpty()) {
+		return;
+	}
+	const auto hasTags = !textWithTags.tags.isEmpty();
+	const auto fullTag = GetFullSimpleTextTag(textWithTags);
+	const auto add = [&](
+			LangKey key,
+			QKeySequence sequence,
+			bool disabled,
+			auto callback) {
+		const auto add = sequence.isEmpty()
+			? QString()
+			: QChar('\t') + sequence.toString(QKeySequence::NativeText);
+		const auto action = new QAction(lang(key) + add, submenu);
+		connect(action, &QAction::triggered, this, callback);
+		action->setDisabled(disabled);
+		submenu->addAction(action);
+	};
+	const auto addtag = [&](
+			LangKey key,
+			QKeySequence sequence,
+			const QString &tag) {
+		const auto disabled = (fullTag == tag)
+			|| (fullTag == kTagPre && tag == kTagCode);
+		add(key, sequence, (fullTag == tag), [=] {
+			toggleSelectionMarkdown(tag);
+		});
+	};
+	//const auto addlink = [&] {
+	//	add(lng_menu_formatting_link, QKeySequence("ctrl+k"), false, [=] {
+	//		createMarkdownLink();
+	//	});
+	//};
+	const auto addclear = [&] {
+		add(lng_menu_formatting_clear, kClearFormatSequence, !hasTags, [=] {
+			clearSelectionMarkdown();
+		});
+	};
+	addtag(lng_menu_formatting_bold, QKeySequence::Bold, kTagBold);
+	addtag(lng_menu_formatting_italic, QKeySequence::Italic, kTagItalic);
+
+	addtag(lng_menu_formatting_monospace, kMonospaceSequence, kTagCode);
+
+	//submenu->addSeparator();
+	//addlink();
+
+	submenu->addSeparator();
+	addclear();
+}
+
+void InputField::addMarkdownMenuAction(
+		not_null<QMenu*> menu,
+		not_null<QAction*> action) {
+	const auto actions = menu->actions();
+	const auto before = [&] {
+		auto seenAfter = false;
+		for (const auto action : actions) {
+			if (seenAfter) {
+				return action;
+			} else if (action->objectName() == qstr("edit-delete")) {
+				seenAfter = true;
+			}
+		}
+		return (QAction*)nullptr;
+	}();
+	menu->insertSeparator(before);
+	menu->insertAction(before, action);
 }
 
 void InputField::dropEventInner(QDropEvent *e) {
