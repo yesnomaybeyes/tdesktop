@@ -572,7 +572,7 @@ void PeerMenuShareContactBox(not_null<UserData*> user) {
 
 QPointer<Ui::RpWidget> ShowForwardMessagesBox(
 		MessageIdsList &&items,
-		base::lambda_once<void()> &&successCallback) {
+		FnMut<void()> &&successCallback) {
 	const auto weak = std::make_shared<QPointer<PeerListBox>>();
 	auto callback = [
 		ids = std::move(items),
@@ -691,7 +691,7 @@ void PeerMenuAddMuteAction(
 //		callback);
 //}
 
-base::lambda<void()> ClearHistoryHandler(not_null<PeerData*> peer) {
+Fn<void()> ClearHistoryHandler(not_null<PeerData*> peer) {
 	return [peer] {
 		const auto weak = std::make_shared<QPointer<ConfirmBox>>();
 		const auto text = peer->isSelf()
@@ -715,13 +715,13 @@ base::lambda<void()> ClearHistoryHandler(not_null<PeerData*> peer) {
 	};
 }
 
-base::lambda<void()> GoToFirstMessageHandler(not_null<PeerData*> peer) {
+Fn<void()> GoToFirstMessageHandler(not_null<PeerData*> peer) {
 	return [peer] {
 		App::main()->ui_showPeerHistory(peer->id, Window::SectionShow::Way::ClearStack, MsgId(1));
 	};
 }
 
-base::lambda<void()> DeleteAndLeaveHandler(not_null<PeerData*> peer) {
+Fn<void()> DeleteAndLeaveHandler(not_null<PeerData*> peer) {
 	return [peer] {
 		const auto warningText = peer->isSelf()
 			? lang(lng_sure_delete_saved_messages)
