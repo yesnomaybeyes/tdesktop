@@ -1,7 +1,8 @@
-image: Visual Studio 2017
+image: Previous Visual Studio 2017
 clone_folder: C:\TBuild\tdesktop
 test: off
 deploy: off
+configuration: Release
 
 environment:
   matrix:
@@ -17,7 +18,5 @@ build:
   project: Telegram\Telegram.sln
 
 artifacts:
-  - path: out\Debug\Telegram.exe
-    name: Telegram_debug.exe
-  - path: out\Debug\Telegram.exe.pdb
-    name: Telegram_debug.exe.pdb
+  - path: out\Release\Telegram.exe
+    name: Telegram.exe
