@@ -4094,7 +4094,9 @@ void ApiWrap::sendFiles(
 		TextWithTags &&caption,
 		std::shared_ptr<SendingAlbum> album,
 		const SendOptions &options) {
-	if (list.files.size() > 1 && !caption.text.isEmpty()) {
+	bool firstFile = true;
+
+	if (list.files.size() > 1 && !caption.text.isEmpty() && !album) {
 		auto message = MessageToSend(options.history);
 		message.textWithTags = std::move(caption);
 		message.replyTo = options.replyTo;
@@ -4110,6 +4112,9 @@ void ApiWrap::sendFiles(
 	auto tasks = std::vector<std::unique_ptr<Task>>();
 	tasks.reserve(list.files.size());
 	for (auto &file : list.files) {
+		if (!firstFile) {
+			caption = TextWithTags();
+		}
 		if (album) {
 			switch (file.type) {
 			case Storage::PreparedFile::AlbumType::Photo:
@@ -4129,6 +4134,7 @@ void ApiWrap::sendFiles(
 			to,
 			caption,
 			album));
+		firstFile = false;
 	}
 	if (album) {
 		_sendingAlbums.emplace(album->groupId, album);
