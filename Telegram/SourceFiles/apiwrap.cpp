@@ -4094,8 +4094,6 @@ void ApiWrap::sendFiles(
 		TextWithTags &&caption,
 		std::shared_ptr<SendingAlbum> album,
 		const SendOptions &options) {
-	bool firstFile = true;
-
 	if (list.files.size() > 1 && !caption.text.isEmpty() && !album) {
 		auto message = MessageToSend(options.history);
 		message.textWithTags = std::move(caption);
@@ -4111,6 +4109,7 @@ void ApiWrap::sendFiles(
 	}
 	auto tasks = std::vector<std::unique_ptr<Task>>();
 	tasks.reserve(list.files.size());
+	bool firstFile = true;
 	for (auto &file : list.files) {
 		if (!firstFile) {
 			caption = TextWithTags();
