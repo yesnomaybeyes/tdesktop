@@ -1325,7 +1325,7 @@ Image *getImage(const MTPDwebDocument &document) {
 	auto filesize = 0; // document.vsize.v;
 	return getImage(
 		WebFileLocation(
-			document.vdc_id.v,
+			Global::WebFileDcId(),
 			document.vurl.v,
 			document.vaccess_hash.v),
 		size.width(),
@@ -1353,7 +1353,7 @@ Image *getImage(const MTPDwebDocument &document, QSize box) {
 	auto filesize = 0; // document.vsize.v;
 	return getImage(
 		WebFileLocation(
-			document.vdc_id.v,
+			Global::WebFileDcId(),
 			document.vurl.v,
 			document.vaccess_hash.v),
 		box,
