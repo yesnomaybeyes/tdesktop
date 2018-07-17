@@ -3876,11 +3876,7 @@ void ApiWrap::sendFiles(
 	}
 	auto tasks = std::vector<std::unique_ptr<Task>>();
 	tasks.reserve(list.files.size());
-	bool firstFile = true;
 	for (auto &file : list.files) {
-		if (!firstFile) {
-			caption = TextWithTags();
-		}
 		if (album) {
 			switch (file.type) {
 			case Storage::PreparedFile::AlbumType::Photo:
@@ -3900,7 +3896,7 @@ void ApiWrap::sendFiles(
 			to,
 			caption,
 			album));
-		firstFile = false;
+		caption = TextWithTags();
 	}
 	if (album) {
 		_sendingAlbums.emplace(album->groupId, album);
