@@ -3,6 +3,7 @@ clone_folder: C:\TBuild\tdesktop
 test: off
 deploy: off
 configuration: Release
+skip_tags: true
 
 environment:
   matrix:
