@@ -24,6 +24,8 @@ Small changes make it easy to keep the fork up-to-date from official upstream.
 ![image](https://user-images.githubusercontent.com/4051126/27226969-12f38dcc-52aa-11e7-8f05-1593d7ee6715.gif)
 
 - Hotkeys for mediaview are now more handly. Cheatsheet is below. *(Added 29.06.2017.)*
+- There is no need to click button or press hotkey to submit local passcode. (Experimental feature.) *(Added 29.06.2017.)*
+![2018-08-10_01-50-45](https://user-images.githubusercontent.com/4051126/43930001-e5d1c1e8-9c3f-11e8-9ddd-ff1a60518d91.gif)
 
 - Showing date of forwarded message in title. *(Added 25.08.2017.)*  
 ![image](https://user-images.githubusercontent.com/4051126/30046488-c94deb14-9213-11e7-8b2b-397ad6dbe6f7.png)
@@ -31,7 +33,7 @@ Small changes make it easy to keep the fork up-to-date from official upstream.
 - **Increased quality of video thumbnails from 90px to the maximum size allowed by server.** *(Added 12.03.2018.)*  
 ![image](https://user-images.githubusercontent.com/4051126/43633880-44e1fab8-9713-11e8-861f-c0e48f8656ba.png)
 
-- Added button to go to first message. *(Added 16.05.2018.)* (Taked from [Telegrate](https://github.com/Sea-n/tdesktop).)  
+- Added button to go to first message. *(Added 16.05.2018.)* (Took from [Telegrate](https://github.com/Sea-n/tdesktop).)  
 ![image](https://user-images.githubusercontent.com/4051126/40266489-7a31a1c8-5b54-11e8-868e-3c9877e0d6ff.png)
 
 - Fixed album caption. Caption is added to first item of album istead of sending separated message. *(Added 19.06.2018.)* 
