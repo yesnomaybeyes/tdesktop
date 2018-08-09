@@ -146,6 +146,23 @@ void PasscodeLockWidget::submit() {
 	Messenger::Instance().unlockPasscode(); // Destroys this widget.
 }
 
+void PasscodeLockWidget::submitOnChange() {
+	if (_passcode->text().isEmpty()) {
+		_passcode->showError();
+		return;
+	}
+
+	const auto passcode = _passcode->text().toUtf8();
+	const auto correct = App::main()
+		? Local::checkPasscode(passcode)
+		: (Local::readMap(passcode) != Local::ReadMapPassNeeded);
+	if (!correct) {
+		return;
+	}
+
+	Messenger::Instance().unlockPasscode(); // Destroys this widget.
+}
+
 void PasscodeLockWidget::error() {
 	_error = lang(lng_passcode_wrong);
 	_passcode->selectAll();
@@ -158,6 +175,8 @@ void PasscodeLockWidget::changed() {
 		_error = QString();
 		update();
 	}
+
+	QTimer::singleShot(100, this, [=] { submitOnChange(); });
 }
 
 void PasscodeLockWidget::resizeEvent(QResizeEvent *e) {
