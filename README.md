@@ -40,6 +40,8 @@ Small changes make it easy to keep the fork up-to-date from official upstream.
 ![image](https://user-images.githubusercontent.com/4051126/43634882-24b239da-9716-11e8-84b7-5c515f03047b.png)
 ![image](https://user-images.githubusercontent.com/4051126/41595331-11639276-73cf-11e8-9a21-45f80803a90f.png)
 
+- Added option to remove fading of audio when it's paused/played. *(Added 10.08.2018.)*
+
 
 ## Hotkeys cheatsheet:
 
