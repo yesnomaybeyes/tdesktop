@@ -296,6 +296,8 @@ private:
 	TimeMs _suppressAllEnd = 0;
 	TimeMs _suppressSongStart = 0;
 
+	TimeMs getFadeDuration();
+
 };
 
 FileMediaInformation::Song PrepareForSending(const QString &fname, const QByteArray &data);

@@ -1117,6 +1117,8 @@ void Fader::onTimer() {
 	QMutexLocker lock(&AudioMutex);
 	if (!mixer()) return;
 
+	auto fadeDuration = getFadeDuration();
+
 	auto volumeChangedAll = false;
 	auto volumeChangedSong = false;
 	if (_suppressAll || _suppressSongAnim) {
@@ -1125,9 +1127,9 @@ void Fader::onTimer() {
 			if (ms >= _suppressAllEnd || ms < _suppressAllStart) {
 				_suppressAll = _suppressAllAnim = false;
 				_suppressVolumeAll = anim::value(1., 1.);
-			} else if (ms > _suppressAllEnd - kFadeDuration) {
+			} else if (ms > _suppressAllEnd - fadeDuration) {
 				if (_suppressVolumeAll.to() != 1.) _suppressVolumeAll.start(1.);
-				_suppressVolumeAll.update(1. - ((_suppressAllEnd - ms) / float64(kFadeDuration)), anim::linear);
+				_suppressVolumeAll.update(1. - ((_suppressAllEnd - ms) / float64(fadeDuration)), anim::linear);
 			} else if (ms >= _suppressAllStart + st::mediaPlayerSuppressDuration) {
 				if (_suppressAllAnim) {
 					_suppressVolumeAll.finish();
@@ -1141,11 +1143,11 @@ void Fader::onTimer() {
 			volumeChangedAll = (VolumeMultiplierAll != wasVolumeMultiplierAll);
 		}
 		if (_suppressSongAnim) {
-			if (ms >= _suppressSongStart + kFadeDuration) {
+			if (ms >= _suppressSongStart + fadeDuration) {
 				_suppressVolumeSong.finish();
 				_suppressSongAnim = false;
 			} else {
-				_suppressVolumeSong.update((ms - _suppressSongStart) / float64(kFadeDuration), anim::linear);
+				_suppressVolumeSong.update((ms - _suppressSongStart) / float64(fadeDuration), anim::linear);
 			}
 		}
 		auto wasVolumeMultiplierSong = VolumeMultiplierSong;
@@ -1225,6 +1227,8 @@ int32 Fader::updateOnePlayback(Mixer::Track *track, bool &hasPlaying, bool &hasF
 	} break;
 	}
 
+	auto fadeDuration = getFadeDuration();
+
 	auto fullPosition = track->bufferedPosition + positionInBuffered;
 	if (state != AL_PLAYING && !track->loading) {
 		if (fading || playing) {
@@ -1242,7 +1246,7 @@ int32 Fader::updateOnePlayback(Mixer::Track *track, bool &hasPlaying, bool &hasF
 		}
 	} else if (fading && state == AL_PLAYING) {
 		auto fadingForSamplesCount = (fullPosition - track->fadeStartPosition);
-		if (TimeMs(1000) * fadingForSamplesCount >= kFadeDuration * track->state.frequency) {
+		if (TimeMs(1000) * fadingForSamplesCount >= fadeDuration * track->state.frequency) {
 			fading = false;
 			alSourcef(track->stream.source, AL_GAIN, 1. * volumeMultiplier);
 			if (errorHappened()) return EmitError;
@@ -1265,7 +1269,7 @@ int32 Fader::updateOnePlayback(Mixer::Track *track, bool &hasPlaying, bool &hasF
 			} break;
 			}
 		} else {
-			auto newGain = TimeMs(1000) * fadingForSamplesCount / float64(kFadeDuration * track->state.frequency);
+			auto newGain = TimeMs(1000) * fadingForSamplesCount / float64(fadeDuration * track->state.frequency);
 			if (track->state.state == State::Pausing || track->state.state == State::Stopping) {
 				newGain = 1. - newGain;
 			}
@@ -1324,7 +1328,10 @@ void Fader::onUnsuppressSong() {
 void Fader::onSuppressAll(qint64 duration) {
 	_suppressAll = true;
 	auto now = getms();
-	if (_suppressAllEnd < now + kFadeDuration) {
+
+	auto fadeDuration = getFadeDuration();
+
+	if (_suppressAllEnd < now + fadeDuration) {
 		_suppressAllStart = now;
 	}
 	_suppressAllEnd = now + duration;
@@ -1340,6 +1347,13 @@ void Fader::onSongVolumeChanged() {
 void Fader::onVideoVolumeChanged() {
 	_volumeChangedVideo = true;
 	onTimer();
+}
+
+TimeMs Fader::getFadeDuration() {
+	if (!Global::AudioFade()) {
+		return TimeMs(0);
+	}
+	return kFadeDuration;
 }
 
 namespace internal {

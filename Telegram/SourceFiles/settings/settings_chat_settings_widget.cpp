@@ -172,6 +172,7 @@ void ChatSettingsWidget::createControls() {
 	createChildRow(_forkLabel, marginSkip, "", "", LabeledLink::Type::Primary, SLOT(toggleSquareAvatars()));
 	createChildRow(_forkLabel, marginSkip, "Fork Settings", "", LabeledLink::Type::Primary, SLOT(toggleSquareAvatars()));
 	createChildRow(_squareAvatars, marginSkip, "Square avatars", [this](bool) { toggleSquareAvatars(); }, Global::SquareAvatars());
+	createChildRow(_audioFade, marginSkip, "Audio fade", [this](bool) { toggleAudioFade(); }, Global::AudioFade());
 }
 
 void ChatSettingsWidget::toggleReplaceEmoji() {
@@ -192,6 +193,11 @@ void ChatSettingsWidget::toggleSuggestStickersByEmoji() {
 
 void ChatSettingsWidget::toggleSquareAvatars() {
 	Global::SetSquareAvatars(_squareAvatars->checked());
+	Local::writeUserSettings();
+}
+
+void ChatSettingsWidget::toggleAudioFade() {
+	Global::SetAudioFade(_audioFade->checked());
 	Local::writeUserSettings();
 }
 

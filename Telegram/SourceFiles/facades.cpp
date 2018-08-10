@@ -557,6 +557,7 @@ struct Data {
 	base::Observable<void> DownloadPathChanged;
 
 	bool SquareAvatars = true;
+	bool AudioFade = true;
 
 	bool ReplaceEmoji = true;
 	bool SuggestEmoji = true;
@@ -689,6 +690,7 @@ DefineVar(Global, QByteArray, DownloadPathBookmark);
 DefineRefVar(Global, base::Observable<void>, DownloadPathChanged);
 
 DefineVar(Global, bool, SquareAvatars);
+DefineVar(Global, bool, AudioFade);
 
 DefineVar(Global, bool, ReplaceEmoji);
 DefineVar(Global, bool, SuggestEmoji);

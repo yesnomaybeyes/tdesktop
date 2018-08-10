@@ -98,12 +98,14 @@ private:
 	void toggleSuggestStickersByEmoji();
 
 	void toggleSquareAvatars();
+	void toggleAudioFade();
 
 	Ui::Checkbox *_replaceEmoji = nullptr;
 	Ui::Checkbox *_suggestEmoji = nullptr;
 	Ui::Checkbox *_suggestByEmoji = nullptr;
 	Ui::Checkbox *_dontAskDownloadPath = nullptr;
 	Ui::Checkbox *_squareAvatars = nullptr;
+	Ui::Checkbox *_audioFade = nullptr;
 	LabeledLink *_forkLabel = nullptr;
 
 #ifndef OS_WIN_STORE

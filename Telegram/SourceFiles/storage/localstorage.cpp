@@ -590,6 +590,7 @@ enum {
 	dbiThemeKey = 0x54,
 	dbiTileBackground = 0x55,
 	dbiSquareAvatars = 0x56,
+	dbiAudioFade = 0x57,
 
 	dbiEncryptedWithSalt = 333,
 	dbiEncrypted = 444,
@@ -1046,6 +1047,14 @@ bool _readSetting(quint32 blockId, QDataStream &stream, int version, ReadSetting
 		if (!_checkStreamStatus(stream)) return false;
 
 		Global::SetSquareAvatars(v == 1);
+	} break;
+
+	case dbiAudioFade: {
+		qint32 v;
+		stream >> v;
+		if (!_checkStreamStatus(stream)) return false;
+
+		Global::SetAudioFade(v == 1);
 	} break;
 
 	case dbiAutoDownload: {
@@ -1971,6 +1980,7 @@ void _writeUserSettings() {
 	data.stream << quint32(dbiAutoPlay) << qint32(cAutoPlayGif() ? 1 : 0);
 	data.stream << quint32(dbiUseExternalVideoPlayer) << qint32(cUseExternalVideoPlayer());
 	data.stream << quint32(dbiSquareAvatars) << qint32(Global::SquareAvatars() ? 1 : 0);
+	data.stream << quint32(dbiAudioFade) << qint32(Global::AudioFade() ? 1 : 0);
 
 	if (!userData.isEmpty()) {
 		data.stream << quint32(dbiAuthSessionSettings) << userData;

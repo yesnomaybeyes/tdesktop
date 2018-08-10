@@ -298,6 +298,7 @@ DeclareVar(QByteArray, DownloadPathBookmark);
 DeclareRefVar(base::Observable<void>, DownloadPathChanged);
 
 DeclareVar(bool, SquareAvatars);
+DeclareVar(bool, AudioFade);
 
 DeclareVar(bool, ReplaceEmoji);
 DeclareVar(bool, SuggestEmoji);
