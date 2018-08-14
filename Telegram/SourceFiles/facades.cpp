@@ -558,6 +558,8 @@ struct Data {
 
 	bool SquareAvatars = true;
 	bool AudioFade = true;
+	QString ExternalPlayerPath;
+	bool AskExternalPlayerPath = false;
 
 	bool ReplaceEmoji = true;
 	bool SuggestEmoji = true;
@@ -691,6 +693,8 @@ DefineRefVar(Global, base::Observable<void>, DownloadPathChanged);
 
 DefineVar(Global, bool, SquareAvatars);
 DefineVar(Global, bool, AudioFade);
+DefineVar(Global, QString, ExternalPlayerPath);
+DefineVar(Global, bool, AskExternalPlayerPath);
 
 DefineVar(Global, bool, ReplaceEmoji);
 DefineVar(Global, bool, SuggestEmoji);

@@ -21,6 +21,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "boxes/connection_box.h"
 #include "boxes/confirm_box.h"
 
+#include "core/file_utilities.h"
+
 namespace Settings {
 
 LabeledLink::LabeledLink(QWidget *parent, const QString &label, const QString &text, Type type, const char *slot) : RpWidget(parent)
@@ -173,6 +175,7 @@ void ChatSettingsWidget::createControls() {
 	createChildRow(_forkLabel, marginSkip, "Fork Settings", "", LabeledLink::Type::Primary, SLOT(toggleSquareAvatars()));
 	createChildRow(_squareAvatars, marginSkip, "Square avatars", [this](bool) { toggleSquareAvatars(); }, Global::SquareAvatars());
 	createChildRow(_audioFade, marginSkip, "Audio fade", [this](bool) { toggleAudioFade(); }, Global::AudioFade());
+	createChildRow(_externalPlayerPath, marginSkip, "Open YouTube links in external player", [this](bool) { toggleAskExternalPlayerPath(); }, Global::AskExternalPlayerPath());
 }
 
 void ChatSettingsWidget::toggleReplaceEmoji() {
@@ -201,6 +204,14 @@ void ChatSettingsWidget::toggleAudioFade() {
 	Local::writeUserSettings();
 }
 
+void ChatSettingsWidget::toggleAskExternalPlayerPath() {
+	if (_externalPlayerPath->checked()) {
+		onChooseFromFile();
+	}
+	Global::SetAskExternalPlayerPath(_externalPlayerPath->checked());
+	Local::writeUserSettings();
+}
+
 void ChatSettingsWidget::onDontAskDownloadPath() {
 	Global::SetAskDownloadPath(!_dontAskDownloadPath->checked());
 	Local::writeUserSettings();
@@ -223,6 +234,37 @@ void ChatSettingsWidget::onAutomaticMediaDownloadSettings() {
 
 void ChatSettingsWidget::onManageStickerSets() {
 	Ui::show(Box<StickersBox>(StickersBox::Section::Installed));
+}
+
+void ChatSettingsWidget::onChooseFromFile() {
+	QStringList exeFile;
+	exeFile.push_back(qsl(".exe"));
+
+	auto filters = QStringList(qsl("Video Player (*.exe *") + exeFile.join(qsl(" *")) + qsl(")"));
+	filters.push_back(FileDialog::AllFilesFilter());
+	const auto callback = [=](const FileDialog::OpenResult &result) {
+		if (result.paths.isEmpty() && result.remoteContent.isEmpty()) {
+			_externalPlayerPath->setChecked(false);
+			return;
+		}
+
+		if (!result.paths.isEmpty()) {
+			auto filePath = result.paths.front();
+			Global::SetExternalPlayerPath(filePath);
+			Local::writeUserSettings();
+		}
+	};
+
+	const auto callbackFail = [=]() {
+		_externalPlayerPath->setChecked(false);
+	};
+
+	FileDialog::GetOpenPath(
+		this,
+		"Choose video player",
+		filters.join(qsl(";;")),
+		crl::guard(this, callback),
+		crl::guard(this, callbackFail));
 }
 
 } // namespace Settings

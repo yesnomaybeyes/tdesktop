@@ -116,14 +116,9 @@ void UrlClickHandler::Open(QString url, QVariant context) {
 
 	if (url.startsWith(qstr("tg://"), Qt::CaseInsensitive)) {
 		Messenger::Instance().openLocalUrl(url, context);
-	} else if (url.indexOf("youtu") >= 0) {
-		QStringList args = QApplication::arguments();
-		QRegExp rx("player=.{0,}");
-		int index = args.indexOf(rx);
-		if (index >= 0) {
-			QString path = args[index].split("=")[1];
-			path = path.replace("\\", "/");
-			//QProcess::startDetached("C:/Program Files/DAUM/PotPlayer/PotPlayerMini64.exe", QStringList() << url);
+	} else if (url.indexOf("youtu") >= 0 && Global::AskExternalPlayerPath()) {
+		QString path = Global::ExternalPlayerPath();
+		if (!path.isEmpty()) {
 			QProcess::startDetached(path, QStringList() << url);
 		} else {
 			QDesktopServices::openUrl(url);

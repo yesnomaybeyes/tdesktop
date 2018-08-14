@@ -85,6 +85,8 @@ private slots:
 	void onAutomaticMediaDownloadSettings();
 	void onManageStickerSets();
 
+	void onChooseFromFile();
+
 private:
 	enum class SendByType {
 		Enter,
@@ -99,6 +101,7 @@ private:
 
 	void toggleSquareAvatars();
 	void toggleAudioFade();
+	void toggleAskExternalPlayerPath();
 
 	Ui::Checkbox *_replaceEmoji = nullptr;
 	Ui::Checkbox *_suggestEmoji = nullptr;
@@ -107,6 +110,7 @@ private:
 	Ui::Checkbox *_squareAvatars = nullptr;
 	Ui::Checkbox *_audioFade = nullptr;
 	LabeledLink *_forkLabel = nullptr;
+	Ui::Checkbox *_externalPlayerPath = nullptr;
 
 #ifndef OS_WIN_STORE
 	Ui::SlideWrap<DownloadPathState> *_downloadPath = nullptr;

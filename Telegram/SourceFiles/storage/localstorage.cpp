@@ -591,6 +591,8 @@ enum {
 	dbiTileBackground = 0x55,
 	dbiSquareAvatars = 0x56,
 	dbiAudioFade = 0x57,
+	dbiExternalPlayerPath = 0x58,
+	dbiAskExternalPlayerPath = 0x59,
 
 	dbiEncryptedWithSalt = 333,
 	dbiEncrypted = 444,
@@ -1055,6 +1057,22 @@ bool _readSetting(quint32 blockId, QDataStream &stream, int version, ReadSetting
 		if (!_checkStreamStatus(stream)) return false;
 
 		Global::SetAudioFade(v == 1);
+	} break;
+
+	case dbiExternalPlayerPath: {
+		QString v;
+		stream >> v;
+		if (!_checkStreamStatus(stream)) return false;
+
+		Global::SetExternalPlayerPath(v);
+	} break;
+
+	case dbiAskExternalPlayerPath: {
+		qint32 v;
+		stream >> v;
+		if (!_checkStreamStatus(stream)) return false;
+
+		Global::SetAskExternalPlayerPath(v == 1);
 	} break;
 
 	case dbiAutoDownload: {
@@ -1951,6 +1969,8 @@ void _writeUserSettings() {
 		size += sizeof(quint32) + Serialize::bytearraySize(userData);
 	}
 
+	size += sizeof(quint32) + Serialize::stringSize(Global::ExternalPlayerPath());
+
 	EncryptedDescriptor data(size);
 	data.stream << quint32(dbiSendKey) << qint32(cCtrlEnter() ? dbiskCtrlEnter : dbiskEnter);
 	data.stream
@@ -1981,6 +2001,8 @@ void _writeUserSettings() {
 	data.stream << quint32(dbiUseExternalVideoPlayer) << qint32(cUseExternalVideoPlayer());
 	data.stream << quint32(dbiSquareAvatars) << qint32(Global::SquareAvatars() ? 1 : 0);
 	data.stream << quint32(dbiAudioFade) << qint32(Global::AudioFade() ? 1 : 0);
+	data.stream << quint32(dbiAskExternalPlayerPath) << qint32(Global::AskExternalPlayerPath() ? 1 : 0);
+	data.stream << quint32(dbiExternalPlayerPath) << Global::ExternalPlayerPath();
 
 	if (!userData.isEmpty()) {
 		data.stream << quint32(dbiAuthSessionSettings) << userData;
