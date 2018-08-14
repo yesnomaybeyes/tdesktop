@@ -1246,7 +1246,6 @@ void HistoryDocument::createComponents(bool caption) {
 	} else {
 		mask |= HistoryDocumentNamed::Bit();
 		if (!_data->isSong()
-			&& !documentIsExecutableName(_data->filename())
 			&& !_data->thumb->isNull()
 			&& _data->thumb->width()
 			&& _data->thumb->height()) {
