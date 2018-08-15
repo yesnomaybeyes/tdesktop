@@ -173,7 +173,7 @@ void ChatSettingsWidget::createControls() {
 
 	createChildRow(_forkLabel, marginSkip, "", "", LabeledLink::Type::Primary, SLOT(toggleSquareAvatars()));
 	createChildRow(_forkLabel, marginSkip, "Fork Settings", "", LabeledLink::Type::Primary, SLOT(toggleSquareAvatars()));
-	createChildRow(_squareAvatars, marginSkip, "Square avatars", [this](bool) { toggleSquareAvatars(); }, Global::SquareAvatars());
+	createChildRow(_squareAvatars, marginSkip, "Square avatars (Automatically restart).", [this](bool) { toggleSquareAvatars(); }, Global::SquareAvatars());
 	createChildRow(_audioFade, marginSkip, "Audio fade", [this](bool) { toggleAudioFade(); }, Global::AudioFade());
 	createChildRow(_externalPlayerPath, marginSkip, "Open YouTube links in external player", [this](bool) { toggleAskExternalPlayerPath(); }, Global::AskExternalPlayerPath());
 }
@@ -197,6 +197,7 @@ void ChatSettingsWidget::toggleSuggestStickersByEmoji() {
 void ChatSettingsWidget::toggleSquareAvatars() {
 	Global::SetSquareAvatars(_squareAvatars->checked());
 	Local::writeUserSettings();
+	App::restart();
 }
 
 void ChatSettingsWidget::toggleAudioFade() {
