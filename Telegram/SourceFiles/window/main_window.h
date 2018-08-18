@@ -21,6 +21,7 @@ class TitleWidget;
 struct TermsLock;
 
 QImage LoadLogo();
+QImage LoadLogoSquare();
 QImage LoadLogoNoMargin();
 QIcon CreateIcon();
 

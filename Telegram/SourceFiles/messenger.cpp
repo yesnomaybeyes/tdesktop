@@ -130,6 +130,13 @@ Messenger::Messenger(not_null<Core::Launcher*> launcher)
 	// Create mime database, so it won't be slow later.
 	QMimeDatabase().mimeTypeForName(qsl("text/plain"));
 
+	Local::ReadMapState state = Local::readMap(QByteArray());
+
+	// Moved readMap to place before creating main window to change tray icon.
+	if (Global::SquareAvatars()) {
+		_logoNoMargin = _logo = Window::LoadLogoSquare();
+	}
+
 	_window = std::make_unique<MainWindow>();
 	_window->init();
 
@@ -147,7 +154,6 @@ Messenger::Messenger(not_null<Core::Launcher*> launcher)
 	initLocationManager();
 	App::initMedia();
 
-	Local::ReadMapState state = Local::readMap(QByteArray());
 	if (state == Local::ReadMapPassNeeded) {
 		Global::SetLocalPasscode(true);
 		Global::RefLocalPasscodeChanged().notify();
