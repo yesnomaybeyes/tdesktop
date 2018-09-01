@@ -126,6 +126,13 @@ void Uploader::uploadMedia(const FullMsgId &msgId, const SendMediaReady &media) 
 			: Auth().data().document(media.document, media.photoThumbs.begin().value());
 		if (!media.data.isEmpty()) {
 			document->setData(media.data);
+			if (document->saveToCache()) {
+				Auth().data().cache().put(
+					document->cacheKey(),
+					Storage::Cache::Database::TaggedValue(
+						base::duplicate(media.data),
+						document->cacheTag()));
+			}
 		}
 		if (!media.file.isEmpty()) {
 			document->setLocation(FileLocation(media.file));
@@ -148,6 +155,13 @@ void Uploader::upload(
 		document->uploadingData = std::make_unique<Data::UploadState>(document->size);
 		if (!file->content.isEmpty()) {
 			document->setData(file->content);
+			if (document->saveToCache()) {
+				Auth().data().cache().put(
+					document->cacheKey(),
+					Storage::Cache::Database::TaggedValue(
+						base::duplicate(file->content),
+						document->cacheTag()));
+			}
 		}
 		if (!file->filepath.isEmpty()) {
 			document->setLocation(FileLocation(file->filepath));
