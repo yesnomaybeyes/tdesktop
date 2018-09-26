@@ -33,7 +33,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "mediaview.h"
 #include "storage/localstorage.h"
 #include "apiwrap.h"
-#include "settings/settings_widget.h"
+#include "settings/settings_intro.h"
 #include "platform/platform_notifications_manager.h"
 #include "window/layer_widget.h"
 #include "window/notifications_manager.h"
@@ -79,7 +79,9 @@ MainWindow::MainWindow() {
 
 	setLocale(QLocale(QLocale::English, QLocale::UnitedStates));
 
-	subscribe(Global::RefSelfChanged(), [this] { updateGlobalMenu(); });
+	subscribe(Messenger::Instance().authSessionChanged(), [this] {
+		updateGlobalMenu();
+	});
 	subscribe(Window::Theme::Background(), [this](const Window::Theme::BackgroundUpdate &data) {
 		themeUpdated(data);
 	});
@@ -277,7 +279,7 @@ void MainWindow::sendServiceHistoryRequest() {
 		_main->rpcFail(&MainWidget::serviceHistoryFail));
 }
 
-void MainWindow::setupMain(const MTPUser *self) {
+void MainWindow::setupMain() {
 	Expects(AuthSession::Exists());
 
 	auto animated = (_intro || _passcodeLock);
@@ -294,7 +296,7 @@ void MainWindow::setupMain(const MTPUser *self) {
 	} else {
 		_main->activate();
 	}
-	_main->start(self);
+	_main->start();
 
 	fixOrder();
 }
@@ -302,7 +304,11 @@ void MainWindow::setupMain(const MTPUser *self) {
 void MainWindow::showSettings() {
 	if (isHidden()) showFromTray();
 
-	controller()->showSpecialLayer(Box<Settings::Widget>());
+	if (const auto controller = this->controller()) {
+		controller->showSettings();
+	} else {
+		showSpecialLayer(Box<Settings::LayerWidget>(), anim::type::normal);
+	}
 }
 
 void MainWindow::showSpecialLayer(
@@ -364,6 +370,12 @@ void MainWindow::ui_hideSettingsAndLayer(anim::type animated) {
 		if (animated == anim::type::instant) {
 			destroyLayerDelayed();
 		}
+	}
+}
+
+void MainWindow::ui_removeLayerBlackout() {
+	if (_layer) {
+		_layer->removeBodyCache();
 	}
 }
 
@@ -595,7 +607,7 @@ void MainWindow::updateTrayMenu(bool force) {
 void MainWindow::onShowAddContact() {
 	if (isHidden()) showFromTray();
 
-	if (App::self()) {
+	if (AuthSession::Exists()) {
 		Ui::show(Box<AddContactBox>(), LayerOption::KeepOther);
 	}
 }
@@ -603,7 +615,7 @@ void MainWindow::onShowAddContact() {
 void MainWindow::onShowNewGroup() {
 	if (isHidden()) showFromTray();
 
-	if (App::self()) {
+	if (AuthSession::Exists()) {
 		Ui::show(
 			Box<GroupInfoBox>(CreatingGroupGroup, false),
 			LayerOption::KeepOther);

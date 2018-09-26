@@ -922,8 +922,8 @@ void Image::restore() const {
 	_forgot = false;
 }
 
-base::optional<Storage::Cache::Key> Image::cacheKey() const {
-	return base::none;
+std::optional<Storage::Cache::Key> Image::cacheKey() const {
+	return std::nullopt;
 }
 
 void Image::invalidateSizeCache() const {
@@ -1000,7 +1000,7 @@ void RemoteImage::destroyLoaderDelayed(FileLoader *newValue) const {
 void RemoteImage::loadLocal() {
 	if (loaded() || amLoading()) return;
 
-	_loader = createLoader(base::none, LoadFromLocalOnly, true);
+	_loader = createLoader(std::nullopt, LoadFromLocalOnly, true);
 	if (_loader) _loader->start();
 }
 
@@ -1143,9 +1143,9 @@ StorageImage::StorageImage(
 	setImageBytes(bytes);
 }
 
-base::optional<Storage::Cache::Key> StorageImage::cacheKey() const {
+std::optional<Storage::Cache::Key> StorageImage::cacheKey() const {
 	return _location.isNull()
-		? base::none
+		? std::nullopt
 		: base::make_optional(Data::StorageCacheKey(_location));
 }
 
@@ -1200,9 +1200,9 @@ WebFileImage::WebFileImage(
 , _size(size) {
 }
 
-base::optional<Storage::Cache::Key> WebFileImage::cacheKey() const {
+std::optional<Storage::Cache::Key> WebFileImage::cacheKey() const {
 	return _location.isNull()
-		? base::none
+		? std::nullopt
 		: base::make_optional(Data::WebDocumentCacheKey(_location));
 }
 
@@ -1344,7 +1344,7 @@ WebImage::WebImage(const QString &url, int width, int height)
 , _height(height) {
 }
 
-base::optional<Storage::Cache::Key> WebImage::cacheKey() const {
+std::optional<Storage::Cache::Key> WebImage::cacheKey() const {
 	return Data::UrlCacheKey(_url);
 }
 
