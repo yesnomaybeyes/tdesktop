@@ -612,6 +612,8 @@ rpl::producer<QString> TitleValue(
 				return lng_settings_advanced;
 			case Section::SettingsType::Chat:
 				return lng_settings_section_chat_settings;
+			case Section::SettingsType::Fork:
+				return lng_settings_section_fork;
 			}
 			Unexpected("Bad settings type in Info::TitleValue()");
 		}

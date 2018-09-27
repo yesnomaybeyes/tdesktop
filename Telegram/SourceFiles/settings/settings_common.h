@@ -38,6 +38,7 @@ enum class Type {
 	PrivacySecurity,
 	Advanced,
 	Chat,
+	Fork,
 };
 
 using Button = Info::Profile::Button;
