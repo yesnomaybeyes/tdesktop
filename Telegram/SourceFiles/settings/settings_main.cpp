@@ -81,7 +81,7 @@ void SetupSections(
 	addSection(
 		lng_settings_section_fork,
 		Type::Fork,
-		&st::settingsIconGeneral);
+		&st::settingsIconFork);
 
 	SetupLanguageButton(container);
 

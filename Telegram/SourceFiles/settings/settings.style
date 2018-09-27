@@ -53,6 +53,7 @@ settingsIconPrivacySecurity: icon {{ "settings_privacy_security", menuIconFg }};
 settingsIconLanguage: icon {{ "settings_language", menuIconFg }};
 settingsIconInterfaceScale: icon {{ "settings_interface_scale", menuIconFg }};
 settingsIconFaq: icon {{ "settings_faq", menuIconFg }};
+settingsIconFork: icon {{ "settings_fork", menuIconFg }};
 
 settingsSetPhotoSkip: 7px;
 
