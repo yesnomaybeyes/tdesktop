@@ -595,10 +595,12 @@ enum {
 	dbiTileBackground = 0x55,
 	dbiCacheSettings = 0x56,
 	dbiAnimationsDisabled = 0x57,
-	dbiSquareAvatars = 0x58,
-	dbiAudioFade = 0x59,
-	dbiExternalPlayerPath = 0x60,
-	dbiAskExternalPlayerPath = 0x61,
+
+	// Fork settings.
+	dbiSquareAvatars = 0x91,
+	dbiAudioFade = 0x92,
+	dbiExternalPlayerPath = 0x93,
+	dbiAskExternalPlayerPath = 0x94,
 
 	dbiEncryptedWithSalt = 333,
 	dbiEncrypted = 444,
