@@ -45,6 +45,7 @@ settingsUpdate: InfoProfileButton(infoMainButton, settingsButton) {
 settingsUpdateStatePosition: point(22px, 29px);
 settingsDividerLabelPadding: margins(22px, 10px, 22px, 19px);
 
+settingsIconFork: icon {{ "settings_fork", menuIconFg }};
 settingsIconInformation: icon {{ "settings_information", menuIconFg }};
 settingsIconNotifications: icon {{ "settings_notifications", menuIconFg }};
 settingsIconChat: icon {{ "settings_chat", menuIconFg }};
@@ -53,7 +54,8 @@ settingsIconPrivacySecurity: icon {{ "settings_privacy_security", menuIconFg }};
 settingsIconLanguage: icon {{ "settings_language", menuIconFg }};
 settingsIconInterfaceScale: icon {{ "settings_interface_scale", menuIconFg }};
 settingsIconFaq: icon {{ "settings_faq", menuIconFg }};
-settingsIconFork: icon {{ "settings_fork", menuIconFg }};
+settingsIconStickers: icon {{ "settings_stickers", menuIconFg }};
+settingsIconThemes: icon {{ "settings_themes", menuIconFg }};
 
 settingsSetPhotoSkip: 7px;
 
@@ -65,7 +67,6 @@ settingsLink: boxLinkButton;
 settingsAdvancedNotificationsPadding: margins(22px, 20px, 10px, 10px);
 settingsLinkLabel: defaultFlatLabel;
 settingsCheckboxesSkip: 12px;
-settingsStickersEmojiPadding: 17px;
 
 settingsSendType: settingsCheckbox;
 settingsSendTypePadding: margins(22px, 5px, 10px, 5px);
@@ -154,6 +155,13 @@ settingsBioLabelPadding: margins(22px, 11px, 22px, 0px);
 
 settingsPrivacyEditLabelPadding: margins(22px, 11px, 22px, 11px);
 
+settingsChatButton: InfoProfileButton(settingsSectionButton) {
+	padding: margins(59px, 13px, 22px, 11px);
+}
+settingsChatIconLeft: 19px;
+
+settingsThemesTopSkip: 10px;
+settingsThemesBottomSkip: 8px;
 settingsTheme: Checkbox(defaultCheckbox) {
 	textFg: windowSubTextFg;
 	textFgActive: windowActiveTextFg;
@@ -161,7 +169,7 @@ settingsTheme: Checkbox(defaultCheckbox) {
 	width: 80px;
 	margin: margins(0px, 0px, 0px, 0px);
 
-	textPosition: point(0px, 88px);
+	textPosition: point(0px, 86px);
 	checkPosition: point(0px, 0px);
 
 	style: defaultTextStyle;
