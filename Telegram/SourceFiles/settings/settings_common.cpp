@@ -172,7 +172,7 @@ void AddSubsectionTitle(
 
 void FillMenu(Fn<void(Type)> showOther, MenuCallback addAction) {
 	addAction(
-		lang(lng_settings_edit_info),
+		lang(lng_settings_information),
 		[=] { showOther(Type::Information); });
 	addAction(
 		lang(lng_settings_logout),
