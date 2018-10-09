@@ -96,6 +96,9 @@ void CreateRightLabel(
 	const style::InfoProfileButton &st,
 	LangKey buttonText);
 void AddSubsectionTitle(
+	not_null<Ui::VerticalLayout*> container,
+	rpl::producer<QString> text);
+void AddSubsectionTitle(
 	not_null<Ui::VerticalLayout*> conatiner,
 	LangKey text);
 

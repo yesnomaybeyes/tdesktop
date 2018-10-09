@@ -24,6 +24,7 @@ QImage LoadLogo();
 QImage LoadLogoSquare();
 QImage LoadLogoNoMargin();
 QIcon CreateIcon();
+void ConvertIconToBlack(QImage &image);
 
 class MainWindow : public Ui::RpWidget, protected base::Subscriber {
 	Q_OBJECT
@@ -166,6 +167,7 @@ private:
 	QPointer<BoxContent> _termsBox;
 
 	QIcon _icon;
+	bool _usingSupportIcon = false;
 	QString _titleText;
 
 	bool _isActive = false;
