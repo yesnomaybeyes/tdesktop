@@ -495,7 +495,7 @@ const QPixmap &Image::pix(
 
 	if (w <= 0 || !width() || !height()) {
         w = width();
-    } else if (cRetina()) {
+    } else {
         w *= cIntRetinaFactor();
         h *= cIntRetinaFactor();
     }
@@ -504,7 +504,7 @@ const QPixmap &Image::pix(
 	auto i = _sizesCache.constFind(k);
 	if (i == _sizesCache.cend()) {
 		auto p = pixNoCache(origin, w, h, options);
-        if (cRetina()) p.setDevicePixelRatio(cRetinaFactor());
+		p.setDevicePixelRatio(cRetinaFactor());
 		i = _sizesCache.insert(k, p);
 		if (!p.isNull()) {
 			globalAcquiredSize += int64(p.width()) * p.height() * 4;
@@ -523,7 +523,7 @@ const QPixmap &Image::pixRounded(
 
 	if (w <= 0 || !width() || !height()) {
 		w = width();
-	} else if (cRetina()) {
+	} else {
 		w *= cIntRetinaFactor();
 		h *= cIntRetinaFactor();
 	}
@@ -545,7 +545,7 @@ const QPixmap &Image::pixRounded(
 	auto i = _sizesCache.constFind(k);
 	if (i == _sizesCache.cend()) {
 		auto p = pixNoCache(origin, w, h, options);
-		if (cRetina()) p.setDevicePixelRatio(cRetinaFactor());
+		p.setDevicePixelRatio(cRetinaFactor());
 		i = _sizesCache.insert(k, p);
 		if (!p.isNull()) {
 			globalAcquiredSize += int64(p.width()) * p.height() * 4;
@@ -562,7 +562,7 @@ const QPixmap &Image::pixCircled(
 
 	if (w <= 0 || !width() || !height()) {
 		w = width();
-	} else if (cRetina()) {
+	} else {
 		w *= cIntRetinaFactor();
 		h *= cIntRetinaFactor();
 	}
@@ -571,7 +571,7 @@ const QPixmap &Image::pixCircled(
 	auto i = _sizesCache.constFind(k);
 	if (i == _sizesCache.cend()) {
 		auto p = pixNoCache(origin, w, h, options);
-		if (cRetina()) p.setDevicePixelRatio(cRetinaFactor());
+		p.setDevicePixelRatio(cRetinaFactor());
 		i = _sizesCache.insert(k, p);
 		if (!p.isNull()) {
 			globalAcquiredSize += int64(p.width()) * p.height() * 4;
@@ -588,7 +588,7 @@ const QPixmap &Image::pixBlurredCircled(
 
 	if (w <= 0 || !width() || !height()) {
 		w = width();
-	} else if (cRetina()) {
+	} else {
 		w *= cIntRetinaFactor();
 		h *= cIntRetinaFactor();
 	}
@@ -597,7 +597,7 @@ const QPixmap &Image::pixBlurredCircled(
 	auto i = _sizesCache.constFind(k);
 	if (i == _sizesCache.cend()) {
 		auto p = pixNoCache(origin, w, h, options);
-		if (cRetina()) p.setDevicePixelRatio(cRetinaFactor());
+		p.setDevicePixelRatio(cRetinaFactor());
 		i = _sizesCache.insert(k, p);
 		if (!p.isNull()) {
 			globalAcquiredSize += int64(p.width()) * p.height() * 4;
@@ -614,7 +614,7 @@ const QPixmap &Image::pixBlurred(
 
 	if (w <= 0 || !width() || !height()) {
 		w = width() * cIntRetinaFactor();
-	} else if (cRetina()) {
+	} else {
 		w *= cIntRetinaFactor();
 		h *= cIntRetinaFactor();
 	}
@@ -623,7 +623,7 @@ const QPixmap &Image::pixBlurred(
 	auto i = _sizesCache.constFind(k);
 	if (i == _sizesCache.cend()) {
 		auto p = pixNoCache(origin, w, h, options);
-		if (cRetina()) p.setDevicePixelRatio(cRetinaFactor());
+		p.setDevicePixelRatio(cRetinaFactor());
 		i = _sizesCache.insert(k, p);
 		if (!p.isNull()) {
 			globalAcquiredSize += int64(p.width()) * p.height() * 4;
@@ -641,7 +641,7 @@ const QPixmap &Image::pixColored(
 
 	if (w <= 0 || !width() || !height()) {
 		w = width() * cIntRetinaFactor();
-	} else if (cRetina()) {
+	} else {
 		w *= cIntRetinaFactor();
 		h *= cIntRetinaFactor();
 	}
@@ -650,7 +650,7 @@ const QPixmap &Image::pixColored(
 	auto i = _sizesCache.constFind(k);
 	if (i == _sizesCache.cend()) {
 		auto p = pixColoredNoCache(origin, add, w, h, true);
-		if (cRetina()) p.setDevicePixelRatio(cRetinaFactor());
+		p.setDevicePixelRatio(cRetinaFactor());
 		i = _sizesCache.insert(k, p);
 		if (!p.isNull()) {
 			globalAcquiredSize += int64(p.width()) * p.height() * 4;
@@ -668,7 +668,7 @@ const QPixmap &Image::pixBlurredColored(
 
 	if (w <= 0 || !width() || !height()) {
 		w = width() * cIntRetinaFactor();
-	} else if (cRetina()) {
+	} else {
 		w *= cIntRetinaFactor();
 		h *= cIntRetinaFactor();
 	}
@@ -677,7 +677,7 @@ const QPixmap &Image::pixBlurredColored(
 	auto i = _sizesCache.constFind(k);
 	if (i == _sizesCache.cend()) {
 		auto p = pixBlurredColoredNoCache(origin, add, w, h);
-		if (cRetina()) p.setDevicePixelRatio(cRetinaFactor());
+		p.setDevicePixelRatio(cRetinaFactor());
 		i = _sizesCache.insert(k, p);
 		if (!p.isNull()) {
 			globalAcquiredSize += int64(p.width()) * p.height() * 4;
@@ -699,7 +699,7 @@ const QPixmap &Image::pixSingle(
 
 	if (w <= 0 || !width() || !height()) {
 		w = width() * cIntRetinaFactor();
-	} else if (cRetina()) {
+	} else {
 		w *= cIntRetinaFactor();
 		h *= cIntRetinaFactor();
 	}
@@ -729,7 +729,7 @@ const QPixmap &Image::pixSingle(
 			globalAcquiredSize -= int64(i->width()) * i->height() * 4;
 		}
 		auto p = pixNoCache(origin, w, h, options, outerw, outerh, colored);
-		if (cRetina()) p.setDevicePixelRatio(cRetinaFactor());
+		p.setDevicePixelRatio(cRetinaFactor());
 		i = _sizesCache.insert(k, p);
 		if (!p.isNull()) {
 			globalAcquiredSize += int64(p.width()) * p.height() * 4;
@@ -750,7 +750,7 @@ const QPixmap &Image::pixBlurredSingle(
 
 	if (w <= 0 || !width() || !height()) {
 		w = width() * cIntRetinaFactor();
-	} else if (cRetina()) {
+	} else {
 		w *= cIntRetinaFactor();
 		h *= cIntRetinaFactor();
 	}
@@ -777,7 +777,7 @@ const QPixmap &Image::pixBlurredSingle(
 			globalAcquiredSize -= int64(i->width()) * i->height() * 4;
 		}
 		auto p = pixNoCache(origin, w, h, options, outerw, outerh);
-		if (cRetina()) p.setDevicePixelRatio(cRetinaFactor());
+		p.setDevicePixelRatio(cRetinaFactor());
 		i = _sizesCache.insert(k, p);
 		if (!p.isNull()) {
 			globalAcquiredSize += int64(p.width()) * p.height() * 4;
@@ -1250,11 +1250,11 @@ std::optional<Storage::Cache::Key> GeoPointImage::cacheKey() const {
 }
 
 int GeoPointImage::countWidth() const {
-	return _location.width;
+	return _location.width * _location.scale;
 }
 
 int GeoPointImage::countHeight() const {
-	return _location.height;
+	return _location.height * _location.scale;
 }
 
 void GeoPointImage::setInformation(int size, int width, int height) {

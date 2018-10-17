@@ -14,6 +14,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "core/file_utilities.h"
 #include "ui/toast/toast.h"
 #include "ui/special_buttons.h"
+#include "ui/emoji_config.h"
 #include "ui/widgets/buttons.h"
 #include "ui/widgets/inner_dropdown.h"
 #include "ui/widgets/dropdown_menu.h"
@@ -795,10 +796,7 @@ void HistoryWidget::supportShareContact(Support::Contact contact) {
 	if (!_history) {
 		return;
 	}
-	const auto commented = !contact.comment.isEmpty();
-	if (commented) {
-		supportInsertText(contact.comment);
-	}
+	supportInsertText(contact.comment);
 	contact.comment = _field->getLastText();
 
 	const auto submit = [=](Qt::KeyboardModifiers modifiers) {
@@ -5522,7 +5520,7 @@ void HistoryWidget::replyToNextMessage() {
 
 void HistoryWidget::onFieldTabbed() {
 	if (_supportAutocomplete) {
-		_supportAutocomplete->activate();
+		_supportAutocomplete->activate(_field.data());
 	} else if (!_fieldAutocomplete->isHidden()) {
 		_fieldAutocomplete->chooseSelected(FieldAutocomplete::ChooseMethod::ByTab);
 	}
