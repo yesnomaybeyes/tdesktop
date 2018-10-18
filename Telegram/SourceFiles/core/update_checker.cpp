@@ -391,6 +391,7 @@ bool UnpackUpdate(const QString &filepath) {
 		return false;
 	}
 
+	/*
 	RSA *pbKey = PEM_read_bio_RSAPublicKey(BIO_new_mem_buf(const_cast<char*>(AppBetaVersion ? UpdatesPublicBetaKey : UpdatesPublicKey), -1), 0, 0, 0);
 	if (!pbKey) {
 		LOG(("Update Error: cant read public rsa key!"));
@@ -412,6 +413,7 @@ bool UnpackUpdate(const QString &filepath) {
 		}
 	}
 	RSA_free(pbKey);
+	*/
 
 	QByteArray uncompressed;
 
