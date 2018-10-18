@@ -428,7 +428,7 @@ int main(int argc, char *argv[])
 		cout << "Bad signature length: " << siglen << "\n";
 		return -1;
 	}
-
+	/*
 	cout << "Checking signature..\n";
 	RSA *pbKey = PEM_read_bio_RSAPublicKey(BIO_new_mem_buf(const_cast<char*>((BetaChannel || AlphaVersion) ? PublicBetaKey : PublicKey), -1), 0, 0, 0);
 	if (!pbKey) {
@@ -442,6 +442,7 @@ int main(int argc, char *argv[])
 	}
 	cout << "Signature verified!\n";
 	RSA_free(pbKey);
+	*/
 #ifdef Q_OS_WIN
 	QString outName(QString("tupdate%1").arg(AlphaVersion ? AlphaVersion : version));
 #elif defined Q_OS_MAC
@@ -481,6 +482,7 @@ int main(int argc, char *argv[])
 }
 
 QString countAlphaVersionSignature(quint64 version) { // duplicated in autoupdater.cpp
+	/*
 	QByteArray cAlphaPrivateKey(AlphaPrivateKey);
 	if (cAlphaPrivateKey.isEmpty()) {
 		cout << "Error: Trying to count alpha version signature without alpha private key!\n";
@@ -523,4 +525,6 @@ QString countAlphaVersionSignature(quint64 version) { // duplicated in autoupdat
 	signature = signature.toBase64(QByteArray::Base64UrlEncoding | QByteArray::OmitTrailingEquals);
 	signature = signature.replace('-', '8').replace('_', 'B');
 	return QString::fromUtf8(signature.mid(19, 32));
+	*/
+	return "0";
 }
