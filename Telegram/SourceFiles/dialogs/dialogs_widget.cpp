@@ -59,7 +59,7 @@ private:
 };
 
 DialogsWidget::UpdateButton::UpdateButton(QWidget *parent) : RippleButton(parent, st::dialogsUpdateButton.ripple)
-, _text(lang(lng_update_telegram).toUpper())
+, _text(lang(lng_update_forkgram).toUpper())
 , _st(st::dialogsUpdateButton) {
 	resize(st::columnMinimalWidthLeft, _st.height);
 }
