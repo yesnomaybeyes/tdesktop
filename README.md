@@ -4,6 +4,8 @@ ForkGram is fork of official Telegram Desktop application.
 This fork does not fundamentally change the official client and adds only some useful small features.  
 Small changes make it easy to keep the fork up-to-date from official upstream.  
 
+**After 1.5 years of developing Forkgram, I finally implemented autoupdates.** *(Added 19.10.2018.)*
+
 [![Build status](https://ci.appveyor.com/api/projects/status/lnfgagykamuhuumt/branch/dev?svg=true)](https://ci.appveyor.com/project/23rd/tdesktop/branch/dev)
 
 ## Features:
