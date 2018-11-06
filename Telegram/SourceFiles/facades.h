@@ -322,7 +322,7 @@ DeclareVar(bool, NotificationsDemoIsShown);
 DeclareVar(bool, TryIPv6);
 DeclareVar(std::vector<ProxyData>, ProxiesList);
 DeclareVar(ProxyData, SelectedProxy);
-DeclareVar(bool, UseProxy);
+DeclareVar(ProxyData::Settings, ProxySettings);
 DeclareVar(bool, UseProxyForCalls);
 DeclareRefVar(base::Observable<void>, ConnectionTypeChanged);
 
