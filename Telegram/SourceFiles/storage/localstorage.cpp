@@ -598,6 +598,7 @@ enum {
 	dbiCacheSettings = 0x56,
 	dbiAnimationsDisabled = 0x57,
 	dbiScalePercent = 0x58,
+	dbiPlaybackSpeed = 0x59,
 
 	// Fork settings.
 	dbiSquareAvatars = 0x91,
@@ -1787,6 +1788,14 @@ bool _readSetting(quint32 blockId, QDataStream &stream, int version, ReadSetting
 		Global::SetVideoVolume(snap(v / 1e6, 0., 1.));
 	} break;
 
+	case dbiPlaybackSpeed: {
+		qint32 v;
+		stream >> v;
+		if (!_checkStreamStatus(stream)) return false;
+
+		Global::SetVoiceMsgPlaybackSpeed((v == 2) ? 2. : 1.);
+	} break;
+
 	default:
 	LOG(("App Error: unknown blockId in _readSetting: %1").arg(blockId));
 	return false;
@@ -2065,6 +2074,7 @@ void _writeUserSettings() {
 	if (!userData.isEmpty()) {
 		data.stream << quint32(dbiAuthSessionSettings) << userData;
 	}
+	data.stream << quint32(dbiPlaybackSpeed) << qint32(std::round(Global::VoiceMsgPlaybackSpeed()));
 
 	{
 		data.stream << quint32(dbiRecentEmoji) << recentEmojiPreloadData;

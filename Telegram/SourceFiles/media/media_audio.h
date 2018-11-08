@@ -142,6 +142,9 @@ public:
 	void setVideoVolume(float64 volume);
 	float64 getVideoVolume() const;
 
+	// Thread: Any. Locks AudioMutex.
+	void setVoicePlaybackSpeed(float64 speed);
+
 	~Mixer();
 
 private slots:
@@ -181,7 +184,7 @@ private:
 		void started();
 
 		bool isStreamCreated() const;
-		void ensureStreamCreated();
+		void ensureStreamCreated(AudioMsgId::Type type);
 
 		int getNotQueuedBufferIndex();
 
@@ -213,7 +216,7 @@ private:
 		TimeMs lastUpdateCorrectedMs = 0;
 
 	private:
-		void createStream();
+		void createStream(AudioMsgId::Type type);
 		void destroyStream();
 		void resetStream();
 
@@ -221,6 +224,8 @@ private:
 
 	// Thread: Any. Must be locked: AudioMutex.
 	void setStoppedState(Track *current, State state = State::Stopped);
+	void updatePlaybackSpeed(Track *track);
+	void updatePlaybackSpeed(Track *track, bool doubled);
 
 	Track *trackForType(AudioMsgId::Type type, int index = -1); // -1 uses currentIndex(type)
 	const Track *trackForType(AudioMsgId::Type type, int index = -1) const;
@@ -237,6 +242,7 @@ private:
 
 	QAtomicInt _volumeVideo;
 	QAtomicInt _volumeSong;
+	QAtomicInt _voicePlaybackSpeed;
 
 	friend class Fader;
 	friend class Loaders;
