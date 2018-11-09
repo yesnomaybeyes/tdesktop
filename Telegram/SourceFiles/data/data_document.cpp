@@ -41,8 +41,8 @@ Core::MediaActiveCache<DocumentData> &ActiveCache() {
 }
 
 int64 ComputeUsage(StickerData *sticker) {
-	return (sticker != nullptr && !sticker->img->isNull())
-		? sticker->img->width() * sticker->img->height() * 4
+	return (sticker != nullptr && sticker->image != nullptr)
+		? sticker->image->width() * sticker->image->height() * 4
 		: 0;
 }
 
@@ -585,19 +585,12 @@ void DocumentData::unload() {
 	// Forget thumb only when image cache limit exceeds.
 	//thumb->unload();
 	if (sticker()) {
-		if (!sticker()->img->isNull()) {
+		if (sticker()->image) {
 			ActiveCache().decrement(ComputeUsage(sticker()));
-
-			// Should be std::unique_ptr<Image>.
-			delete sticker()->img.get();
-			sticker()->img = ImagePtr();
+			sticker()->image = nullptr;
 		}
 	}
-	if (!replyPreview->isNull()) {
-		// Should be std::unique_ptr<Image>.
-		delete replyPreview.get();
-		replyPreview = ImagePtr();
-	}
+	_replyPreview = nullptr;
 	if (!_data.isEmpty()) {
 		ActiveCache().decrement(_data.size());
 		_data.clear();
@@ -740,16 +733,17 @@ bool DocumentData::loaded(FilePathResolveType type) const {
 			that->_data = _loader->bytes();
 			ActiveCache().increment(that->_data.size());
 			if (that->sticker()
-				&& that->sticker()->img->isNull()
+				&& !that->sticker()->image
 				&& !_loader->imageData().isNull()) {
-				that->sticker()->img = Images::Create(
-					_data,
-					_loader->imageFormat(),
-					_loader->imageData());
+				that->sticker()->image = std::make_unique<Image>(
+					std::make_unique<Images::LocalFileSource>(
+						QString(),
+						_data,
+						_loader->imageFormat(),
+						_loader->imageData()));
 				ActiveCache().increment(ComputeUsage(that->sticker()));
 			}
-			if (!that->_data.isEmpty()
-				|| (that->sticker() && !that->sticker()->img->isNull())) {
+			if (!that->_data.isEmpty() || that->getStickerImage()) {
 				ActiveCache().up(that);
 			}
 
@@ -1037,8 +1031,8 @@ bool DocumentData::isStickerSetInstalled() const {
 	return false;
 }
 
-ImagePtr DocumentData::makeReplyPreview(Data::FileOrigin origin) {
-	if (replyPreview->isNull() && !thumb->isNull()) {
+Image *DocumentData::getReplyPreview(Data::FileOrigin origin) {
+	if (!_replyPreview->isNull() && !thumb->isNull()) {
 		if (thumb->loaded()) {
 			int w = thumb->width(), h = thumb->height();
 			if (w <= 0) w = 1;
@@ -1048,12 +1042,15 @@ ImagePtr DocumentData::makeReplyPreview(Data::FileOrigin origin) {
 			auto options = Images::Option::Smooth | (isVideoMessage() ? Images::Option::Circled : Images::Option::None) | Images::Option::TransparentBackground;
 			auto outerSize = st::msgReplyBarSize.height();
 			auto image = thumb->pixNoCache(origin, thumbSize.width(), thumbSize.height(), options, outerSize, outerSize);
-			replyPreview = Images::Create(image.toImage(), "PNG");
+			_replyPreview = std::make_unique<Image>(
+				std::make_unique<Images::ImageSource>(
+					image.toImage(),
+					"PNG"));
 		} else {
 			thumb->load(origin);
 		}
 	}
-	return replyPreview;
+	return _replyPreview.get();
 }
 
 StickerData *DocumentData::sticker() const {
@@ -1067,15 +1064,26 @@ void DocumentData::checkSticker() {
 	if (!data) return;
 
 	automaticLoad(stickerSetOrigin(), nullptr);
-	if (data->img->isNull() && loaded()) {
+	if (!data->image && loaded()) {
 		if (_data.isEmpty()) {
 			const auto &loc = location(true);
 			if (loc.accessEnable()) {
-				data->img = Images::Create(loc.name(), "WEBP");
+				data->image = std::make_unique<Image>(
+					std::make_unique<Images::LocalFileSource>(
+						loc.name(),
+						QByteArray(),
+						"WEBP"));
 				loc.accessDisable();
 			}
 		} else {
-			data->img = Images::Create(_data, "WEBP");
+			auto format = QByteArray("WEBP");
+			auto image = App::readImage(_data, &format, false);
+			data->image = std::make_unique<Image>(
+				std::make_unique<Images::LocalFileSource>(
+					QString(),
+					_data,
+					format,
+					std::move(image)));
 		}
 		if (const auto usage = ComputeUsage(data)) {
 			ActiveCache().increment(usage);
@@ -1092,13 +1100,21 @@ void DocumentData::checkStickerThumb() {
 	}
 }
 
-ImagePtr DocumentData::getStickerThumb() {
-	if (hasGoodStickerThumb()) {
-		return thumb;
-	} else if (const auto data = sticker()) {
-		return data->img;
+Image *DocumentData::getStickerImage() {
+	checkSticker();
+	if (const auto data = sticker()) {
+		return data->image.get();
 	}
-	return ImagePtr();
+	return nullptr;
+}
+
+Image *DocumentData::getStickerThumb() {
+	if (hasGoodStickerThumb()) {
+		return thumb->isNull() ? nullptr : thumb.get();
+	} else if (const auto data = sticker()) {
+		return data->image.get();
+	}
+	return nullptr;
 }
 
 Data::FileOrigin DocumentData::stickerSetOrigin() const {
