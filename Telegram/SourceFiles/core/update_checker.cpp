@@ -1260,6 +1260,7 @@ MtpChecker::MtpChecker(QPointer<MTP::Instance> instance, bool testing)
 }
 
 void MtpChecker::start() {
+	return;
 	if (!_mtp.valid()) {
 		LOG(("Update Info: MTP is unavailable."));
 		crl::on_main(this, [=] { fail(); });
@@ -1499,6 +1500,7 @@ MtpLoader::MtpLoader(
 }
 
 void MtpLoader::startLoading() {
+	return;
 	if (!_mtp.valid()) {
 		LOG(("Update Error: MTP is unavailable."));
 		threadSafeFailed();
