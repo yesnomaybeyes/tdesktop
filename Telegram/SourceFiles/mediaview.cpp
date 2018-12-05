@@ -979,7 +979,7 @@ void MediaView::onDownload() {
 
 	QString path;
 	if (Global::DownloadPath().isEmpty()) {
-		path = psDownloadPath();
+		path = File::DefaultDownloadPath();
 	} else if (Global::DownloadPath() == qsl("tmp")) {
 		path = cTempDir();
 	} else {
@@ -2445,9 +2445,10 @@ void MediaView::paintThemePreview(Painter &p, QRect clip) {
 }
 
 void MediaView::keyPressEvent(QKeyEvent *e) {
+	const auto ctrl = e->modifiers().testFlag(Qt::ControlModifier);
 	if (_clipController) {
-		auto toggle1 = (e->key() == Qt::Key_F && e->modifiers().testFlag(Qt::ControlModifier));
-		auto toggle2 = (e->key() == Qt::Key_Enter || e->key() == Qt::Key_Return) && (e->modifiers().testFlag(Qt::AltModifier) || e->modifiers().testFlag(Qt::ControlModifier));
+		auto toggle1 = (e->key() == Qt::Key_F && ctrl);
+		auto toggle2 = (e->key() == Qt::Key_Enter || e->key() == Qt::Key_Return) && (e->modifiers().testFlag(Qt::AltModifier) || ctrl);
 		if (toggle1 || toggle2) {
 			onVideoToggleFullScreen();
 			return;
@@ -2469,7 +2470,7 @@ void MediaView::keyPressEvent(QKeyEvent *e) {
 		}
 	} else if (e == QKeySequence::Save || e == QKeySequence::SaveAs) {
 		onSaveAs();
-	} else if (e->key() == Qt::Key_Copy || (e->key() == Qt::Key_C && e->modifiers().testFlag(Qt::ControlModifier))) {
+	} else if (e->key() == Qt::Key_Copy || (e->key() == Qt::Key_C && ctrl)) {
 		onCopy();
 	} else if (e->key() == Qt::Key_Enter || e->key() == Qt::Key_Return || e->key() == Qt::Key_Space) {
 		if (_doc && !_doc->loading() && (fileBubbleShown() || !_doc->loaded())) {

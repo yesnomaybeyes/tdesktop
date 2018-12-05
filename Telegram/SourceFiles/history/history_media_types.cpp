@@ -20,6 +20,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "media/view/media_clip_playback.h"
 #include "boxes/confirm_box.h"
 #include "boxes/add_contact_box.h"
+#include "boxes/sticker_set_box.h"
 #include "core/click_handler_types.h"
 #include "history/history.h"
 #include "history/history_item_components.h"
@@ -1350,7 +1351,8 @@ void HistoryDocument::createComponents(bool caption) {
 		if (!_data->isSong()
 			&& !_data->thumb->isNull()
 			&& _data->thumb->width()
-			&& _data->thumb->height()) {
+			&& _data->thumb->height()
+			&& !Data::IsExecutableName(_data->filename())) {
 			mask |= HistoryDocumentThumbed::Bit();
 		}
 	}
@@ -2922,11 +2924,7 @@ QSize HistorySticker::countOptimalSize() {
 
 	if (!_packLink && sticker && sticker->set.type() != mtpc_inputStickerSetEmpty) {
 		_packLink = std::make_shared<LambdaClickHandler>([document = _data] {
-			if (auto sticker = document->sticker()) {
-				if (sticker->set.type() != mtpc_inputStickerSetEmpty && App::main()) {
-					App::main()->stickersBox(sticker->set);
-				}
-			}
+			StickerSetBox::Show(document);
 		});
 	}
 	_pixw = _data->dimensions.width();
