@@ -81,8 +81,7 @@ void SetupForkContent(not_null<Ui::VerticalLayout*> container) {
 		lng_settings_external_player,
 		Global::AskExternalPlayerPath());
 
-	base::ObservableViewer(
-		squareAvatars->checkedChanged
+	squareAvatars->checkedChanges(
 	) | rpl::filter([](bool checked) {
 		return (checked != Global::SquareAvatars());
 	}) | rpl::start_with_next([=](bool checked) {
@@ -91,8 +90,7 @@ void SetupForkContent(not_null<Ui::VerticalLayout*> container) {
 		App::restart();
 	}, squareAvatars->lifetime());
 	
-	base::ObservableViewer(
-		audioFade->checkedChanged
+	audioFade->checkedChanges(
 	) | rpl::filter([](bool checked) {
 		return (checked != Global::AudioFade());
 	}) | rpl::start_with_next([=](bool checked) {
@@ -100,8 +98,7 @@ void SetupForkContent(not_null<Ui::VerticalLayout*> container) {
 		Local::writeUserSettings();
 	}, audioFade->lifetime());
 
-	base::ObservableViewer(
-		externalPlayer->checkedChanged
+	externalPlayer->checkedChanges(
 	) | rpl::filter([](bool checked) {
 		return (checked != Global::AskExternalPlayerPath());
 	}) | rpl::start_with_next([=](bool checked) {
