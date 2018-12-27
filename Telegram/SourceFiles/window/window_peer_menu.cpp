@@ -33,6 +33,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "info/profile/info_profile_values.h"
 #include "data/data_session.h"
 #include "data/data_feed.h"
+#include "data/data_poll.h"
 #include "dialogs/dialogs_key.h"
 
 namespace Window {
@@ -635,12 +636,17 @@ void PeerMenuShareContactBox(not_null<UserData*> user) {
 
 void PeerMenuCreatePoll(not_null<PeerData*> peer) {
 	const auto box = Ui::show(Box<CreatePollBox>());
+	const auto lock = box->lifetime().make_state<bool>(false);
 	box->submitRequests(
 	) | rpl::start_with_next([=](const PollData &result) {
+		if (std::exchange(*lock, true)) {
+			return;
+		}
 		const auto options = ApiWrap::SendOptions(App::history(peer));
 		Auth().api().createPoll(result, options, crl::guard(box, [=] {
 			box->closeBox();
 		}), crl::guard(box, [=](const RPCError &error) {
+			*lock = false;
 			box->submitFailed(lang(lng_attach_failed));
 		}));
 	}, box->lifetime());
