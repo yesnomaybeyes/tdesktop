@@ -798,7 +798,7 @@ Fn<void()> ClearHistoryHandler(not_null<PeerData*> peer) {
 
 Fn<void()> GoToFirstMessageHandler(not_null<PeerData*> peer) {
 	return [peer] {
-		App::main()->ui_showPeerHistory(peer->id, Window::SectionShow::Way::ClearStack, MsgId(1));
+		Auth().api().jumpToDate(App::history(peer->id), QDate(2013, 8, 1));
 	};
 }
 
