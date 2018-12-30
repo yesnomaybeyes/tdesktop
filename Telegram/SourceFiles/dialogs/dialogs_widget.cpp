@@ -1385,6 +1385,8 @@ void DialogsWidget::keyPressEvent(QKeyEvent *e) {
 		_inner->selectSkipPage(_scroll->height(), 1);
 	} else if (e->key() == Qt::Key_PageUp) {
 		_inner->selectSkipPage(_scroll->height(), -1);
+	} else if (e->key() == Qt::Key_F10) {
+		showMainMenu();
 	} else {
 		e->ignore();
 	}
