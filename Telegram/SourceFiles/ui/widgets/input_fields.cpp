@@ -18,6 +18,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "numbers.h"
 #include "auth_session.h"
 #include "messenger.h"
+#include "languages.h"
 
 namespace Ui {
 namespace {
@@ -2510,6 +2511,18 @@ void InputField::keyPressEventInner(QKeyEvent *e) {
 		|| e->key() == Qt::Key_Home
 		|| e->key() == Qt::Key_End) {
 		_reverseMarkdownReplacement = false;
+	}
+
+	if ((e->key() == Qt::Key_BracketRight || e->key() == 1066)
+		&& e->modifiers().testFlag(Qt::ControlModifier)) {
+		QString translatedString = swapFromWrongKeyboardLayout(getLastText());
+		if (getLastText() != translatedString) {
+			clear();
+			setText(translatedString);
+			setCursorPosition(QTextCursor::EndOfLine);
+			e->ignore();
+			return;
+		}
 	}
 
 	if (macmeta && e->key() == Qt::Key_Backspace) {
