@@ -601,6 +601,7 @@ enum {
 	dbiScalePercent = 0x58,
 	dbiPlaybackSpeed = 0x59,
 	dbiLanguagesKey = 0x5a,
+	dbiCallSettings = 0x5b,
 
 	// Fork settings.
 	dbiSquareAvatars = 0x91,
@@ -889,6 +890,43 @@ void applyReadContext(ReadSettingsContext &&context) {
 	if (context.legacyLanguageId != Lang::kLegacyLanguageNone) {
 		Lang::Current().fillFromLegacy(context.legacyLanguageId, context.legacyLanguageFile);
 		writeLangPack();
+	}
+}
+
+QByteArray serializeCallSettings(){
+	QByteArray result=QByteArray();
+	uint32 size = 3*sizeof(qint32) + Serialize::stringSize(Global::CallOutputDeviceID()) + Serialize::stringSize(Global::CallInputDeviceID());
+	result.reserve(size);
+	QDataStream stream(&result, QIODevice::WriteOnly);
+	stream.setVersion(QDataStream::Qt_5_1);
+	stream << Global::CallOutputDeviceID();
+	stream << qint32(Global::CallOutputVolume());
+	stream << Global::CallInputDeviceID();
+	stream << qint32(Global::CallInputVolume());
+	stream << qint32(Global::CallAudioDuckingEnabled() ? 1 : 0);
+	return result;
+}
+
+void deserializeCallSettings(QByteArray& settings){
+	QDataStream stream(&settings, QIODevice::ReadOnly);
+	stream.setVersion(QDataStream::Qt_5_1);
+	QString outputDeviceID;
+	QString inputDeviceID;
+	qint32 outputVolume;
+	qint32 inputVolume;
+	qint32 duckingEnabled;
+
+	stream >> outputDeviceID;
+	stream >> outputVolume;
+	stream >> inputDeviceID;
+	stream >> inputVolume;
+	stream >> duckingEnabled;
+	if(_checkStreamStatus(stream)){
+		Global::SetCallOutputDeviceID(outputDeviceID);
+		Global::SetCallOutputVolume(outputVolume);
+		Global::SetCallInputDeviceID(inputDeviceID);
+		Global::SetCallInputVolume(inputVolume);
+		Global::SetCallAudioDuckingEnabled(duckingEnabled);
 	}
 }
 
@@ -1824,6 +1862,14 @@ bool _readSetting(quint32 blockId, QDataStream &stream, int version, ReadSetting
 		Global::SetVoiceMsgPlaybackDoubled(v == 2);
 	} break;
 
+	case dbiCallSettings: {
+		QByteArray callSettings;
+		stream >> callSettings;
+		if(!_checkStreamStatus(stream)) return false;
+
+		deserializeCallSettings(callSettings);
+	} break;
+
 	default:
 	LOG(("App Error: unknown blockId in _readSetting: %1").arg(blockId));
 	return false;
@@ -2040,6 +2086,7 @@ void _writeUserSettings() {
 	auto userData = userDataInstance
 		? userDataInstance->serialize()
 		: QByteArray();
+	auto callSettings = serializeCallSettings();
 
 	uint32 size = 23 * (sizeof(quint32) + sizeof(qint32));
 	size += sizeof(quint32) + Serialize::stringSize(Global::AskDownloadPath() ? QString() : Global::DownloadPath()) + Serialize::bytearraySize(Global::AskDownloadPath() ? QByteArray() : Global::DownloadPathBookmark());
@@ -2062,6 +2109,7 @@ void _writeUserSettings() {
 	if (!userData.isEmpty()) {
 		size += sizeof(quint32) + Serialize::bytearraySize(userData);
 	}
+	size += sizeof(quint32) + Serialize::bytearraySize(callSettings);
 
 	size += sizeof(quint32) + Serialize::stringSize(Global::ExternalPlayerPath());
 
@@ -2119,6 +2167,7 @@ void _writeUserSettings() {
 	if (!Global::HiddenPinnedMessages().isEmpty()) {
 		data.stream << quint32(dbiHiddenPinnedMessages) << Global::HiddenPinnedMessages();
 	}
+	data.stream << qint32(dbiCallSettings) << callSettings;
 
 	FileWriteDescriptor file(_userSettingsKey);
 	file.writeEncrypted(data);
