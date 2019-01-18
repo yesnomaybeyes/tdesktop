@@ -7,6 +7,7 @@ Small changes make it easy to keep the fork up-to-date from official upstream.
 **After 1.5 years of developing Forkgram, I finally implemented autoupdates.** *(Added 19.10.2018.)*
 
 [![Build status](https://ci.appveyor.com/api/projects/status/lnfgagykamuhuumt/branch/dev?svg=true)](https://ci.appveyor.com/project/23rd/tdesktop/branch/dev)
+[![Github All Releases](https://img.shields.io/github/downloads/Forkgram/tdesktop/total.svg)](https://github.com/Forkgram/tdesktop/releases)
 
 ## Features:
 - Square avatars. (Automatically restarts Telegram.) *(Added XX.04.2017.)*  
