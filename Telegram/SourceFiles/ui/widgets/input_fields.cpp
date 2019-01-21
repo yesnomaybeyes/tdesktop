@@ -2547,9 +2547,13 @@ void InputField::keyPressEventInner(QKeyEvent *e) {
 		_reverseMarkdownReplacement = false;
 	}
 
-	if ((e->key() == Qt::Key_BracketRight || e->key() == 1066)
+
+	// [WIP].
+	auto rightBracket = e->key() == Qt::Key_BracketRight || e->key() == 1066;
+	auto leftBracket = e->key() == Qt::Key_BracketLeft || e->key() == 1061;
+	if (false && (rightBracket || leftBracket)
 		&& e->modifiers().testFlag(Qt::ControlModifier)) {
-		QString translatedString = swapFromWrongKeyboardLayout(getLastText());
+		QString translatedString = swapFromWrongKeyboardLayout(getLastText(), leftBracket);
 		if (getLastText() != translatedString) {
 			clear();
 			setText(translatedString);
