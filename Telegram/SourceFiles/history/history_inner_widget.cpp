@@ -1554,6 +1554,7 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 					? lng_context_copy_selected_items
 					: lng_context_copy_selected),
 				[=] { copySelectedText(); });
+			addSearchAction();
 		}
 		addItemActions(item);
 		if (lnkPhoto) {
@@ -1641,6 +1642,7 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 					: lng_context_copy_selected),
 				[=] { copySelectedText(); });
 			addItemActions(item);
+			addSearchAction();
 		} else {
 			addItemActions(item);
 			if (item && !isUponSelected) {
@@ -1773,6 +1775,15 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 
 void HistoryInner::copySelectedText() {
 	SetClipboardWithEntities(getSelectedText());
+}
+
+void HistoryInner::addSearchAction() {
+	if (Global::SearchEngine()) {
+		_menu->addAction(lang(lng_context_search_selected), [=] {
+			QString url = Global::SearchEngineUrl();
+			QDesktopServices::openUrl(url.replace(qsl("%q"), this->getSelectedText().text));
+		});
+	}
 }
 
 void HistoryInner::savePhotoToFile(not_null<PhotoData*> photo) {

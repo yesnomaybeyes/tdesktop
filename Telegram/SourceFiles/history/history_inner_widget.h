@@ -289,6 +289,7 @@ private:
 	void reportItem(FullMsgId itemId);
 	void reportAsGroup(FullMsgId itemId);
 	void copySelectedText();
+	void addSearchAction();
 
 	// Does any of the shown histories has this flag set.
 	bool hasPendingResizedItems() const;

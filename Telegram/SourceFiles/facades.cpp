@@ -430,6 +430,8 @@ struct Data {
 	bool AudioFade = true;
 	QString ExternalPlayerPath;
 	bool AskExternalPlayerPath = false;
+	QString SearchEngineUrl = qsl("https://dgg.gg/%q");
+	bool SearchEngine = false;
 
 	bool ReplaceEmoji = true;
 	bool SuggestEmoji = true;
@@ -569,6 +571,8 @@ DefineVar(Global, bool, SquareAvatars);
 DefineVar(Global, bool, AudioFade);
 DefineVar(Global, QString, ExternalPlayerPath);
 DefineVar(Global, bool, AskExternalPlayerPath);
+DefineVar(Global, QString, SearchEngineUrl);
+DefineVar(Global, bool, SearchEngine);
 
 DefineVar(Global, bool, ReplaceEmoji);
 DefineVar(Global, bool, SuggestEmoji);

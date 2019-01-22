@@ -274,10 +274,17 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_settings_choose_username" = "Choose username";
 "lng_settings_empty_bio" = "None";
 
+// Fork settings.
 "lng_settings_section_fork" = "Fork settings";
 "lng_settings_square_avatats" = "Square avatars";
 "lng_settings_audio_fade" = "Audio fade";
 "lng_settings_external_player" = "Open YouTube links in external player";
+"lng_settings_search_engine" = "Add a Search Selected Text to Context Menu";
+"lng_settings_search_engine_box_title" = "URL of Search Engine";
+"lng_settings_search_engine_field_label" = "URL must contain '%q'";
+
+"lng_context_search_selected" = "Search Selected Text";
+// 
 
 "lng_settings_section_notify" = "Notifications";
 "lng_settings_notify_title" = "Notifications for chats";

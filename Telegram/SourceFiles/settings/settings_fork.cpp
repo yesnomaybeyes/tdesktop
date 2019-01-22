@@ -3,18 +3,99 @@ Author: 23rd.
 */
 #include "settings/settings_fork.h"
 
+#include "base/qthelp_url.h"
+#include "boxes/abstract_box.h"
 #include "settings/settings_common.h"
 #include "ui/wrap/vertical_layout.h"
 #include "ui/wrap/slide_wrap.h"
 #include "ui/widgets/checkbox.h"
+#include "ui/widgets/input_fields.h"
 #include "lang/lang_keys.h"
 #include "storage/localstorage.h"
 #include "styles/style_settings.h"
+#include "styles/style_boxes.h"
 #include "core/file_utilities.h"
 #include "boxes/confirm_box.h"
 
 namespace Settings {
 namespace {
+
+class SearchEngineBox : public BoxContent {
+public:
+	SearchEngineBox(
+		QWidget*,
+		Fn<void(bool)> callback);
+
+	void setInnerFocus() override;
+
+protected:
+	void prepare() override;
+
+private:
+	Fn<void(bool)> _callback;
+	Fn<void()> _setInnerFocus;
+};
+
+SearchEngineBox::SearchEngineBox(
+	QWidget*,
+	Fn<void(bool)> callback)
+: _callback(std::move(callback)) {
+	Expects(_callback != nullptr);
+}
+
+void SearchEngineBox::setInnerFocus() {
+	Expects(_setInnerFocus != nullptr);
+
+	_setInnerFocus();
+}
+
+void SearchEngineBox::prepare() {
+	const auto content = Ui::CreateChild<Ui::VerticalLayout>(this);
+
+	const auto url = content->add(
+		object_ptr<Ui::InputField>(
+			content,
+			st::defaultInputField,
+			langFactory(lng_settings_search_engine_field_label),
+			Global::SearchEngineUrl()),
+		st::markdownLinkFieldPadding);
+
+	const auto submit = [=] {
+		const auto linkUrl = qthelp::validate_url(url->getLastText());
+		const auto isInvalid = linkUrl.isEmpty() || linkUrl.indexOf("%q") == -1;
+		if (isInvalid) {
+			url->showError();
+			return;
+		}
+		const auto weak = make_weak(this);
+		Global::SetSearchEngineUrl(linkUrl);
+		Local::writeUserSettings();
+		_callback(!isInvalid);
+		if (weak) {
+			closeBox();
+		}
+	};
+
+	connect(url, &Ui::InputField::submitted, [=] {
+		submit();
+	});
+
+	setTitle(langFactory(lng_settings_search_engine_box_title));
+
+	addButton(langFactory(lng_formatting_link_create), submit);
+	addButton(langFactory(lng_cancel), [=] { 
+		_callback(!Global::SearchEngineUrl().isEmpty());
+		closeBox();
+	});
+
+	content->resizeToWidth(st::boxWidth);
+	content->moveToLeft(0, 0);
+	setDimensions(st::boxWidth, content->height());
+
+	_setInnerFocus = [=] {
+		url->setFocusFast();
+	};
+}
 
 
 // Dunno how to set this variable without method.
@@ -81,6 +162,9 @@ void SetupForkContent(not_null<Ui::VerticalLayout*> container) {
 	const auto externalPlayer = addCheckbox(
 		lng_settings_external_player,
 		Global::AskExternalPlayerPath());
+	const auto searchEngine = addCheckbox(
+		lng_settings_search_engine,
+		Global::SearchEngine());
 
 	squareAvatars->checkedChanges(
 	) | rpl::filter([](bool checked) {
@@ -118,6 +202,23 @@ void SetupForkContent(not_null<Ui::VerticalLayout*> container) {
 		Local::writeUserSettings();
 	}, externalPlayer->lifetime());
 
+
+	searchEngine->checkedChanges(
+	) | rpl::filter([](bool checked) {
+		return (checked != Global::SearchEngine());
+	}) | rpl::start_with_next([=](bool checked) {
+		if (checked) {
+			Ui::show(Box<SearchEngineBox>([=](
+				const bool &isSuccess) {
+				searchEngine->setChecked(isSuccess);
+				Global::SetSearchEngine(isSuccess);
+				Local::writeUserSettings();
+			}), LayerOption::KeepOther);
+		} else {
+			Global::SetSearchEngine(checked);
+			Local::writeUserSettings();
+		}
+	}, searchEngine->lifetime());
 }
 
 void SetupFork(not_null<Ui::VerticalLayout*> container) {

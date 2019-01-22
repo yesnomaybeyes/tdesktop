@@ -276,6 +276,8 @@ DeclareVar(bool, SquareAvatars);
 DeclareVar(bool, AudioFade);
 DeclareVar(QString, ExternalPlayerPath);
 DeclareVar(bool, AskExternalPlayerPath);
+DeclareVar(QString, SearchEngineUrl);
+DeclareVar(bool, SearchEngine);
 
 DeclareVar(bool, ReplaceEmoji);
 DeclareVar(bool, SuggestEmoji);
