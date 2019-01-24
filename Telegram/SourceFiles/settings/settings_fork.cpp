@@ -11,6 +11,7 @@ Author: 23rd.
 #include "storage/localstorage.h"
 #include "styles/style_settings.h"
 #include "core/file_utilities.h"
+#include "boxes/confirm_box.h"
 
 namespace Settings {
 namespace {
@@ -85,9 +86,17 @@ void SetupForkContent(not_null<Ui::VerticalLayout*> container) {
 	) | rpl::filter([](bool checked) {
 		return (checked != Global::SquareAvatars());
 	}) | rpl::start_with_next([=](bool checked) {
-		Global::SetSquareAvatars(checked);
-		Local::writeUserSettings();
-		App::restart();
+		Ui::show(Box<ConfirmBox>(
+				lang(lng_settings_need_restart),
+				lang(lng_settings_restart_now),
+				[=] { 
+					Global::SetSquareAvatars(checked);
+					Local::writeUserSettings();
+					App::restart();
+				},
+				[=] { 
+					squareAvatars->setChecked(!checked);
+				}));
 	}, squareAvatars->lifetime());
 	
 	audioFade->checkedChanges(
