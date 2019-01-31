@@ -616,6 +616,7 @@ enum {
 	dbiAskExternalPlayerPath = 0x94,
 	dbiSearchEngine = 0x95,
 	dbiSearchEngineUrl = 0x96,
+	dbiLastSeenInDialogs = 0x97,
 
 	dbiEncryptedWithSalt = 333,
 	dbiEncrypted = 444,
@@ -1155,6 +1156,14 @@ bool _readSetting(quint32 blockId, QDataStream &stream, int version, ReadSetting
 		if (!_checkStreamStatus(stream)) return false;
 
 		Global::SetSearchEngineUrl(v);
+	} break;
+
+	case dbiLastSeenInDialogs: {
+		qint32 v;
+		stream >> v;
+		if (!_checkStreamStatus(stream)) return false;
+
+		Global::SetLastSeenInDialogs(v == 1);
 	} break;
 
 	case dbiAutoDownloadOld: {
@@ -2170,6 +2179,7 @@ void _writeUserSettings() {
 	data.stream << quint32(dbiExternalPlayerPath) << Global::ExternalPlayerPath();
 	data.stream << quint32(dbiSearchEngine) << qint32(Global::SearchEngine() ? 1 : 0);
 	data.stream << quint32(dbiSearchEngineUrl) << Global::SearchEngineUrl();
+	data.stream << quint32(dbiLastSeenInDialogs) << qint32(Global::LastSeenInDialogs() ? 1 : 0);
 
 	if (!userData.isEmpty()) {
 		data.stream << quint32(dbiAuthSessionSettings) << userData;

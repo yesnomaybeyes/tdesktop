@@ -276,6 +276,7 @@ DeclareVar(bool, SquareAvatars);
 DeclareVar(bool, AudioFade);
 DeclareVar(QString, ExternalPlayerPath);
 DeclareVar(bool, AskExternalPlayerPath);
+DeclareVar(bool, LastSeenInDialogs);
 DeclareVar(QString, SearchEngineUrl);
 DeclareVar(bool, SearchEngine);
 

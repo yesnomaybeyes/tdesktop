@@ -21,6 +21,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "history/history.h"
 #include "data/data_channel.h"
 #include "data/data_user.h"
+#include "data/data_peer_values.h"
 
 namespace Dialogs {
 namespace Layout {
@@ -353,6 +354,18 @@ void paintRow(
 	if (sendStateIcon && history) {
 		rectForName.setWidth(rectForName.width() - st::dialogsSendStateSkip);
 		sendStateIcon->paint(p, rectForName.topLeft() + QPoint(rectForName.width(), 0), fullWidth);
+	}
+	if (from->isUser() && Global::LastSeenInDialogs()) {
+		auto lastSeen = Data::OnlineText(from->asUser(), unixtime());
+		static QSet<QString> ignoredStrings {
+            lang(lng_status_recently),
+            lang(lng_status_bot),
+            lang(lng_status_service_notifications),
+            lang(lng_status_support),
+        };
+        if (!ignoredStrings.contains(lastSeen)) {
+			paintRowTopRight(p, lastSeen, rectForName, active, selected);
+		}
 	}
 
 	const auto nameFg = active

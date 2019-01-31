@@ -162,6 +162,9 @@ void SetupForkContent(not_null<Ui::VerticalLayout*> container) {
 	const auto externalPlayer = addCheckbox(
 		lng_settings_external_player,
 		Global::AskExternalPlayerPath());
+	const auto lastSeenInDialogs = addCheckbox(
+		lng_settings_last_seen_in_dialogs,
+		Global::LastSeenInDialogs());
 	const auto searchEngine = addCheckbox(
 		lng_settings_search_engine,
 		Global::SearchEngine());
@@ -202,6 +205,13 @@ void SetupForkContent(not_null<Ui::VerticalLayout*> container) {
 		Local::writeUserSettings();
 	}, externalPlayer->lifetime());
 
+	lastSeenInDialogs->checkedChanges(
+	) | rpl::filter([](bool checked) {
+		return (checked != Global::LastSeenInDialogs());
+	}) | rpl::start_with_next([=](bool checked) {
+		Global::SetLastSeenInDialogs(checked);
+		Local::writeUserSettings();
+	}, lastSeenInDialogs->lifetime());
 
 	searchEngine->checkedChanges(
 	) | rpl::filter([](bool checked) {
