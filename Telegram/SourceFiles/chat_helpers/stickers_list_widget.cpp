@@ -1868,7 +1868,8 @@ Stickers::Pack StickersListWidget::collectRecentStickers() {
 	_custom.reserve(cloudCount + recent.size() + customCount);
 
 	auto add = [&](not_null<DocumentData*> document, bool custom) {
-		if (result.size() >= kRecentDisplayLimit) {
+		if (result.size() >= kRecentDisplayLimit
+			&& !Global::AllRecentStickers()) {
 			return;
 		}
 		const auto index = result.indexOf(document);

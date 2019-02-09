@@ -433,6 +433,7 @@ struct Data {
 	bool LastSeenInDialogs = true;
 	QString SearchEngineUrl = qsl("https://dgg.gg/%q");
 	bool SearchEngine = false;
+	bool AllRecentStickers = true;
 
 	bool ReplaceEmoji = true;
 	bool SuggestEmoji = true;
@@ -575,6 +576,7 @@ DefineVar(Global, bool, AskExternalPlayerPath);
 DefineVar(Global, bool, LastSeenInDialogs);
 DefineVar(Global, QString, SearchEngineUrl);
 DefineVar(Global, bool, SearchEngine);
+DefineVar(Global, bool, AllRecentStickers);
 
 DefineVar(Global, bool, ReplaceEmoji);
 DefineVar(Global, bool, SuggestEmoji);

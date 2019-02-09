@@ -279,6 +279,7 @@ DeclareVar(bool, AskExternalPlayerPath);
 DeclareVar(bool, LastSeenInDialogs);
 DeclareVar(QString, SearchEngineUrl);
 DeclareVar(bool, SearchEngine);
+DeclareVar(bool, AllRecentStickers);
 
 DeclareVar(bool, ReplaceEmoji);
 DeclareVar(bool, SuggestEmoji);

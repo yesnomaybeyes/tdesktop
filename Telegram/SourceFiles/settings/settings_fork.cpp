@@ -168,6 +168,9 @@ void SetupForkContent(not_null<Ui::VerticalLayout*> container) {
 	const auto searchEngine = addCheckbox(
 		lng_settings_search_engine,
 		Global::SearchEngine());
+	const auto allRecentStickers = addCheckbox(
+		lng_settings_show_all_recent_stickers,
+		Global::AllRecentStickers());
 
 	squareAvatars->checkedChanges(
 	) | rpl::filter([](bool checked) {
@@ -229,6 +232,14 @@ void SetupForkContent(not_null<Ui::VerticalLayout*> container) {
 			Local::writeUserSettings();
 		}
 	}, searchEngine->lifetime());
+
+	allRecentStickers->checkedChanges(
+	) | rpl::filter([](bool checked) {
+		return (checked != Global::AllRecentStickers());
+	}) | rpl::start_with_next([=](bool checked) {
+		Global::SetAllRecentStickers(checked);
+		Local::writeUserSettings();
+	}, lastSeenInDialogs->lifetime());
 }
 
 void SetupFork(not_null<Ui::VerticalLayout*> container) {
