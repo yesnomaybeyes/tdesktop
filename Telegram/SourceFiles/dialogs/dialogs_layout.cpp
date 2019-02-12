@@ -35,6 +35,11 @@ void paintRowTopRight(Painter &p, const QString &text, QRect &rectForName, bool 
 	rectForName.setWidth(rectForName.width() - width - st::dialogsDateSkip);
 	p.setFont(st::dialogsDateFont);
 	p.setPen(active ? st::dialogsDateFgActive : (selected ? st::dialogsDateFgOver : st::dialogsDateFg));
+
+	if (text == lang(lng_status_online)) {
+		p.setPen(st::contactsStatusFgOnline);
+	}
+
 	p.drawText(rectForName.left() + rectForName.width() + st::dialogsDateSkip, rectForName.top() + st::msgNameFont->height - st::msgDateFont->descent, text);
 }
 
