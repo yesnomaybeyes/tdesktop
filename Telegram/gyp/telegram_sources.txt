@@ -817,7 +817,6 @@
 <(src_loc)/countries.h
 <(src_loc)/facades.cpp
 <(src_loc)/facades.h
-<(src_loc)/languages.h
 <(src_loc)/layout.cpp
 <(src_loc)/layout.h
 <(src_loc)/logs.cpp

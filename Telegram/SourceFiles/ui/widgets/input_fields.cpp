@@ -19,7 +19,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "numbers.h"
 #include "auth_session.h"
 #include "core/application.h"
-#include "languages.h"
 
 namespace Ui {
 namespace {
@@ -2548,16 +2547,17 @@ void InputField::keyPressEventInner(QKeyEvent *e) {
 	}
 
 
-	// [WIP].
 	auto rightBracket = e->key() == Qt::Key_BracketRight || e->key() == 1066;
-	auto leftBracket = e->key() == Qt::Key_BracketLeft || e->key() == 1061;
-	if (false && (rightBracket || leftBracket)
+	// auto leftBracket = e->key() == Qt::Key_BracketLeft || e->key() == 1061;
+	if (rightBracket
 		&& e->modifiers().testFlag(Qt::ControlModifier)) {
-		QString translatedString = swapFromWrongKeyboardLayout(getLastText(), leftBracket);
+		QString translatedString = rusKeyboardLayoutSwitch(getLastText());
 		if (getLastText() != translatedString) {
 			clear();
 			setText(translatedString);
-			setCursorPosition(QTextCursor::EndOfLine);
+			([=] { 
+				setCursorPosition(QTextCursor::EndOfLine);
+			});
 			e->ignore();
 			return;
 		}
