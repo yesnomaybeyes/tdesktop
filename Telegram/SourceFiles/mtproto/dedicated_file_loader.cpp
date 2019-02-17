@@ -287,7 +287,6 @@ DedicatedLoader::DedicatedLoader(
 }
 
 void DedicatedLoader::startLoading() {
-	return;
 	if (!_mtp.valid()) {
 		LOG(("Update Error: MTP is unavailable."));
 		threadSafeFailed();
