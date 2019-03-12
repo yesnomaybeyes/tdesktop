@@ -52,12 +52,12 @@ _PsEventFilter *_psEventFilter = nullptr;
 namespace {
 
 QRect _monitorRect;
-TimeMs _monitorLastGot = 0;
+crl::time _monitorLastGot = 0;
 
 } // namespace
 
 QRect psDesktopRect() {
-	auto tnow = getms(true);
+	auto tnow = crl::now();
 	if (tnow > _monitorLastGot + 1000 || tnow < _monitorLastGot) {
 		_monitorLastGot = tnow;
 		_monitorRect = QApplication::desktop()->availableGeometry(App::wnd());
@@ -90,23 +90,8 @@ void psDeleteDir(const QString &dir) {
 	objc_deleteDir(dir);
 }
 
-namespace {
-
-auto _lastUserAction = 0LL;
-
-} // namespace
-
-void psUserActionDone() {
-	_lastUserAction = getms(true);
-}
-
 bool psIdleSupported() {
 	return objc_idleSupported();
-}
-
-TimeMs psIdleTime() {
-	auto idleTime = 0LL;
-	return objc_idleTime(idleTime) ? idleTime : (getms(true) - _lastUserAction);
 }
 
 QStringList psInitLogs() {
@@ -268,6 +253,11 @@ bool OpenSystemSettings(SystemSettingsType type) {
 		break;
 	}
 	return true;
+}
+
+crl::time LastUserInputTime() {
+	auto idleTime = 0LL;
+	return objc_idleTime(idleTime) ? (crl::now() - crl::time(idleTime)) : 0LL;
 }
 
 } // namespace Platform

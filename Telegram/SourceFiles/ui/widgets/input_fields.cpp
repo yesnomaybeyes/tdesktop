@@ -972,9 +972,8 @@ QRect FlatInput::getTextRect() const {
 void FlatInput::paintEvent(QPaintEvent *e) {
 	Painter p(this);
 
-	auto ms = getms();
-	auto placeholderFocused = _a_placeholderFocused.current(ms, _focused ? 1. : 0.);
-
+	auto ms = crl::now();
+	auto placeholderFocused = _a_placeholderFocused.value(_focused ? 1. : 0.);
 	auto pen = anim::pen(_st.borderColor, _st.borderActive, placeholderFocused);
 	pen.setWidth(_st.borderWidth);
 	p.setPen(pen);
@@ -988,7 +987,7 @@ void FlatInput::paintEvent(QPaintEvent *e) {
 		_st.icon.paint(p, 0, 0, width());
 	}
 
-	auto placeholderOpacity = _a_placeholderVisible.current(ms, _placeholderVisible ? 1. : 0.);
+	auto placeholderOpacity = _a_placeholderVisible.value(_placeholderVisible ? 1. : 0.);
 	if (placeholderOpacity > 0.) {
 		p.setOpacity(placeholderOpacity);
 
@@ -1008,7 +1007,11 @@ void FlatInput::paintEvent(QPaintEvent *e) {
 void FlatInput::focusInEvent(QFocusEvent *e) {
 	if (!_focused) {
 		_focused = true;
-		_a_placeholderFocused.start([this] { update(); }, 0., 1., _st.phDuration);
+		_a_placeholderFocused.start(
+			[=] { update(); },
+			0.,
+			1.,
+			_st.phDuration);
 		update();
 	}
 	QLineEdit::focusInEvent(e);
@@ -1018,7 +1021,11 @@ void FlatInput::focusInEvent(QFocusEvent *e) {
 void FlatInput::focusOutEvent(QFocusEvent *e) {
 	if (_focused) {
 		_focused = false;
-		_a_placeholderFocused.start([this] { update(); }, 1., 0., _st.phDuration);
+		_a_placeholderFocused.start(
+			[=] { update(); },
+			1.,
+			0.,
+			_st.phDuration);
 		update();
 	}
 	QLineEdit::focusOutEvent(e);
@@ -1070,7 +1077,11 @@ void FlatInput::updatePlaceholder() {
 	auto placeholderVisible = !hasText;
 	if (_placeholderVisible != placeholderVisible) {
 		_placeholderVisible = placeholderVisible;
-		_a_placeholderVisible.start([this] { update(); }, _placeholderVisible ? 0. : 1., _placeholderVisible ? 1. : 0., _st.phDuration);
+		_a_placeholderVisible.start(
+			[=] { update(); },
+			_placeholderVisible ? 0. : 1.,
+			_placeholderVisible ? 1. : 0.,
+			_st.phDuration);
 	}
 }
 
@@ -1546,7 +1557,7 @@ void InputField::handleTouchEvent(QTouchEvent *e) {
 void InputField::paintEvent(QPaintEvent *e) {
 	Painter p(this);
 
-	auto ms = getms();
+	auto ms = crl::now();
 	auto r = rect().intersected(e->rect());
 	if (_st.textBg->c.alphaF() > 0.) {
 		p.fillRect(r, _st.textBg);
@@ -3609,7 +3620,7 @@ QRect MaskedInputField::getTextRect() const {
 void MaskedInputField::paintEvent(QPaintEvent *e) {
 	Painter p(this);
 
-	auto ms = getms();
+	auto ms = crl::now();
 	auto r = rect().intersected(e->rect());
 	p.fillRect(r, _st.textBg);
 	if (_st.border) {
@@ -3817,7 +3828,7 @@ QRect MaskedInputField::placeholderRect() const {
 	return rect().marginsRemoved(_textMargins + _st.placeholderMargins);
 }
 
-void MaskedInputField::placeholderAdditionalPrepare(Painter &p, TimeMs ms) {
+void MaskedInputField::placeholderAdditionalPrepare(Painter &p, crl::time ms) {
 	p.setFont(_st.font);
 	p.setPen(_st.placeholderFg);
 }
@@ -3946,7 +3957,7 @@ void CountryCodeInput::correctValue(
 PhonePartInput::PhonePartInput(QWidget *parent, const style::InputField &st) : MaskedInputField(parent, st/*, lang(lng_phone_ph)*/) {
 }
 
-void PhonePartInput::paintAdditionalPlaceholder(Painter &p, TimeMs ms) {
+void PhonePartInput::paintAdditionalPlaceholder(Painter &p, crl::time ms) {
 	if (!_pattern.isEmpty()) {
 		auto t = getDisplayedText();
 		auto ph = _additionalPlaceholder.mid(t.size());
@@ -4147,7 +4158,7 @@ void UsernameInput::setLinkPlaceholder(const QString &placeholder) {
 	}
 }
 
-void UsernameInput::paintAdditionalPlaceholder(Painter &p, TimeMs ms) {
+void UsernameInput::paintAdditionalPlaceholder(Painter &p, crl::time ms) {
 	if (!_linkPlaceholder.isEmpty()) {
 		p.setFont(_st.font);
 		p.setPen(_st.placeholderFg);
@@ -4211,7 +4222,7 @@ void PhoneInput::clearText() {
 	correctValue(QString(), 0, phone, pos);
 }
 
-void PhoneInput::paintAdditionalPlaceholder(Painter &p, TimeMs ms) {
+void PhoneInput::paintAdditionalPlaceholder(Painter &p, crl::time ms) {
 	if (!_pattern.isEmpty()) {
 		auto t = getDisplayedText();
 		auto ph = _additionalPlaceholder.mid(t.size());

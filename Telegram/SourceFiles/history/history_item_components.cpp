@@ -15,7 +15,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "history/history_message.h"
 #include "history/view/history_view_service_message.h"
 #include "history/media/history_media_document.h"
-#include "media/media_audio.h"
+#include "media/audio/media_audio.h"
 #include "media/player/media_player_instance.h"
 #include "data/data_media_types.h"
 #include "data/data_session.h"
@@ -50,11 +50,12 @@ void HistoryMessageVia::resize(int32 availw) const {
 }
 
 void HistoryMessageSigned::refresh(const QString &date) {
-	auto time = qsl(", ") + date;
 	auto name = author;
-	auto timew = st::msgDateFont->width(time);
-	auto namew = st::msgDateFont->width(name);
-	if (timew + namew > st::maxSignatureSize) {
+	const auto time = qsl(", ") + date;
+	const auto timew = st::msgDateFont->width(time);
+	const auto namew = st::msgDateFont->width(name);
+	isElided = (timew + namew > st::maxSignatureSize);
+	if (isElided) {
 		name = st::msgDateFont->elided(author, st::maxSignatureSize - timew);
 	}
 	signature.setText(
@@ -514,7 +515,7 @@ int ReplyKeyboard::naturalHeight() const {
 	return (_rows.size() - 1) * _st->buttonSkip() + _rows.size() * _st->buttonHeight();
 }
 
-void ReplyKeyboard::paint(Painter &p, int outerWidth, const QRect &clip, TimeMs ms) const {
+void ReplyKeyboard::paint(Painter &p, int outerWidth, const QRect &clip, crl::time ms) const {
 	Assert(_st != nullptr);
 	Assert(_width > 0);
 
@@ -612,7 +613,7 @@ void ReplyKeyboard::startAnimation(int i, int j, int direction) {
 
 	_animations.remove(-indexForAnimation);
 	if (!_animations.contains(indexForAnimation)) {
-		_animations.emplace(indexForAnimation, getms());
+		_animations.emplace(indexForAnimation, crl::now());
 	}
 
 	if (notStarted && !_a_selected.animating()) {
@@ -620,7 +621,7 @@ void ReplyKeyboard::startAnimation(int i, int j, int direction) {
 	}
 }
 
-void ReplyKeyboard::step_selected(TimeMs ms, bool timer) {
+void ReplyKeyboard::step_selected(crl::time ms, bool timer) {
 	if (anim::Disabled()) {
 		ms += st::botKbDuration;
 	}
@@ -670,7 +671,7 @@ void ReplyKeyboard::Style::paintButton(
 		Painter &p,
 		int outerWidth,
 		const ReplyKeyboard::Button &button,
-		TimeMs ms) const {
+		crl::time ms) const {
 	const QRect &rect = button.rect;
 	paintButtonBg(p, rect, button.howMuchOver);
 	if (button.ripple) {
@@ -857,5 +858,5 @@ void HistoryDocumentVoice::startSeeking() {
 
 void HistoryDocumentVoice::stopSeeking() {
 	_seeking = false;
-	Media::Player::instance()->stopSeeking(AudioMsgId::Type::Voice);
+	Media::Player::instance()->cancelSeeking(AudioMsgId::Type::Voice);
 }

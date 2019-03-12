@@ -12,7 +12,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "base/bytes.h"
 #include "storage/localstorage.h"
 #include "core/application.h"
-#include "core/sandbox.h"
 #include "mainwindow.h"
 #include "core/click_handler_types.h"
 #include "info/info_memento.h"
@@ -39,7 +38,7 @@ namespace {
 // Check with own update stream, but not change original AppVersion.
 constexpr int ForkAppVersion = AppVersion + 0;
 
-constexpr auto kUpdaterTimeout = 10 * TimeMs(1000);
+constexpr auto kUpdaterTimeout = 10 * crl::time(1000);
 constexpr auto kMaxResponseSize = 1024 * 1024;
 
 #ifdef TDESKTOP_DISABLE_AUTOUPDATE
@@ -1233,7 +1232,7 @@ void Updater::start(bool forceWait) {
 
 		_checking.fire({});
 	} else {
-		_timer.callOnce((updateInSecs + 5) * TimeMs(1000));
+		_timer.callOnce((updateInSecs + 5) * crl::time(1000));
 	}
 }
 
@@ -1390,7 +1389,7 @@ Updater::~Updater() {
 
 UpdateChecker::UpdateChecker()
 : _updater(GetUpdaterInstance()) {
-	if (Sandbox::Instance().applicationLaunched()) {
+	if (IsAppLaunched()) {
 		if (const auto mtproto = Core::App().mtp()) {
 			_updater->setMtproto(mtproto);
 		}

@@ -7,7 +7,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #pragma once
 
-#include "platform/win/windows_h_wrapper.h"
+#include "platform/win/wrapper_windows_h.h"
 
 class LocationCoords;
 
@@ -36,6 +36,8 @@ inline void ReInitOnTopPanel(QWidget *panel) {
 
 QString CurrentExecutablePath(int argc, char *argv[]);
 
+crl::time LastUserInputTime();
+
 namespace ThirdParty {
 
 inline void start() {
@@ -57,9 +59,7 @@ void psWriteDump();
 
 void psDeleteDir(const QString &dir);
 
-void psUserActionDone();
 bool psIdleSupported();
-TimeMs psIdleTime();
 
 QStringList psInitLogs();
 void psClearInitLogs();

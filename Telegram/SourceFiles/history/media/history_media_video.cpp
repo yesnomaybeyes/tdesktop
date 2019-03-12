@@ -58,6 +58,33 @@ QSize HistoryVideo::sizeForAspectRatio() const {
 	return { 1, 1 };
 }
 
+QSize HistoryVideo::countOptimalDimensions() const {
+	const auto desired = ConvertScale(_data->dimensions);
+	const auto size = desired.isEmpty() ? sizeForAspectRatio() : desired;
+	auto tw = size.width();
+	auto th = size.height();
+	if (!tw || !th) {
+		tw = th = 1;
+	} else if (tw >= th && tw > st::maxMediaSize) {
+		th = qRound((st::maxMediaSize / float64(tw)) * th);
+		tw = st::maxMediaSize;
+	} else if (tw < th && th > st::maxMediaSize) {
+		tw = qRound((st::maxMediaSize / float64(th)) * tw);
+		th = st::maxMediaSize;
+	} else if ((tw < st::msgVideoSize.width())
+		&& (tw * st::msgVideoSize.height()
+			>= th * st::msgVideoSize.width())) {
+		th = qRound((st::msgVideoSize.width() / float64(tw)) * th);
+		tw = st::msgVideoSize.width();
+	} else if ((th < st::msgVideoSize.height())
+		&& (tw * st::msgVideoSize.height()
+			< th * st::msgVideoSize.width())) {
+		tw = qRound((st::msgVideoSize.height() / float64(th)) * tw);
+		th = st::msgVideoSize.height();
+	}
+	return QSize(tw, th);
+}
+
 QSize HistoryVideo::countOptimalSize() {
 	if (_parent->media() != this) {
 		_caption = Text();
@@ -67,20 +94,9 @@ QSize HistoryVideo::countOptimalSize() {
 			_parent->skipBlockHeight());
 	}
 
-	const auto size = sizeForAspectRatio();
-	auto tw = ConvertScale(size.width());
-	auto th = ConvertScale(size.height());
-	if (!tw || !th) {
-		tw = th = 1;
-	}
-	if (tw * st::msgVideoSize.height() > th * st::msgVideoSize.width()) {
-		th = qRound((st::msgVideoSize.width() / float64(tw)) * th);
-		tw = st::msgVideoSize.width();
-	} else {
-		tw = qRound((st::msgVideoSize.height() / float64(th)) * tw);
-		th = st::msgVideoSize.height();
-	}
-
+	const auto size = countOptimalDimensions();
+	const auto tw = size.width();
+	const auto th = size.height();
 	_thumbw = qMax(tw, 1);
 	_thumbh = qMax(th, 1);
 
@@ -101,20 +117,9 @@ QSize HistoryVideo::countOptimalSize() {
 }
 
 QSize HistoryVideo::countCurrentSize(int newWidth) {
-	const auto size = sizeForAspectRatio();
-	auto tw = ConvertScale(size.width());
-	auto th = ConvertScale(size.height());
-	if (!tw || !th) {
-		tw = th = 1;
-	}
-	if (tw * st::msgVideoSize.height() > th * st::msgVideoSize.width()) {
-		th = qRound((st::msgVideoSize.width() / float64(tw)) * th);
-		tw = st::msgVideoSize.width();
-	} else {
-		tw = qRound((st::msgVideoSize.height() / float64(th)) * tw);
-		th = st::msgVideoSize.height();
-	}
-
+	const auto size = countOptimalDimensions();
+	auto tw = size.width();
+	auto th = size.height();
 	if (newWidth < tw) {
 		th = qRound((newWidth / float64(tw)) * th);
 		tw = newWidth;
@@ -138,7 +143,7 @@ QSize HistoryVideo::countCurrentSize(int newWidth) {
 	return { newWidth, newHeight };
 }
 
-void HistoryVideo::draw(Painter &p, const QRect &r, TextSelection selection, TimeMs ms) const {
+void HistoryVideo::draw(Painter &p, const QRect &r, TextSelection selection, crl::time ms) const {
 	if (width() < st::msgPadding.left() + st::msgPadding.right() + 1) return;
 
 	_data->automaticLoad(_realParent->fullId(), _parent->data());
@@ -183,11 +188,22 @@ void HistoryVideo::draw(Painter &p, const QRect &r, TextSelection selection, Tim
 		if (good) {
 			good->load({});
 		}
-		if (const auto normal = _data->thumbnail()) {
-			const auto use = (normal->loaded() || !_data->thumbnailInline())
-				? normal
-				: _data->thumbnailInline();
-			p.drawPixmap(rthumb.topLeft(), use->pixBlurredSingle(_realParent->fullId(), _thumbw, _thumbh, paintw, painth, roundRadius, roundCorners));
+		const auto normal = _data->thumbnail();
+		if (normal && normal->loaded()) {
+			p.drawPixmap(rthumb.topLeft(), normal->pixSingle(_realParent->fullId(), _thumbw, _thumbh, paintw, painth, roundRadius, roundCorners));
+		} else if (const auto blurred = _data->thumbnailInline()) {
+			p.drawPixmap(rthumb.topLeft(), blurred->pixBlurredSingle(_realParent->fullId(), _thumbw, _thumbh, paintw, painth, roundRadius, roundCorners));
+		} else {
+			const auto roundTop = (roundCorners & RectPart::TopLeft);
+			const auto roundBottom = (roundCorners & RectPart::BottomLeft);
+			const auto margin = inWebPage
+				? st::buttonRadius
+				: st::historyMessageRadius;
+			const auto parts = roundCorners
+				| RectPart::NoTopBottom
+				| (roundTop ? RectPart::Top : RectPart::None)
+				| (roundBottom ? RectPart::Bottom : RectPart::None);
+			App::roundRect(p, rthumb.marginsAdded({ 0, roundTop ? 0 : margin, 0, roundBottom ? 0 : margin }), st::imageBg, roundRadius, parts);
 		}
 	}
 	if (selected) {
@@ -202,7 +218,7 @@ void HistoryVideo::draw(Painter &p, const QRect &r, TextSelection selection, Tim
 		auto over = _animation->a_thumbOver.current();
 		p.setBrush(anim::brush(st::msgDateImgBg, st::msgDateImgBgOver, over));
 	} else {
-		bool over = ClickHandler::showAsActive(_data->loading() ? _cancell : _savel);
+		bool over = ClickHandler::showAsActive((_data->loading() || _data->uploading()) ? _cancell : _savel);
 		p.setBrush(over ? st::msgDateImgBgOver : st::msgDateImgBg);
 	}
 
@@ -215,17 +231,16 @@ void HistoryVideo::draw(Painter &p, const QRect &r, TextSelection selection, Tim
 		p.setOpacity(1);
 	}
 
-	auto icon = ([this, radial, selected, loaded]() -> const style::icon * {
-		if (loaded && !radial) {
-			return &(selected ? st::historyFileThumbPlaySelected : st::historyFileThumbPlay);
-		} else if (radial || _data->loading()) {
-			if (_parent->data()->id > 0 || _data->uploading()) {
-				return &(selected ? st::historyFileThumbCancelSelected : st::historyFileThumbCancel);
-			}
+	auto icon = [&]() -> const style::icon * {
+		if (_data->loading() || _data->uploading()) {
+			return &(selected ? st::historyFileThumbCancelSelected : st::historyFileThumbCancel);
+		} else if (!IsServerMsgId(_parent->data()->id)) {
 			return nullptr;
+		} else if (loaded || _data->canBePlayed()) {
+			return &(selected ? st::historyFileThumbPlaySelected : st::historyFileThumbPlay);
 		}
 		return &(selected ? st::historyFileThumbDownloadSelected : st::historyFileThumbDownload);
-	})();
+	}();
 	if (icon) {
 		icon->paintInCenter(p, inner);
 	}
@@ -264,7 +279,6 @@ TextState HistoryVideo::textState(QPoint point, StateRequest request) const {
 	}
 
 	auto result = TextState(_parent);
-	bool loaded = _data->loaded();
 
 	auto paintx = 0, painty = 0, paintw = width(), painth = height();
 	bool bubble = _parent->hasBubble();
@@ -286,10 +300,13 @@ TextState HistoryVideo::textState(QPoint point, StateRequest request) const {
 		painth -= st::mediaCaptionSkip;
 	}
 	if (QRect(paintx, painty, paintw, painth).contains(point)) {
-		if (_data->uploading()) {
+		if (_data->loading() || _data->uploading()) {
 			result.link = _cancell;
+		} else if (!IsServerMsgId(_parent->data()->id)) {
+		} else if (_data->loaded() || _data->canBePlayed()) {
+			result.link = _openl;
 		} else {
-			result.link = loaded ? _openl : (_data->loading() ? _cancell : _savel);
+			result.link = _savel;
 		}
 	}
 	if (_caption.isEmpty() && _parent->media() == this) {
@@ -317,7 +334,7 @@ void HistoryVideo::drawGrouped(
 		Painter &p,
 		const QRect &clip,
 		TextSelection selection,
-		TimeMs ms,
+		crl::time ms,
 		const QRect &geometry,
 		RectParts corners,
 		not_null<uint64*> cacheKey,
@@ -381,13 +398,12 @@ void HistoryVideo::drawGrouped(
 	auto icon = [&]() -> const style::icon * {
 		if (_data->waitingForAlbum()) {
 			return &(selected ? st::historyFileThumbWaitingSelected : st::historyFileThumbWaiting);
-		} else if (loaded && !radial) {
-			return &(selected ? st::historyFileThumbPlaySelected : st::historyFileThumbPlay);
-		} else if (radial || _data->loading()) {
-			if (_parent->data()->id > 0 || _data->uploading()) {
-				return &(selected ? st::historyFileThumbCancelSelected : st::historyFileThumbCancel);
-			}
+		} else if (_data->loading() || _data->uploading()) {
+			return &(selected ? st::historyFileThumbCancelSelected : st::historyFileThumbCancel);
+		} else if (!IsServerMsgId(_realParent->id)) {
 			return nullptr;
+		} else if (loaded || _data->canBePlayed()) {
+			return &(selected ? st::historyFileThumbPlaySelected : st::historyFileThumbPlay);
 		}
 		return &(selected ? st::historyFileThumbDownloadSelected : st::historyFileThumbDownload);
 	}();
@@ -423,12 +439,12 @@ TextState HistoryVideo::getStateGrouped(
 	if (!geometry.contains(point)) {
 		return {};
 	}
-	return TextState(_parent, _data->uploading()
+	return TextState(_parent, (_data->loading() || _data->uploading())
 		? _cancell
-		: _data->loaded()
+		: !IsServerMsgId(_realParent->id)
+		? nullptr
+		: (_data->loaded() || _data->canBePlayed())
 		? _openl
-		: _data->loading()
-		? _cancell
 		: _savel);
 }
 
@@ -496,11 +512,17 @@ void HistoryVideo::validateGroupedCache(
 	const auto pixHeight = pixSize.height() * cIntRetinaFactor();
 
 	*cacheKey = key;
-	*cache = (image ? image : Image::Blank().get())->pixNoCache(_realParent->fullId(), pixWidth, pixHeight, options, width, height);
+	*cache = (image ? image : Image::BlankMedia().get())->pixNoCache(
+		_realParent->fullId(),
+		pixWidth,
+		pixHeight,
+		options,
+		width,
+		height);
 }
 
 void HistoryVideo::setStatusSize(int newSize) const {
-	HistoryFileMedia::setStatusSize(newSize, _data->size, _data->duration(), 0);
+	HistoryFileMedia::setStatusSize(newSize, _data->size, _data->getDuration(), 0);
 }
 
 TextWithEntities HistoryVideo::selectedText(TextSelection selection) const {
