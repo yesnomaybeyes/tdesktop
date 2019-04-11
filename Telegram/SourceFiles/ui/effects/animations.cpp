@@ -14,7 +14,7 @@ namespace Ui {
 namespace Animations {
 namespace {
 
-constexpr auto kAnimationTimeout = crl::time(1000) / 60;
+constexpr auto kAnimationTick = crl::time(1000) / 120;
 constexpr auto kIgnoreUpdatesTimeout = crl::time(4);
 
 } // namespace
@@ -118,23 +118,31 @@ void Manager::update() {
 }
 
 void Manager::updateQueued() {
-	InvokeQueued(this, [=] { update(); });
+	Expects(_timerId == 0);
+
+	_timerId = -1;
+	InvokeQueued(delayedCallGuard(), [=] {
+		Expects(_timerId < 0);
+
+		_timerId = 0;
+		update();
+	});
 }
 
 void Manager::schedule() {
-	if (_scheduled) {
+	if (_scheduled || _timerId < 0) {
 		return;
 	}
 	stopTimer();
 
 	_scheduled = true;
-	Ui::PostponeCall(static_cast<QObject*>(this), [=] {
+	Ui::PostponeCall(delayedCallGuard(), [=] {
 		_scheduled = false;
 		if (_forceImmediateUpdate) {
 			_forceImmediateUpdate = false;
 			updateQueued();
 		} else {
-			const auto next = _lastUpdateTime + kAnimationTimeout;
+			const auto next = _lastUpdateTime + kAnimationTick;
 			const auto now = crl::now();
 			if (now < next) {
 				_timerId = startTimer(next - now, Qt::PreciseTimer);
@@ -145,8 +153,12 @@ void Manager::schedule() {
 	});
 }
 
+not_null<const QObject*> Manager::delayedCallGuard() const {
+	return static_cast<const QObject*>(this);
+}
+
 void Manager::stopTimer() {
-	if (_timerId) {
+	if (_timerId > 0) {
 		killTimer(base::take(_timerId));
 	}
 }

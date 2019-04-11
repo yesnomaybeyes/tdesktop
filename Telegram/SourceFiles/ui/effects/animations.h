@@ -15,6 +15,8 @@ class Manager;
 class Basic final {
 public:
 	Basic() = default;
+	Basic(const Basic &other) = delete;
+	Basic &operator=(const Basic &other) = delete;
 
 	template <typename Callback>
 	explicit Basic(Callback &&callback);
@@ -156,6 +158,7 @@ private:
 	void schedule();
 	void updateQueued();
 	void stopTimer();
+	not_null<const QObject*> delayedCallGuard() const;
 
 	crl::time _lastUpdateTime = 0;
 	int _timerId = 0;
