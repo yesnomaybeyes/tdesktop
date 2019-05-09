@@ -517,7 +517,7 @@ enum { // Local Storage Keys
 	lskUserSettings = 0x09, // no data
 	lskRecentHashtagsAndBots = 0x0a, // no data
 	lskStickersOld = 0x0b, // no data
-	lskSavedPeers = 0x0c, // no data
+	lskSavedPeersOld = 0x0c, // no data
 	lskReportSpamStatuses = 0x0d, // no data
 	lskSavedGifsOld = 0x0e, // no data
 	lskSavedGifs = 0x0f, // no data
@@ -696,7 +696,6 @@ bool NoTimeLimit(qint32 storedLimitValue) {
 
 FileKey _exportSettingsKey = 0;
 
-FileKey _savedPeersKey = 0;
 FileKey _langPackKey = 0;
 FileKey _languagesKey = 0;
 
@@ -2389,7 +2388,7 @@ ReadMapState _readMap(const QByteArray &pass) {
 	quint64 installedStickersKey = 0, featuredStickersKey = 0, recentStickersKey = 0, favedStickersKey = 0, archivedStickersKey = 0;
 	quint64 savedGifsKey = 0;
 	quint64 backgroundKeyDay = 0, backgroundKeyNight = 0;
-	quint64 userSettingsKey = 0, recentHashtagsAndBotsKey = 0, savedPeersKey = 0, exportSettingsKey = 0;
+	quint64 userSettingsKey = 0, recentHashtagsAndBotsKey = 0, exportSettingsKey = 0;
 	while (!map.stream.atEnd()) {
 		quint32 keyType;
 		map.stream >> keyType;
@@ -2473,8 +2472,9 @@ ReadMapState _readMap(const QByteArray &pass) {
 		case lskSavedGifs: {
 			map.stream >> savedGifsKey;
 		} break;
-		case lskSavedPeers: {
-			map.stream >> savedPeersKey;
+		case lskSavedPeersOld: {
+			quint64 key;
+			map.stream >> key;
 		} break;
 		case lskExportSettings: {
 			map.stream >> exportSettingsKey;
@@ -2502,7 +2502,6 @@ ReadMapState _readMap(const QByteArray &pass) {
 	_favedStickersKey = favedStickersKey;
 	_archivedStickersKey = archivedStickersKey;
 	_savedGifsKey = savedGifsKey;
-	_savedPeersKey = savedPeersKey;
 	_backgroundKeyDay = backgroundKeyDay;
 	_backgroundKeyNight = backgroundKeyNight;
 	_userSettingsKey = userSettingsKey;
@@ -2606,7 +2605,6 @@ void _writeMap(WriteMapWhen when) {
 	}
 	if (_favedStickersKey) mapSize += sizeof(quint32) + sizeof(quint64);
 	if (_savedGifsKey) mapSize += sizeof(quint32) + sizeof(quint64);
-	if (_savedPeersKey) mapSize += sizeof(quint32) + sizeof(quint64);
 	if (_backgroundKeyDay || _backgroundKeyNight) mapSize += sizeof(quint32) + sizeof(quint64) + sizeof(quint64);
 	if (_userSettingsKey) mapSize += sizeof(quint32) + sizeof(quint64);
 	if (_recentHashtagsAndBotsKey) mapSize += sizeof(quint32) + sizeof(quint64);
@@ -2649,9 +2647,6 @@ void _writeMap(WriteMapWhen when) {
 	}
 	if (_savedGifsKey) {
 		mapData.stream << quint32(lskSavedGifs) << quint64(_savedGifsKey);
-	}
-	if (_savedPeersKey) {
-		mapData.stream << quint32(lskSavedPeers) << quint64(_savedPeersKey);
 	}
 	if (_backgroundKeyDay || _backgroundKeyNight) {
 		mapData.stream
@@ -2929,7 +2924,7 @@ void reset() {
 	_savedGifsKey = 0;
 	_backgroundKeyDay = _backgroundKeyNight = 0;
 	Window::Theme::Background()->reset();
-	_userSettingsKey = _recentHashtagsAndBotsKey = _savedPeersKey = _exportSettingsKey = 0;
+	_userSettingsKey = _recentHashtagsAndBotsKey = _exportSettingsKey = 0;
 	_oldMapVersion = _oldSettingsVersion = 0;
 	_cacheTotalSizeLimit = Database::Settings().totalSizeLimit;
 	_cacheTotalTimeLimit = Database::Settings().totalTimeLimit;
@@ -2978,7 +2973,6 @@ base::flat_set<QString> CollectGoodNames() {
 		_backgroundKeyDay,
 		_recentHashtagsAndBotsKey,
 		_exportSettingsKey,
-		_savedPeersKey,
 		_trustedBotsKey
 	};
 	auto result = base::flat_set<QString>{ "map0", "map1" };
@@ -4903,104 +4897,6 @@ Export::Settings ReadExportSettings() {
 		: Export::Settings();
 }
 
-void writeSavedPeers() {
-	if (!_working()) return;
-
-	const SavedPeers &saved(cSavedPeers());
-	if (saved.isEmpty()) {
-		if (_savedPeersKey) {
-			clearKey(_savedPeersKey);
-			_savedPeersKey = 0;
-			_mapChanged = true;
-		}
-		_writeMap();
-	} else {
-		if (!_savedPeersKey) {
-			_savedPeersKey = genKey();
-			_mapChanged = true;
-			_writeMap(WriteMapWhen::Fast);
-		}
-		quint32 size = sizeof(quint32);
-		for (SavedPeers::const_iterator i = saved.cbegin(); i != saved.cend(); ++i) {
-			size += Serialize::peerSize(i.key()) + Serialize::dateTimeSize();
-		}
-
-		EncryptedDescriptor data(size);
-		data.stream << quint32(saved.size());
-		for (SavedPeers::const_iterator i = saved.cbegin(); i != saved.cend(); ++i) {
-			Serialize::writePeer(data.stream, i.key());
-			data.stream << i.value();
-		}
-
-		FileWriteDescriptor file(_savedPeersKey);
-		file.writeEncrypted(data);
-	}
-}
-
-void readSavedPeers() {
-	if (!_savedPeersKey) return;
-
-	FileReadDescriptor saved;
-	if (!readEncryptedFile(saved, _savedPeersKey)) {
-		clearKey(_savedPeersKey);
-		_savedPeersKey = 0;
-		_writeMap();
-		return;
-	}
-	if (saved.version == 9011) { // broken dev version
-		clearKey(_savedPeersKey);
-		_savedPeersKey = 0;
-		_writeMap();
-		return;
-	}
-
-	quint32 count = 0;
-	saved.stream >> count;
-	cRefSavedPeers().clear();
-	cRefSavedPeersByTime().clear();
-	QList<PeerData*> peers;
-	peers.reserve(count);
-	for (uint32 i = 0; i < count; ++i) {
-		const auto peer = Serialize::readPeer(saved.version, saved.stream);
-		if (!peer) break;
-
-		QDateTime t;
-		saved.stream >> t;
-
-		cRefSavedPeers().insert(peer, t);
-		cRefSavedPeersByTime().insert(t, peer);
-		peers.push_back(peer);
-	}
-
-	Auth().api().requestPeers(peers);
-}
-
-void addSavedPeer(PeerData *peer, const QDateTime &position) {
-	auto &savedPeers = cRefSavedPeers();
-	auto i = savedPeers.find(peer);
-	if (i == savedPeers.cend()) {
-		savedPeers.insert(peer, position);
-	} else if (i.value() != position) {
-		cRefSavedPeersByTime().remove(i.value(), peer);
-		i.value() = position;
-		cRefSavedPeersByTime().insert(i.value(), peer);
-	}
-	writeSavedPeers();
-}
-
-void removeSavedPeer(PeerData *peer) {
-	auto &savedPeers = cRefSavedPeers();
-	if (savedPeers.isEmpty()) return;
-
-	auto i = savedPeers.find(peer);
-	if (i != savedPeers.cend()) {
-		cRefSavedPeersByTime().remove(i.value(), peer);
-		savedPeers.erase(i);
-
-		writeSavedPeers();
-	}
-}
-
 void writeReportSpamStatuses() {
 	_writeReportSpamStatuses();
 }
@@ -5157,10 +5053,6 @@ bool ClearManager::addTask(int task) {
 		}
 		if (_recentHashtagsAndBotsKey) {
 			_recentHashtagsAndBotsKey = 0;
-			_mapChanged = true;
-		}
-		if (_savedPeersKey) {
-			_savedPeersKey = 0;
 			_mapChanged = true;
 		}
 		_writeMap();
