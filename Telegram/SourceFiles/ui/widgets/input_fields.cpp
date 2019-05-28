@@ -2604,9 +2604,6 @@ void InputField::keyPressEventInner(QKeyEvent *e) {
 		if (getLastText() != translatedString) {
 			clear();
 			setText(translatedString);
-			([=] { 
-				setCursorPosition(QTextCursor::EndOfLine);
-			});
 			e->ignore();
 			return;
 		}
