@@ -33,6 +33,7 @@
             '/w14834', # [[nodiscard]]
             '/w15038', # wrong initialization order
             '/w14265', # class has virtual functions, but destructor is not virtual
+            '/bigobj', # Fix C1128 error
           ],
           'TreatWChar_tAsBuiltInType': 'false',
         },
