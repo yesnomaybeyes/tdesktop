@@ -355,8 +355,9 @@ ReplyMarkupClickHandler::ReplyMarkupClickHandler(
 
 // Copy to clipboard support.
 QString ReplyMarkupClickHandler::copyToClipboardText() const {
-	if (auto button = getButton()) {
-		if (button->type == HistoryMessageMarkupButton::Type::Url) {
+	if (const auto button = getButton()) {
+		using Type = HistoryMessageMarkupButton::Type;
+		if (button->type == Type::Url || button->type == Type::Auth) {
 			return QString::fromUtf8(button->data);
 		}
 	}
@@ -364,8 +365,9 @@ QString ReplyMarkupClickHandler::copyToClipboardText() const {
 }
 
 QString ReplyMarkupClickHandler::copyToClipboardContextItemText() const {
-	if (auto button = getButton()) {
-		if (button->type == HistoryMessageMarkupButton::Type::Url) {
+	if (const auto button = getButton()) {
+		using Type = HistoryMessageMarkupButton::Type;
+		if (button->type == Type::Url || button->type == Type::Auth) {
 			return lang(lng_context_copy_link);
 		}
 	}
