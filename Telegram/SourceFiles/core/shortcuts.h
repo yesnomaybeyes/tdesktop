@@ -35,6 +35,15 @@ enum class Command {
 	ChatPinned4,
 	ChatPinned5,
 
+	ChatBinded1,
+	ChatBinded2,
+	ChatBinded3,
+	ChatBinded4,
+	SetChatBinded1,
+	SetChatBinded2,
+	SetChatBinded3,
+	SetChatBinded4,
+
 	SupportReloadTemplates,
 	SupportToggleMuted,
 	SupportScrollToCurrent,

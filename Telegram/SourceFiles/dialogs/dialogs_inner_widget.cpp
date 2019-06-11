@@ -2965,6 +2965,25 @@ void InnerWidget::setupShortcuts() {
 				return jumpToDialogRow({ row->key(), FullMsgId() });
 			});
 		}
+
+		static const auto kBinded = {
+			Command::ChatBinded1,
+			Command::ChatBinded2,
+			Command::ChatBinded3,
+			Command::ChatBinded4,
+		};
+		auto &&binded = ranges::view::zip(kBinded, ranges::view::ints(0));
+		for (const auto [command, index] : binded) {
+			request->check(command) && request->handle([=, index = index] {
+				const auto peerId = session().settings().bindedChat(index);
+				if (!peerId) {
+					return false;
+				}
+				App::main()->choosePeer(peerId, ShowAtUnreadMsgId);
+				return true;
+			});
+		}
+
 		if (session().supportMode() && row.key.history()) {
 			request->check(
 				Command::SupportScrollToCurrent

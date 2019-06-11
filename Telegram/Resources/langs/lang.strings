@@ -160,6 +160,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_pinned_unpin" = "Unpin";
 "lng_pinned_notify" = "Notify all members";
 
+"lng_binded" = "Dialog was binded.";
+"lng_unbinded" = "Dialog was unbinded.";
+
 "lng_edit_media_album_error" = "This file cannot be saved as a part of an album.";
 "lng_edit_media_invalid_file" = "Sorry, no way to use this file.";
 

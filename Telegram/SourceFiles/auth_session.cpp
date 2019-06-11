@@ -54,6 +54,7 @@ QByteArray AuthSessionSettings::serialize() const {
 	}
 	size += _variables.groupStickersSectionHidden.size() * sizeof(quint64);
 	size += Serialize::bytearraySize(autoDownload);
+	size += _variables.bindedChats.size() * sizeof(quint64);
 
 	auto result = QByteArray();
 	result.reserve(size);
@@ -98,6 +99,10 @@ QByteArray AuthSessionSettings::serialize() const {
 		stream << qint32(_variables.notifyAboutPinned.current() ? 1 : 0);
 		stream << qint32(_variables.archiveInMainMenu.current() ? 1 : 0);
 		stream << qint32(_variables.skipArchiveInSearch.current() ? 1 : 0);
+		stream << qint32(_variables.bindedChats.size());
+		for (auto peerId : _variables.bindedChats) {
+			stream << quint64(peerId);
+		}
 	}
 	return result;
 }
@@ -138,6 +143,7 @@ void AuthSessionSettings::constructFromSerialized(const QByteArray &serialized) 
 	qint32 notifyAboutPinned = _variables.notifyAboutPinned.current() ? 1 : 0;
 	qint32 archiveInMainMenu = _variables.archiveInMainMenu.current() ? 1 : 0;
 	qint32 skipArchiveInSearch = _variables.skipArchiveInSearch.current() ? 1 : 0;
+	std::vector<PeerId> bindedChats = std::move(_variables.bindedChats);
 
 	stream >> selectorTab;
 	stream >> lastSeenWarningSeen;
@@ -229,6 +235,17 @@ void AuthSessionSettings::constructFromSerialized(const QByteArray &serialized) 
 	if (!stream.atEnd()) {
 		stream >> skipArchiveInSearch;
 	}
+	if (!stream.atEnd()) {
+		auto count = qint32(0);
+		stream >> count;
+		if (stream.status() == QDataStream::Ok) {
+			for (auto i = 0; i != count; ++i) {
+				quint64 peerId;
+				stream >> peerId;
+				bindedChats[i] = (peerId);
+			}
+		}
+	}
 	if (stream.status() != QDataStream::Ok) {
 		LOG(("App Error: "
 			"Bad data for AuthSessionSettings::constructFromSerialized()"));
@@ -302,6 +319,7 @@ void AuthSessionSettings::constructFromSerialized(const QByteArray &serialized) 
 	_variables.notifyAboutPinned = (notifyAboutPinned == 1);
 	_variables.archiveInMainMenu = (archiveInMainMenu == 1);
 	_variables.skipArchiveInSearch = (skipArchiveInSearch == 1);
+	_variables.bindedChats = std::move(bindedChats);
 }
 
 void AuthSessionSettings::setSupportChatsTimeSlice(int slice) {

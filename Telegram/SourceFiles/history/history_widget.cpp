@@ -109,6 +109,7 @@ constexpr auto kSaveDraftTimeout = 1000;
 constexpr auto kSaveDraftAnywayTimeout = 5000;
 constexpr auto kSaveCloudDraftIdleTimeout = 14000;
 constexpr auto kRecordingUpdateDelta = crl::time(100);
+constexpr auto kBindedToastDuration = crl::time(500);
 
 ApiWrap::RequestMessageDataCallback replyEditMessageDataCallback() {
 	return [](ChannelData *channel, MsgId msgId) {
@@ -1391,19 +1392,46 @@ void HistoryWidget::setupShortcuts() {
 		return isActiveWindow() && !Ui::isLayerShown() && inFocusChain();
 	}) | rpl::start_with_next([=](not_null<Shortcuts::Request*> request) {
 		using Command = Shortcuts::Command;
-		if (_history) {
-			request->check(Command::Search, 1) && request->handle([=] {
-				App::main()->searchInChat(_history);
+		if (!_history) {
+			return;
+		}
+		request->check(Command::Search, 1) && request->handle([=] {
+			App::main()->searchInChat(_history);
+			return true;
+		});
+		if (session().supportMode()) {
+			request->check(
+				Command::SupportToggleMuted
+			) && request->handle([=] {
+				toggleMuteUnmute();
 				return true;
 			});
-			if (session().supportMode()) {
-				request->check(
-					Command::SupportToggleMuted
-				) && request->handle([=] {
-					toggleMuteUnmute();
-					return true;
-				});
-			}
+		}
+
+		static const auto kSetBinded = {
+			Command::SetChatBinded1,
+			Command::SetChatBinded2,
+			Command::SetChatBinded3,
+			Command::SetChatBinded4,
+		};
+		auto &&binded = ranges::view::zip(kSetBinded, ranges::view::ints(0));
+		for (const auto [command, index] : binded) {
+			request->check(command) && request->handle([=, index = index] {
+				auto toBind = _peer->id;
+				if (toBind == session().settings().bindedChat(index)) {
+					toBind = 0;
+				}
+				session().settings().setBindedChat(toBind, index);
+
+				auto toast = Ui::Toast::Config();
+				toast.text = (toBind
+					? tr::lng_binded
+					: tr::lng_unbinded)(tr::now);
+				toast.durationMs = kBindedToastDuration;
+				Ui::Toast::Show(this, toast);
+				Local::writeUserSettings();
+				return true;
+			});
 		}
 	}, lifetime());
 }

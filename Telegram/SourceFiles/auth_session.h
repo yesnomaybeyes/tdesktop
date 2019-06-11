@@ -185,6 +185,13 @@ public:
 		_variables.groupStickersSectionHidden.remove(peerId);
 	}
 
+	void setBindedChat(PeerId peerId, int index) {
+		_variables.bindedChats[index] = peerId;
+	}
+	PeerId bindedChat(int index) const {
+		return _variables.bindedChats[index];
+	}
+
 	Data::AutoDownload::Full &autoDownload() {
 		return _variables.autoDownload;
 	}
@@ -264,6 +271,8 @@ private:
 		rpl::variable<bool> archiveInMainMenu = false;
 		rpl::variable<bool> notifyAboutPinned = true;
 		rpl::variable<bool> skipArchiveInSearch = false;
+
+		std::vector<PeerId> bindedChats{0, 0, 0, 0};
 
 		static constexpr auto kDefaultSupportChatsLimitSlice
 			= 7 * 24 * 60 * 60;

@@ -324,6 +324,15 @@ void Manager::fillDefaults() {
 	set(qsl("ctrl+4"), Command::ChatPinned4);
 	set(qsl("ctrl+5"), Command::ChatPinned5);
 
+	set(qsl("ctrl+6"), Command::ChatBinded1);
+	set(qsl("ctrl+7"), Command::ChatBinded2);
+	set(qsl("ctrl+8"), Command::ChatBinded3);
+	set(qsl("ctrl+9"), Command::ChatBinded4);
+	set(qsl("ctrl+shift+6"), Command::SetChatBinded1);
+	set(qsl("ctrl+shift+7"), Command::SetChatBinded2);
+	set(qsl("ctrl+shift+8"), Command::SetChatBinded3);
+	set(qsl("ctrl+shift+9"), Command::SetChatBinded4);
+
 	set(qsl("ctrl+0"), Command::ChatSelf);
 }
 
