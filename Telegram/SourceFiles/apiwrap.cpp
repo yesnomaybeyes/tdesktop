@@ -5124,6 +5124,106 @@ void ApiWrap::sendInlineResult(
 	}
 }
 
+void ApiWrap::sendExistingPhoto(
+		not_null<PhotoData*> photo,
+		TextWithEntities caption,
+		const SendOptions &options) {
+	sendAction(options);
+
+	const auto history = options.history;
+	const auto peer = history->peer;
+	const auto newId = FullMsgId(peerToChannel(peer->id), clientMsgId());
+	const auto randomId = rand_value<uint64>();
+
+	auto flags = NewMessageFlags(peer) | MTPDmessage::Flag::f_media;
+	auto sendFlags = MTPmessages_SendMedia::Flags(0);
+	if (options.replyTo) {
+		flags |= MTPDmessage::Flag::f_reply_to_msg_id;
+		sendFlags |= MTPmessages_SendMedia::Flag::f_reply_to_msg_id;
+	}
+	bool channelPost = peer->isChannel() && !peer->isMegagroup();
+	bool silentPost = channelPost
+		&& _session->data().notifySilentPosts(peer);
+	if (channelPost) {
+		flags |= MTPDmessage::Flag::f_views;
+		flags |= MTPDmessage::Flag::f_post;
+	}
+	if (!channelPost) {
+		flags |= MTPDmessage::Flag::f_from_id;
+	} else if (peer->asChannel()->addsSignature()) {
+		flags |= MTPDmessage::Flag::f_post_author;
+	}
+	if (silentPost) {
+		sendFlags |= MTPmessages_SendMedia::Flag::f_silent;
+	}
+	auto messageFromId = channelPost ? 0 : _session->userId();
+	auto messagePostAuthor = channelPost
+		? App::peerName(_session->user())
+		: QString();
+
+	TextUtilities::Trim(caption);
+	auto sentEntities = TextUtilities::EntitiesToMTP(
+		caption.entities,
+		TextUtilities::ConvertOption::SkipLocal);
+	if (!sentEntities.v.isEmpty()) {
+		sendFlags |= MTPmessages_SendMedia::Flag::f_entities;
+	}
+	const auto replyTo = options.replyTo;
+	const auto captionText = caption.text;
+
+	_session->data().registerMessageRandomId(randomId, newId);
+	
+	history->addNewPhoto(
+		newId.msg,
+		flags,
+		0,
+		replyTo,
+		unixtime(),
+		messageFromId,
+		messagePostAuthor,
+		photo,
+		caption,
+		MTPReplyMarkup());
+
+	auto failHandler = std::make_shared<Fn<void(const RPCError&, QByteArray)>>();
+	auto performRequest = [=] {
+		const auto usedFileReference = photo->fileReference();
+		history->sendRequestId = request(MTPmessages_SendMedia(
+			MTP_flags(sendFlags),
+			peer->input,
+			MTP_int(replyTo),
+			MTP_inputMediaPhoto(
+				MTP_flags(0),
+				photo->mtpInput(),
+				MTPint()),
+			MTP_string(captionText),
+			MTP_long(randomId),
+			MTPReplyMarkup(),
+			sentEntities
+		)).done([=](const MTPUpdates &result) {
+			applyUpdates(result, randomId);
+		}).fail([=](const RPCError &error) {
+			(*failHandler)(error, usedFileReference);
+		}).afterRequest(history->sendRequestId
+		).send();
+	};
+	*failHandler = [=](const RPCError &error, QByteArray usedFileReference) {
+		if (error.code() == 400
+			&& error.type().startsWith(qstr("FILE_REFERENCE_"))) {
+			auto refreshed = [=](const UpdatedFileReferences &data) {
+				if (photo->fileReference() != usedFileReference) {
+					performRequest();
+				} else {
+					sendMessageFail(error);
+				}
+			};
+		} else {
+			sendMessageFail(error);
+		}
+	};
+	performRequest();
+}
+
 void ApiWrap::sendExistingDocument(
 		not_null<DocumentData*> document,
 		Data::FileOrigin origin,

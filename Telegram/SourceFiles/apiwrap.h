@@ -429,6 +429,10 @@ public:
 		Data::FileOrigin origin,
 		TextWithEntities caption,
 		const SendOptions &options);
+	void sendExistingPhoto(
+		not_null<PhotoData*> photo,
+		TextWithEntities caption,
+		const SendOptions &options);
 
 	void requestSupportContact(FnMut<void(const MTPUser&)> callback);
 

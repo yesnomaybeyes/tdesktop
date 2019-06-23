@@ -1535,6 +1535,12 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 				Auth().api().requestAttachedStickerSets(photo);
 			});
 		}
+		_menu->addAction(tr::lng_context_to_save_messages(tr::now), [=] {
+			Auth().api().sendExistingPhoto(
+				photo,
+				_dragStateItem->originalText(),
+				ApiWrap::SendOptions(Auth().data().history(Auth().userPeerId())));
+		});
 	};
 	const auto addDocumentActions = [&](not_null<DocumentData*> document) {
 		if (document->loading()) {
@@ -1566,6 +1572,13 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 		_menu->addAction(lnkIsVideo ? tr::lng_context_save_video(tr::now) : (lnkIsVoice ? tr::lng_context_save_audio(tr::now) : (lnkIsAudio ? tr::lng_context_save_audio_file(tr::now) : tr::lng_context_save_file(tr::now))), App::LambdaDelayed(st::defaultDropdownMenu.menu.ripple.hideDuration, this, [=] {
 			saveDocumentToFile(itemId, document);
 		}));
+		_menu->addAction(tr::lng_context_to_save_messages(tr::now), [=] {
+			Auth().api().sendExistingDocument(
+				document,
+				document->stickerSetOrigin(),
+				item->originalText(),
+				ApiWrap::SendOptions(Auth().data().history(Auth().userPeerId())));
+		});
 	};
 	const auto link = ClickHandler::getActive();
 	auto lnkPhoto = dynamic_cast<PhotoClickHandler*>(link.get());
