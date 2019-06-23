@@ -244,7 +244,9 @@ void Folder::paintUserpic(
 	p.setBrush(overrideBg ? *overrideBg : st::historyPeerArchiveUserpicBg);
 	{
 		PainterHighQualityEnabler hq(p);
-		p.drawEllipse(x, y, size, size);
+		Global::SquareAvatars()
+			? p.drawRect(x, y, size, size)
+			: p.drawEllipse(x, y, size, size);
 	}
 	if (size == st::dialogsPhotoSize) {
 		const auto rect = QRect{ x, y, size, size };
