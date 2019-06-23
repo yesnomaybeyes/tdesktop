@@ -56,7 +56,7 @@ void SearchEngineBox::prepare() {
 		object_ptr<Ui::InputField>(
 			content,
 			st::defaultInputField,
-			langFactory(lng_settings_search_engine_field_label),
+			tr::lng_settings_search_engine_field_label(),
 			Global::SearchEngineUrl()),
 		st::markdownLinkFieldPadding);
 
@@ -80,10 +80,10 @@ void SearchEngineBox::prepare() {
 		submit();
 	});
 
-	setTitle(langFactory(lng_settings_search_engine_box_title));
+	setTitle(tr::lng_settings_search_engine_box_title());
 
-	addButton(langFactory(lng_formatting_link_create), submit);
-	addButton(langFactory(lng_cancel), [=] { 
+	addButton(tr::lng_formatting_link_create(), submit);
+	addButton(tr::lng_cancel(), [=] {
 		_callback(!Global::SearchEngineUrl().isEmpty());
 		closeBox();
 	});
@@ -134,19 +134,19 @@ void OnChooseVideoPlayer(Ui::Checkbox *externalPlayer) {
 };
 
 void SetupForkContent(not_null<Ui::VerticalLayout*> container) {
-	const auto checkbox = [&](LangKey label, bool checked) {
+	const auto checkbox = [&](const QString &label, bool checked) {
 		return object_ptr<Ui::Checkbox>(
 			container,
-			lang(label),
+			label,
 			checked,
 			st::settingsCheckbox);
 	};
-	const auto addCheckbox = [&](LangKey label, bool checked) {
+	const auto addCheckbox = [&](const QString &label, bool checked) {
 		return container->add(
 			checkbox(label, checked),
 			st::settingsCheckboxPadding);
 	};
-	const auto addSlidingCheckbox = [&](LangKey label, bool checked) {
+	const auto addSlidingCheckbox = [&](const QString &label, bool checked) {
 		return container->add(
 			object_ptr<Ui::SlideWrap<Ui::Checkbox>>(
 				container,
@@ -154,22 +154,22 @@ void SetupForkContent(not_null<Ui::VerticalLayout*> container) {
 				st::settingsCheckboxPadding));
 	};
 	const auto squareAvatars = addCheckbox(
-		lng_settings_square_avatats,
+		tr::lng_settings_square_avatats(tr::now),
 		Global::SquareAvatars());
 	const auto audioFade = addCheckbox(
-		lng_settings_audio_fade,
+		tr::lng_settings_audio_fade(tr::now),
 		Global::AudioFade());
 	const auto externalPlayer = addCheckbox(
-		lng_settings_external_player,
+		tr::lng_settings_external_player(tr::now),
 		Global::AskExternalPlayerPath());
 	const auto lastSeenInDialogs = addCheckbox(
-		lng_settings_last_seen_in_dialogs,
+		tr::lng_settings_last_seen_in_dialogs(tr::now),
 		Global::LastSeenInDialogs());
 	const auto searchEngine = addCheckbox(
-		lng_settings_search_engine,
+		tr::lng_settings_search_engine(tr::now),
 		Global::SearchEngine());
 	const auto allRecentStickers = addCheckbox(
-		lng_settings_show_all_recent_stickers,
+		tr::lng_settings_show_all_recent_stickers(tr::now),
 		Global::AllRecentStickers());
 
 	squareAvatars->checkedChanges(
@@ -177,18 +177,18 @@ void SetupForkContent(not_null<Ui::VerticalLayout*> container) {
 		return (checked != Global::SquareAvatars());
 	}) | rpl::start_with_next([=](bool checked) {
 		Ui::show(Box<ConfirmBox>(
-				lang(lng_settings_need_restart),
-				lang(lng_settings_restart_now),
-				[=] { 
+				tr::lng_settings_need_restart(tr::now),
+				tr::lng_settings_restart_now(tr::now),
+				[=] {
 					Global::SetSquareAvatars(checked);
 					Local::writeUserSettings();
 					App::restart();
 				},
-				[=] { 
+				[=] {
 					squareAvatars->setChecked(!checked);
 				}));
 	}, squareAvatars->lifetime());
-	
+
 	audioFade->checkedChanges(
 	) | rpl::filter([](bool checked) {
 		return (checked != Global::AudioFade());
