@@ -37,6 +37,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_widgets.h"
 #include "styles/style_history.h"
 #include "styles/style_window.h"
+#include "chat_helpers/message_field.h"
 
 namespace {
 
@@ -126,6 +127,56 @@ void FastShareMessage(not_null<HistoryItem*> item) {
 		&& item->media()
 		&& (item->media()->game() != nullptr);
 	const auto canCopyLink = item->hasDirectLink() || isGame;
+
+	const auto asCopyCallback = [=](
+			QVector<PeerData*> &&result,
+			TextWithTags &&comment,
+			bool emptyText) {
+
+		const auto asCopySend = [&](not_null<HistoryItem*> item) {
+			for (const auto peer : result) {
+				const auto history = peer->owner().history(peer);
+				if (!item->media()) {
+					auto message = ApiWrap::MessageToSend(history);
+					message.textWithTags = PrepareEditText(item);
+					message.clearDraft = false;
+					history->session().api().sendMessage(std::move(message));
+					continue;
+				}
+
+				const auto caption = [&] {
+					return !emptyText
+					? item->originalText()
+					: TextWithEntities{
+						comment.text,
+						comment.text.isEmpty()
+							? EntitiesInText()
+							: ConvertTextTagsToEntities(comment.tags)
+					};
+				}();
+				if (const auto document = item->media()->document()) {
+					Auth().api().sendExistingDocument(
+						document,
+						document->stickerSetOrigin(),
+						caption,
+						ApiWrap::SendOptions(history));
+				} else if (const auto photo = item->media()->photo()) {
+					Auth().api().sendExistingPhoto(
+						photo,
+						caption,
+						ApiWrap::SendOptions(history));
+				}
+			}
+		};
+
+		if (isGroup) {
+			for (const auto i : history->owner().groups().find(item)->items) {
+				asCopySend(i);
+			}
+		} else if (const auto item = Auth().data().message(data->msgIds[0])) {
+			asCopySend(item);
+		}
+	};
 
 	auto copyCallback = [=]() {
 		if (auto item = Auth().data().message(data->msgIds[0])) {
@@ -249,6 +300,7 @@ void FastShareMessage(not_null<HistoryItem*> item) {
 	Ui::show(Box<ShareBox>(
 		std::move(copyLinkCallback),
 		std::move(submitCallback),
+		std::move(asCopyCallback),
 		std::move(filterCallback)));
 }
 

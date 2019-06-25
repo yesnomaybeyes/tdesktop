@@ -153,9 +153,11 @@ ShareBox::ShareBox(
 	QWidget*,
 	CopyCallback &&copyCallback,
 	SubmitCallback &&submitCallback,
+	AsCopyCallback &&asCopyCallback,
 	FilterCallback &&filterCallback)
 : _copyCallback(std::move(copyCallback))
 , _submitCallback(std::move(submitCallback))
+, _asCopyCallback(std::move(asCopyCallback))
 , _filterCallback(std::move(filterCallback))
 , _select(
 	this,
@@ -398,9 +400,21 @@ void ShareBox::keyPressEvent(QKeyEvent *e) {
 }
 
 void ShareBox::createButtons() {
+	const auto asCopyShare = [=](bool emptyText) {
+		if (!_asCopyCallback) {
+			return;
+		}
+		_asCopyCallback(
+			_inner->selected(),
+			_comment->entity()->getTextWithAppliedMarkdown(),
+			emptyText);
+		closeBox();
+	};
 	clearButtons();
 	if (_hasSelected) {
 		addButton(tr::lng_share_confirm(), [=] { submit(); });
+		addButton(tr::lng_share_as_copy(), [=] { asCopyShare(false); });
+		addButton(tr::lng_share_as_copy_no_text(), [=] { asCopyShare(true); });
 	} else if (_copyCallback) {
 		addButton(tr::lng_share_copy_link(), [=] { copyLink(); });
 	}

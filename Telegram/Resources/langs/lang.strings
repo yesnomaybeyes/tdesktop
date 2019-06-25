@@ -1447,6 +1447,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_share_wrong_user" = "This game was opened from a different user.";
 "lng_share_game_link_copied" = "Game link copied to clipboard.";
 "lng_share_done" = "Done!";
+"lng_share_as_copy" = "As copy";
+"lng_share_as_copy_no_text" = "No text";
 
 "lng_contact_phone" = "Phone Number";
 "lng_enter_contact_data" = "New Contact";

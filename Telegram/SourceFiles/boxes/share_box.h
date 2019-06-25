@@ -37,11 +37,13 @@ class ShareBox : public BoxContent, public RPCSender {
 public:
 	using CopyCallback = Fn<void()>;
 	using SubmitCallback = Fn<void(QVector<PeerData*>&&, TextWithTags&&)>;
+	using AsCopyCallback = Fn<void(QVector<PeerData*>&&, TextWithTags&&, bool emptyText)>;
 	using FilterCallback = Fn<bool(PeerData*)>;
 	ShareBox(
 		QWidget*,
 		CopyCallback &&copyCallback,
 		SubmitCallback &&submitCallback,
+		AsCopyCallback &&anonymousCallback,
 		FilterCallback &&filterCallback);
 
 protected:
@@ -79,6 +81,7 @@ private:
 
 	CopyCallback _copyCallback;
 	SubmitCallback _submitCallback;
+	AsCopyCallback _asCopyCallback;
 	FilterCallback _filterCallback;
 
 	object_ptr<Ui::MultiSelect> _select;
