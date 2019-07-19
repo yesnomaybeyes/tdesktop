@@ -25,6 +25,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/image/image.h"
 #include "ui/special_buttons.h"
 #include "inline_bots/inline_bot_result.h"
+#include "base/unixtime.h"
 #include "data/data_drafts.h"
 #include "data/data_session.h"
 #include "data/data_web_page.h"
@@ -4333,7 +4334,7 @@ void HistoryWidget::sendFileConfirmed(
 			MTPMessageFwdHeader(),
 			MTPint(),
 			MTP_int(file->to.replyTo),
-			MTP_int(unixtime()),
+			MTP_int(base::unixtime::now()),
 			MTP_string(caption.text),
 			photo,
 			MTPReplyMarkup(),
@@ -4364,7 +4365,7 @@ void HistoryWidget::sendFileConfirmed(
 			MTPMessageFwdHeader(),
 			MTPint(),
 			MTP_int(file->to.replyTo),
-			MTP_int(unixtime()),
+			MTP_int(base::unixtime::now()),
 			MTP_string(caption.text),
 			document,
 			MTPReplyMarkup(),
@@ -4398,7 +4399,7 @@ void HistoryWidget::sendFileConfirmed(
 				MTPMessageFwdHeader(),
 				MTPint(),
 				MTP_int(file->to.replyTo),
-				MTP_int(unixtime()),
+				MTP_int(base::unixtime::now()),
 				MTP_string(caption.text),
 				document,
 				MTPReplyMarkup(),
@@ -4768,7 +4769,7 @@ void HistoryWidget::updateHistoryGeometry(bool initial, bool loadedDown, const S
 		newScrollHeight -= st::historyReplyHeight;
 	}
 	if (_contactStatus) {
-		newScrollHeight -= _contactStatus->height() - st::lineWidth;
+		newScrollHeight -= _contactStatus->height();
 	}
 	if (!editingMessage() && (isBlocked() || isBotStart() || isJoinChannel() || isMuteUnmute())) {
 		newScrollHeight -= _unblock->height();
@@ -5182,7 +5183,7 @@ void HistoryWidget::keyPressEvent(QKeyEvent *e) {
 				? _history->lastSentMessage()
 				: nullptr;
 			if (item
-				&& item->allowsEdit(unixtime())
+				&& item->allowsEdit(base::unixtime::now())
 				&& _field->empty()
 				&& !_editMsgId
 				&& !_replyToId) {
@@ -5531,7 +5532,7 @@ bool HistoryWidget::sendExistingPhoto(
 		flags,
 		0,
 		options.replyTo,
-		unixtime(),
+		base::unixtime::now(),
 		messageFromId,
 		messagePostAuthor,
 		photo,
@@ -5956,7 +5957,7 @@ void HistoryWidget::gotPreview(QString links, const MTPMessageMedia &result, mtp
 		const auto &data = result.c_messageMediaWebPage().vwebpage();
 		const auto page = session().data().processWebpage(data);
 		_previewCache.insert(links, page->id);
-		if (page->pendingTill > 0 && page->pendingTill <= unixtime()) {
+		if (page->pendingTill > 0 && page->pendingTill <= base::unixtime::now()) {
 			page->pendingTill = -1;
 		}
 		if (links == _previewLinks && !_previewCancelled) {
@@ -5995,7 +5996,7 @@ void HistoryWidget::updatePreview() {
 				TextUtilities::Clean(linkText),
 				Ui::DialogTextOptions());
 
-			const auto timeout = (_previewData->pendingTill - unixtime());
+			const auto timeout = (_previewData->pendingTill - base::unixtime::now());
 			_previewTimer.callOnce(std::max(timeout, 0) * crl::time(1000));
 		} else {
 			QString title, desc;

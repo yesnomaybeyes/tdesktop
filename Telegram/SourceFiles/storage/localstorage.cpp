@@ -603,7 +603,7 @@ enum {
 	dbiStickersFavedLimit = 0x50,
 	dbiSuggestStickersByEmoji = 0x51,
 	dbiSuggestEmoji = 0x52,
-	dbiTxtDomainString = 0x53,
+	dbiTxtDomainStringOld = 0x53,
 	dbiThemeKey = 0x54,
 	dbiTileBackground = 0x55,
 	dbiCacheSettingsOld = 0x56,
@@ -613,6 +613,7 @@ enum {
 	dbiLanguagesKey = 0x5a,
 	dbiCallSettings = 0x5b,
 	dbiCacheSettings = 0x5c,
+	dbiTxtDomainString = 0x5d,
 
 	// Fork settings.
 	dbiSquareAvatars = 0x91,
@@ -1300,6 +1301,12 @@ bool _readSetting(quint32 blockId, QDataStream &stream, int version, ReadSetting
 		Global::RefWorkMode().set(newMode());
 	} break;
 
+	case dbiTxtDomainStringOld: {
+		QString v;
+		stream >> v;
+		if (!_checkStreamStatus(stream)) return false;
+	} break;
+
 	case dbiTxtDomainString: {
 		QString v;
 		stream >> v;
@@ -1406,9 +1413,13 @@ bool _readSetting(quint32 blockId, QDataStream &stream, int version, ReadSetting
 
 			const auto unchecked = static_cast<ProxyData::Settings>(settings);
 			switch (unchecked) {
+			case ProxyData::Settings::Enabled:
+				Global::SetProxySettings(Global::SelectedProxy()
+					? ProxyData::Settings::Enabled
+					: ProxyData::Settings::System);
+				break;
 			case ProxyData::Settings::Disabled:
 			case ProxyData::Settings::System:
-			case ProxyData::Settings::Enabled:
 				Global::SetProxySettings(unchecked);
 				break;
 			default:

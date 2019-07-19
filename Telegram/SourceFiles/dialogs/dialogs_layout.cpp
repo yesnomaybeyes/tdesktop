@@ -22,6 +22,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "history/history_item_components.h"
 #include "history/history_item.h"
 #include "history/history.h"
+#include "base/unixtime.h"
 #include "data/data_channel.h"
 #include "data/data_user.h"
 #include "data/data_peer_values.h"
@@ -414,7 +415,7 @@ void paintRow(
 	}
 	if (from) {
 		if (from->isUser() && Global::LastSeenInDialogs()) {
-			auto lastSeen = Data::OnlineText(from->asUser(), unixtime());
+			auto lastSeen = Data::OnlineText(from->asUser(), base::unixtime::now());
 			static QSet<QString> ignoredStrings {
 				tr::lng_status_recently(tr::now),
 				tr::lng_status_bot(tr::now),
@@ -659,11 +660,13 @@ void RowPainter::paint(
 			if (cloudDraft) {
 				return (item->date() > cloudDraft->date)
 					? ItemDateTime(item)
-					: ParseDateTime(cloudDraft->date);
+					: base::unixtime::parse(cloudDraft->date);
 			}
 			return ItemDateTime(item);
 		}
-		return cloudDraft ? ParseDateTime(cloudDraft->date) : QDateTime();
+		return cloudDraft
+			? base::unixtime::parse(cloudDraft->date)
+			: QDateTime();
 	}();
 	const auto displayMentionBadge = history
 		? history->hasUnreadMentions()
