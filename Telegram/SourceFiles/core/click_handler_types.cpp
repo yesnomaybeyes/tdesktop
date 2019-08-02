@@ -130,13 +130,6 @@ void UrlClickHandler::Open(QString url, QVariant context) {
 		File::OpenEmailLink(url);
 	} else if (url.startsWith(qstr("tg://"), Qt::CaseInsensitive)) {
 		Core::App().openLocalUrl(url, context);
-	} else if (url.indexOf("youtu") >= 0 && Global::AskExternalPlayerPath()) {
-		QString path = Global::ExternalPlayerPath();
-		if (!path.isEmpty()) {
-			QProcess::startDetached(path, QStringList() << url);
-		} else {
-			QDesktopServices::openUrl(url);
-		}
 	} else if (!url.isEmpty()) {
 		QDesktopServices::openUrl(url);
 	}

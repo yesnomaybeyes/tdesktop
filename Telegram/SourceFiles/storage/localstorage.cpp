@@ -618,8 +618,8 @@ enum {
 	// Fork settings.
 	dbiSquareAvatars = 0x91,
 	dbiAudioFade = 0x92,
-	dbiExternalPlayerPath = 0x93,
-	dbiAskExternalPlayerPath = 0x94,
+	dbiUriScheme = 0x93,
+	dbiAskUriScheme = 0x94,
 	dbiSearchEngine = 0x95,
 	dbiSearchEngineUrl = 0x96,
 	dbiLastSeenInDialogs = 0x97,
@@ -1102,20 +1102,20 @@ bool _readSetting(quint32 blockId, QDataStream &stream, int version, ReadSetting
 		Global::SetAudioFade(v == 1);
 	} break;
 
-	case dbiExternalPlayerPath: {
+	case dbiUriScheme: {
 		QString v;
 		stream >> v;
 		if (!_checkStreamStatus(stream)) return false;
 
-		Global::SetExternalPlayerPath(v);
+		Global::SetUriScheme(v);
 	} break;
 
-	case dbiAskExternalPlayerPath: {
+	case dbiAskUriScheme: {
 		qint32 v;
 		stream >> v;
 		if (!_checkStreamStatus(stream)) return false;
 
-		Global::SetAskExternalPlayerPath(v == 1);
+		Global::SetAskUriScheme(v == 1);
 	} break;
 
 	case dbiSearchEngine: {
@@ -2137,7 +2137,7 @@ void _writeUserSettings() {
 	}
 	size += sizeof(quint32) + Serialize::bytearraySize(callSettings);
 
-	size += sizeof(quint32) + Serialize::stringSize(Global::ExternalPlayerPath());
+	size += sizeof(quint32) + Serialize::stringSize(Global::UriScheme());
 
 	EncryptedDescriptor data(size);
 	data.stream
@@ -2168,8 +2168,8 @@ void _writeUserSettings() {
 	
 	data.stream << quint32(dbiSquareAvatars) << qint32(Global::SquareAvatars() ? 1 : 0);
 	data.stream << quint32(dbiAudioFade) << qint32(Global::AudioFade() ? 1 : 0);
-	data.stream << quint32(dbiAskExternalPlayerPath) << qint32(Global::AskExternalPlayerPath() ? 1 : 0);
-	data.stream << quint32(dbiExternalPlayerPath) << Global::ExternalPlayerPath();
+	data.stream << quint32(dbiAskUriScheme) << qint32(Global::AskUriScheme() ? 1 : 0);
+	data.stream << quint32(dbiUriScheme) << Global::UriScheme();
 	data.stream << quint32(dbiSearchEngine) << qint32(Global::SearchEngine() ? 1 : 0);
 	data.stream << quint32(dbiSearchEngineUrl) << Global::SearchEngineUrl();
 	data.stream << quint32(dbiLastSeenInDialogs) << qint32(Global::LastSeenInDialogs() ? 1 : 0);

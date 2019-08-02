@@ -20,54 +20,67 @@ Author: 23rd.
 namespace Settings {
 namespace {
 
-class SearchEngineBox : public BoxContent {
+using langString = tr::phrase<>;
+
+class SettingBox : public BoxContent {
 public:
-	SearchEngineBox(
+	explicit SettingBox(
 		QWidget*,
-		Fn<void(bool)> callback);
+		Fn<void(bool)> callback,
+		langString title,
+		langString info);
 
 	void setInnerFocus() override;
 
 protected:
 	void prepare() override;
 
-private:
+	virtual QString getOrSetGlobal(QString value) = 0;
+	virtual bool isInvalidUrl(QString linkUrl) = 0;
+
 	Fn<void(bool)> _callback;
 	Fn<void()> _setInnerFocus;
+	langString _info;
+	langString _title;
 };
 
-SearchEngineBox::SearchEngineBox(
+SettingBox::SettingBox(
 	QWidget*,
-	Fn<void(bool)> callback)
-: _callback(std::move(callback)) {
+	Fn<void(bool)> callback,
+	langString title,
+	langString info)
+: _callback(std::move(callback))
+, _info(info)
+, _title(title) {
 	Expects(_callback != nullptr);
 }
 
-void SearchEngineBox::setInnerFocus() {
+void SettingBox::setInnerFocus() {
 	Expects(_setInnerFocus != nullptr);
 
 	_setInnerFocus();
 }
 
-void SearchEngineBox::prepare() {
+void SettingBox::prepare() {
 	const auto content = Ui::CreateChild<Ui::VerticalLayout>(this);
 
 	const auto url = content->add(
 		object_ptr<Ui::InputField>(
 			content,
 			st::defaultInputField,
-			tr::lng_settings_search_engine_field_label(),
-			Global::SearchEngineUrl()),
+			_info(),
+			getOrSetGlobal(QString())),
 		st::markdownLinkFieldPadding);
 
 	const auto submit = [=] {
-		const auto linkUrl = qthelp::validate_url(url->getLastText());
-		const auto isInvalid = linkUrl.isEmpty() || linkUrl.indexOf("%q") == -1;
+		const auto linkUrl = url->getLastText();
+		const auto isInvalid = isInvalidUrl(linkUrl);
 		if (isInvalid) {
 			url->showError();
 			return;
 		}
 		const auto weak = make_weak(this);
+		getOrSetGlobal(linkUrl);
 		Global::SetSearchEngineUrl(linkUrl);
 		Local::writeUserSettings();
 		_callback(!isInvalid);
@@ -80,7 +93,7 @@ void SearchEngineBox::prepare() {
 		submit();
 	});
 
-	setTitle(tr::lng_settings_search_engine_box_title());
+	setTitle(_title());
 
 	addButton(tr::lng_formatting_link_create(), submit);
 	addButton(tr::lng_cancel(), [=] {
@@ -97,41 +110,62 @@ void SearchEngineBox::prepare() {
 	};
 }
 
+//////
 
-// Dunno how to set this variable without method.
+class SearchEngineBox : public SettingBox {
+
+	using SettingBox::SettingBox;
+
+protected:
+	QString getOrSetGlobal(QString value) override;
+	bool isInvalidUrl(QString linkUrl) override;
+};
+
+QString SearchEngineBox::getOrSetGlobal(QString value) {
+	if (value.isEmpty()) {
+		return Global::SearchEngineUrl();
+	}
+	Global::SetSearchEngineUrl(value);
+	return QString();
+}
+
+bool SearchEngineBox::isInvalidUrl(QString linkUrl) {
+	linkUrl = qthelp::validate_url(linkUrl);
+	return linkUrl.isEmpty() || linkUrl.indexOf("%q") == -1;
+}
+
+
+//////
+
+class URISchemeBox : public SettingBox {
+
+	using SettingBox::SettingBox;
+
+protected:
+	QString getOrSetGlobal(QString value) override;
+	bool isInvalidUrl(QString linkUrl) override;
+};
+
+QString URISchemeBox::getOrSetGlobal(QString value) {
+	if (value.isEmpty()) {
+		return Global::UriScheme();
+	}
+	Global::SetUriScheme(value);
+	return QString();
+}
+
+bool URISchemeBox::isInvalidUrl(QString linkUrl) {
+	return linkUrl.indexOf("://") < 2;
+}
+
+//////
+
+
 QWidget *parentWidget = nullptr;
 
 void SetParentWidget(QWidget *parent) {
 	parentWidget = parent;
 }
-
-void OnChooseVideoPlayer(Ui::Checkbox *externalPlayer) {
-	auto filters = QStringList(qsl("Video Player (*.exe)")); 
-	filters.push_back(FileDialog::AllFilesFilter());
-	const auto callback = [=](const FileDialog::OpenResult &result) {
-		if (result.paths.isEmpty() && result.remoteContent.isEmpty()) {
-			externalPlayer->setChecked(false);
-			return;
-		}
-
-		if (!result.paths.isEmpty()) {
-			auto filePath = result.paths.front();
-			Global::SetExternalPlayerPath(filePath);
-			Local::writeUserSettings();
-		}
-	};
-
-	const auto callbackFail = [=]() {
-		externalPlayer->setChecked(false);
-	};
-
-	FileDialog::GetOpenPath(
-		parentWidget,
-		"Choose video player",
-		filters.join(qsl(";;")),
-		crl::guard(parentWidget, callback),
-		crl::guard(parentWidget, callbackFail));
-};
 
 void SetupForkContent(not_null<Ui::VerticalLayout*> container) {
 	const auto checkbox = [&](const QString &label, bool checked) {
@@ -159,9 +193,9 @@ void SetupForkContent(not_null<Ui::VerticalLayout*> container) {
 	const auto audioFade = addCheckbox(
 		tr::lng_settings_audio_fade(tr::now),
 		Global::AudioFade());
-	const auto externalPlayer = addCheckbox(
-		tr::lng_settings_external_player(tr::now),
-		Global::AskExternalPlayerPath());
+	const auto uriScheme = addCheckbox(
+		tr::lng_settings_uri_scheme(tr::now),
+		Global::AskUriScheme());
 	const auto lastSeenInDialogs = addCheckbox(
 		tr::lng_settings_last_seen_in_dialogs(tr::now),
 		Global::LastSeenInDialogs());
@@ -197,16 +231,25 @@ void SetupForkContent(not_null<Ui::VerticalLayout*> container) {
 		Local::writeUserSettings();
 	}, audioFade->lifetime());
 
-	externalPlayer->checkedChanges(
+	uriScheme->checkedChanges(
 	) | rpl::filter([](bool checked) {
-		return (checked != Global::AskExternalPlayerPath());
+		return (checked != Global::AskUriScheme());
 	}) | rpl::start_with_next([=](bool checked) {
-		Global::SetAskExternalPlayerPath(checked);
 		if (checked) {
-			OnChooseVideoPlayer(externalPlayer);
+			Ui::show(Box<URISchemeBox>([=](
+				const bool &isSuccess) {
+				uriScheme->setChecked(isSuccess);
+				Global::SetAskUriScheme(isSuccess);
+				Local::writeUserSettings();
+			},
+				tr::lng_settings_uri_scheme_box_title,
+				tr::lng_settings_uri_scheme_field_label),
+			LayerOption::KeepOther);
+		} else {
+			Global::SetAskUriScheme(checked);
+			Local::writeUserSettings();
 		}
-		Local::writeUserSettings();
-	}, externalPlayer->lifetime());
+	}, uriScheme->lifetime());
 
 	lastSeenInDialogs->checkedChanges(
 	) | rpl::filter([](bool checked) {
@@ -226,7 +269,10 @@ void SetupForkContent(not_null<Ui::VerticalLayout*> container) {
 				searchEngine->setChecked(isSuccess);
 				Global::SetSearchEngine(isSuccess);
 				Local::writeUserSettings();
-			}), LayerOption::KeepOther);
+			},
+				tr::lng_settings_search_engine_box_title,
+				tr::lng_settings_search_engine_field_label),
+			LayerOption::KeepOther);
 		} else {
 			Global::SetSearchEngine(checked);
 			Local::writeUserSettings();

@@ -267,11 +267,11 @@ DeclareRefVar(base::Observable<void>, DownloadPathChanged);
 
 DeclareVar(bool, SquareAvatars);
 DeclareVar(bool, AudioFade);
-DeclareVar(QString, ExternalPlayerPath);
-DeclareVar(bool, AskExternalPlayerPath);
 DeclareVar(bool, LastSeenInDialogs);
-DeclareVar(QString, SearchEngineUrl);
+DeclareVar(bool, AskUriScheme);
+DeclareVar(QString, UriScheme);
 DeclareVar(bool, SearchEngine);
+DeclareVar(QString, SearchEngineUrl);
 DeclareVar(bool, AllRecentStickers);
 
 DeclareVar(bool, ReplaceEmoji);

@@ -283,12 +283,16 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_settings_section_fork" = "Fork settings";
 "lng_settings_square_avatats" = "Square avatars";
 "lng_settings_audio_fade" = "Audio fade";
-"lng_settings_external_player" = "Open YouTube links in external player";
+"lng_settings_uri_scheme" = "Open links with custom URI Scheme";
+"lng_settings_uri_scheme_box_title" = "Custom URI Scheme";
+"lng_settings_uri_scheme_field_label" = "Example: potplayer://.";
 "lng_settings_last_seen_in_dialogs" = "Show last seen time in list of dialogs";
 "lng_settings_search_engine" = "Add a Search Selected Text to Context Menu";
 "lng_settings_search_engine_box_title" = "URL of Search Engine";
 "lng_settings_search_engine_field_label" = "URL must contain '%q'";
 "lng_settings_show_all_recent_stickers" = "Show all Recently used Stickers";
+
+"lng_context_open_uri_link" = "Open Link with URI Scheme";
 
 "lng_context_search_selected" = "Search Selected Text";
 // 

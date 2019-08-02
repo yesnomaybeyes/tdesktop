@@ -411,8 +411,8 @@ struct Data {
 
 	bool SquareAvatars = true;
 	bool AudioFade = true;
-	QString ExternalPlayerPath;
-	bool AskExternalPlayerPath = false;
+	bool AskUriScheme = false;
+	QString UriScheme = qsl("");
 	bool LastSeenInDialogs = true;
 	QString SearchEngineUrl = qsl("https://dgg.gg/%q");
 	bool SearchEngine = false;
@@ -553,8 +553,8 @@ DefineRefVar(Global, base::Observable<void>, DownloadPathChanged);
 
 DefineVar(Global, bool, SquareAvatars);
 DefineVar(Global, bool, AudioFade);
-DefineVar(Global, QString, ExternalPlayerPath);
-DefineVar(Global, bool, AskExternalPlayerPath);
+DefineVar(Global, bool, AskUriScheme);
+DefineVar(Global, QString, UriScheme);
 DefineVar(Global, bool, LastSeenInDialogs);
 DefineVar(Global, QString, SearchEngineUrl);
 DefineVar(Global, bool, SearchEngine);
