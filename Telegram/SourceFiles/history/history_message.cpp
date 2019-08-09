@@ -7,6 +7,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "history/history_message.h"
 
+#include "api/api_sending.h"
 #include "lang/lang_keys.h"
 #include "mainwidget.h"
 #include "mainwindow.h"
@@ -17,10 +18,13 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "history/history_service.h"
 #include "history/view/history_view_service_message.h"
 #include "history/view/history_view_context_menu.h" // For CopyPostLink().
-#include "auth_session.h"
+#include "chat_helpers/stickers_emoji_pack.h"
+#include "main/main_session.h"
 #include "boxes/share_box.h"
 #include "boxes/confirm_box.h"
 #include "ui/toast/toast.h"
+#include "ui/text/text_utilities.h"
+#include "ui/text/text_isolated_emoji.h"
 #include "ui/text_options.h"
 #include "core/application.h"
 #include "layout.h"
@@ -108,6 +112,71 @@ bool HasInlineItems(const HistoryItemsList &items) {
 
 } // namespace
 
+QString GetErrorTextForForward(
+		not_null<PeerData*> peer,
+		const HistoryItemsList &items,
+		const TextWithTags &comment,
+		bool ignoreSlowmodeCountdown) {
+	if (!peer->canWrite()) {
+		return tr::lng_forward_cant(tr::now);
+	}
+
+	for (const auto item : items) {
+		if (const auto media = item->media()) {
+			const auto error = media->errorTextForForward(peer);
+			if (!error.isEmpty() && error != qstr("skip")) {
+				return error;
+			}
+		}
+	}
+	const auto error = Data::RestrictionError(
+		peer,
+		ChatRestriction::f_send_inline);
+	if (error && HasInlineItems(items)) {
+		return *error;
+	}
+
+	if (peer->slowmodeApplied()) {
+		if (const auto history = peer->owner().historyLoaded(peer)) {
+			if (!ignoreSlowmodeCountdown
+				&& (history->latestSendingMessage() != nullptr)
+				&& (!items.empty() || !comment.text.isEmpty())) {
+				return tr::lng_slowmode_no_many(tr::now);
+			}
+		}
+		if (comment.text.size() > MaxMessageSize) {
+			return tr::lng_slowmode_too_long(tr::now);
+		} else if (!items.empty() && !comment.text.isEmpty()) {
+			return tr::lng_slowmode_no_many(tr::now);
+		} else if (items.size() > 1) {
+			const auto albumForward = [&] {
+				if (const auto groupId = items.front()->groupId()) {
+					for (const auto item : items) {
+						if (item->groupId() != groupId) {
+							return false;
+						}
+					}
+					return true;
+				}
+				return false;
+			}();
+			if (!albumForward) {
+				return tr::lng_slowmode_no_many(tr::now);
+			}
+		}
+	}
+	if (const auto left = peer->slowmodeSecondsLeft()) {
+		if (!ignoreSlowmodeCountdown) {
+			return tr::lng_slowmode_enabled(
+				tr::now,
+				lt_left,
+				formatDurationWords(left));
+		}
+	}
+
+	return QString();
+}
+
 void FastShareMessage(not_null<HistoryItem*> item) {
 	struct ShareData {
 		ShareData(not_null<PeerData*> peer, MessageIdsList &&ids)
@@ -119,10 +188,11 @@ void FastShareMessage(not_null<HistoryItem*> item) {
 		base::flat_set<mtpRequestId> requests;
 	};
 	const auto history = item->history();
+	const auto owner = &history->owner();
 	const auto data = std::make_shared<ShareData>(
 		history->peer,
-		history->owner().itemOrItsGroup(item));
-	const auto isGroup = (history->owner().groups().find(item) != nullptr);
+		owner->itemOrItsGroup(item));
+	const auto isGroup = (owner->groups().find(item) != nullptr);
 	const auto isGame = item->getMessageBot()
 		&& item->media()
 		&& (item->media()->game() != nullptr);
@@ -155,16 +225,17 @@ void FastShareMessage(not_null<HistoryItem*> item) {
 					};
 				}();
 				if (const auto document = item->media()->document()) {
-					Auth().api().sendExistingDocument(
+					Api::SendExistingDocument(
+						history,
 						document,
-						document->stickerSetOrigin(),
 						caption,
-						ApiWrap::SendOptions(history));
+						0);
 				} else if (const auto photo = item->media()->photo()) {
-					Auth().api().sendExistingPhoto(
+					Api::SendExistingPhoto(
+						history,
 						photo,
 						caption,
-						ApiWrap::SendOptions(history));
+						0);
 				}
 			}
 		};
@@ -179,7 +250,7 @@ void FastShareMessage(not_null<HistoryItem*> item) {
 	};
 
 	auto copyCallback = [=]() {
-		if (auto item = Auth().data().message(data->msgIds[0])) {
+		if (const auto item = owner->message(data->msgIds[0])) {
 			if (item->hasDirectLink()) {
 				HistoryView::CopyPostLink(item->fullId());
 			} else if (const auto bot = item->getMessageBot()) {
@@ -200,7 +271,8 @@ void FastShareMessage(not_null<HistoryItem*> item) {
 	};
 	auto submitCallback = [=](
 			QVector<PeerData*> &&result,
-			TextWithTags &&comment) {
+			TextWithTags &&comment,
+			bool silent) {
 		if (!data->requests.empty()) {
 			return; // Share clicked already.
 		}
@@ -209,23 +281,28 @@ void FastShareMessage(not_null<HistoryItem*> item) {
 			return;
 		}
 
-		auto restrictedSomewhere = false;
-		auto restrictedEverywhere = true;
-		auto firstError = QString();
-		for (const auto peer : result) {
-			const auto error = GetErrorTextForForward(peer, items);
-			if (!error.isEmpty()) {
-				if (firstError.isEmpty()) {
-					firstError = error;
+		const auto error = [&] {
+			for (const auto peer : result) {
+				const auto error = GetErrorTextForForward(
+					peer,
+					items,
+					comment);
+				if (!error.isEmpty()) {
+					return std::make_pair(error, peer);
 				}
-				restrictedSomewhere = true;
-				continue;
 			}
-			restrictedEverywhere = false;
-		}
-		if (restrictedEverywhere) {
+			return std::make_pair(QString(), result.front());
+		}();
+		if (!error.first.isEmpty()) {
+			auto text = TextWithEntities();
+			if (result.size() > 1) {
+				text.append(
+					Ui::Text::Bold(App::peerName(error.second))
+				).append("\n\n");
+			}
+			text.append(error.first);
 			Ui::show(
-				Box<InformBox>(firstError),
+				Box<InformBox>(text),
 				LayerOption::KeepOther);
 			return;
 		}
@@ -243,6 +320,9 @@ void FastShareMessage(not_null<HistoryItem*> item) {
 			| MTPmessages_ForwardMessages::Flag::f_with_my_score
 			| (isGroup
 				? MTPmessages_ForwardMessages::Flag::f_grouped
+				: MTPmessages_ForwardMessages::Flag(0))
+			| (silent
+				? MTPmessages_ForwardMessages::Flag::f_silent
 				: MTPmessages_ForwardMessages::Flag(0));
 		auto msgIds = QVector<MTPint>();
 		msgIds.reserve(data->msgIds.size());
@@ -257,10 +337,6 @@ void FastShareMessage(not_null<HistoryItem*> item) {
 			return result;
 		};
 		for (const auto peer : result) {
-			if (!GetErrorTextForForward(peer, items).isEmpty()) {
-				continue;
-			}
-
 			const auto history = peer->owner().history(peer);
 			if (!comment.text.isEmpty()) {
 				auto message = ApiWrap::MessageToSend(history);
@@ -274,7 +350,6 @@ void FastShareMessage(not_null<HistoryItem*> item) {
 				MTP_vector<MTPint>(msgIds),
 				MTP_vector<MTPlong>(generateRandom()),
 				peer->input);
-			auto callback = doneCallback;
 			history->sendRequestId = MTP::send(
 				request,
 				rpcDone(base::duplicate(doneCallback)),
@@ -298,6 +373,7 @@ void FastShareMessage(not_null<HistoryItem*> item) {
 		? Fn<void()>(std::move(copyCallback))
 		: Fn<void()>();
 	Ui::show(Box<ShareBox>(
+		App::wnd()->sessionController(),
 		std::move(copyLinkCallback),
 		std::move(submitCallback),
 		std::move(asCopyCallback),
@@ -307,17 +383,17 @@ void FastShareMessage(not_null<HistoryItem*> item) {
 Fn<void(ChannelData*, MsgId)> HistoryDependentItemCallback(
 		const FullMsgId &msgId) {
 	return [dependent = msgId](ChannelData *channel, MsgId msgId) {
-		if (auto item = Auth().data().message(dependent)) {
+		if (const auto item = Auth().data().message(dependent)) {
 			item->updateDependencyItem();
 		}
 	};
 }
 
 MTPDmessage::Flags NewMessageFlags(not_null<PeerData*> peer) {
-	MTPDmessage::Flags result = 0;
+	MTPDmessage::Flags result = MTPDmessage_ClientFlag::f_sending | 0;
 	if (!peer->isSelf()) {
 		result |= MTPDmessage::Flag::f_out;
-		//if (p->isChat() || (p->isUser() && !p->asUser()->botInfo)) {
+		//if (p->isChat() || (p->isUser() && !p->asUser()->isBot())) {
 		//	result |= MTPDmessage::Flag::f_unread;
 		//}
 	}
@@ -326,23 +402,9 @@ MTPDmessage::Flags NewMessageFlags(not_null<PeerData*> peer) {
 
 QString GetErrorTextForForward(
 		not_null<PeerData*> peer,
-		const HistoryItemsList &items) {
-	if (!peer->canWrite()) {
-		return tr::lng_forward_cant(tr::now);
-	}
-
-	for (const auto item : items) {
-		if (const auto media = item->media()) {
-			const auto error = media->errorTextForForward(peer);
-			if (!error.isEmpty() && error != qstr("skip")) {
-				return error;
-			}
-		}
-	}
-	const auto error = Data::RestrictionError(
-		peer,
-		ChatRestriction::f_send_inline);
-	return (error && HasInlineItems(items)) ? *error : QString();
+		const HistoryItemsList &items,
+		bool ignoreSlowmodeCountdown) {
+	return GetErrorTextForForward(peer, items, {}, ignoreSlowmodeCountdown);
 }
 
 struct HistoryMessage::CreateConfig {
@@ -421,6 +483,8 @@ HistoryMessage::HistoryMessage(
 		setGroupId(
 			MessageGroupId::FromRaw(history->peer->id, groupedId->v));
 	}
+
+	refreshMessageBadge();
 }
 
 HistoryMessage::HistoryMessage(
@@ -636,31 +700,44 @@ bool HistoryMessage::updateDependencyItem() {
 	return true;
 }
 
-void HistoryMessage::updateAdminBadgeState() {
-	auto hasAdminBadge = [&] {
-		if (auto channel = history()->peer->asChannel()) {
-			if (auto user = author()->asUser()) {
-				return channel->isGroupAdmin(user);
-			}
+void HistoryMessage::refreshMessageBadge() {
+	const auto text = [&] {
+		if (isDiscussionPost()) {
+			return tr::lng_channel_badge(tr::now);
 		}
-		return false;
+		const auto channel = history()->peer->asMegagroup();
+		const auto user = author()->asUser();
+		if (!channel || !user) {
+			return QString();
+		}
+		const auto info = channel->mgInfo.get();
+		const auto i = channel->mgInfo->admins.find(peerToUser(user->id));
+		const auto custom = (i != channel->mgInfo->admins.end())
+			? i->second
+			: (info->creator == user)
+			? info->creatorRank
+			: QString();
+		return !custom.isEmpty()
+			? custom
+			: (info->creator == user)
+			? tr::lng_owner_badge(tr::now)
+			: (i != channel->mgInfo->admins.end())
+			? tr::lng_admin_badge(tr::now)
+			: QString();
 	}();
-	if (hasAdminBadge) {
-		_flags |= MTPDmessage_ClientFlag::f_has_admin_badge;
+	if (text.isEmpty()) {
+		_messageBadge.clear();
 	} else {
-		_flags &= ~MTPDmessage_ClientFlag::f_has_admin_badge;
+		_messageBadge.setText(
+			st::defaultTextStyle,
+			TextUtilities::RemoveEmoji(TextUtilities::SingleLine(text)));
 	}
 }
 
 void HistoryMessage::applyGroupAdminChanges(
-		const base::flat_map<UserId, bool> &changes) {
-	auto i = changes.find(peerToUser(author()->id));
-	if (i != changes.end()) {
-		if (i->second) {
-			_flags |= MTPDmessage_ClientFlag::f_has_admin_badge;
-		} else {
-			_flags &= ~MTPDmessage_ClientFlag::f_has_admin_badge;
-		}
+		const base::flat_set<UserId> &changes) {
+	if (!out() && changes.contains(peerToUser(author()->id))) {
+		refreshMessageBadge();
 		history()->owner().requestItemResize(this);
 	}
 }
@@ -670,10 +747,6 @@ bool HistoryMessage::allowsForward() const {
 		return false;
 	}
 	return !_media || _media->allowsForward();
-}
-
-bool HistoryMessage::hasMessageBadge() const {
-	return hasAdminBadge() || isDiscussionPost();
 }
 
 bool HistoryMessage::isTooOldForEdit(TimeId now) const {
@@ -995,13 +1068,17 @@ void HistoryMessage::applyEdition(const MTPDmessageService &message) {
 	}
 }
 
-void HistoryMessage::updateSentMedia(const MTPMessageMedia *media) {
+void HistoryMessage::updateSentContent(
+		const TextWithEntities &textWithEntities,
+		const MTPMessageMedia *media) {
+	const auto isolated = isolatedEmoji();
+	setText(textWithEntities);
 	if (_flags & MTPDmessage_ClientFlag::f_from_inline_bot) {
 		if (!media || !_media || !_media->updateInlineResultMedia(*media)) {
 			refreshSentMedia(media);
 		}
 		_flags &= ~MTPDmessage_ClientFlag::f_from_inline_bot;
-	} else {
+	} else if (media || _media || !isolated || isolated != isolatedEmoji()) {
 		if (!media || !_media || !_media->updateSentMedia(*media)) {
 			refreshSentMedia(media);
 		}
@@ -1066,6 +1143,7 @@ void HistoryMessage::setText(const TextWithEntities &textWithEntities) {
 		}
 	}
 
+	clearIsolatedEmoji();
 	if (_media && _media->consumeMessageText(textWithEntities)) {
 		setEmptyText();
 	} else {
@@ -1078,8 +1156,10 @@ void HistoryMessage::setText(const TextWithEntities &textWithEntities) {
 			// just replace it with something so that UI won't look buggy.
 			_text.setMarkedText(
 				st::messageTextStyle,
-				{ QString::fromUtf8("\xF0\x9F\x98\x94"), EntitiesInText() },
+				{ QString::fromUtf8(":-("), EntitiesInText() },
 				Ui::ItemTextOptions(this));
+		} else if (!_media) {
+			checkIsolatedEmoji();
 		}
 		_textWidth = -1;
 		_textHeight = 0;
@@ -1094,6 +1174,20 @@ void HistoryMessage::setEmptyText() {
 
 	_textWidth = -1;
 	_textHeight = 0;
+}
+
+void HistoryMessage::clearIsolatedEmoji() {
+	if (!(_flags & MTPDmessage_ClientFlag::f_isolated_emoji)) {
+		return;
+	}
+	history()->session().emojiStickersPack().remove(this);
+	_flags &= ~MTPDmessage_ClientFlag::f_isolated_emoji;
+}
+
+void HistoryMessage::checkIsolatedEmoji() {
+	if (history()->session().emojiStickersPack().add(this)) {
+		_flags |= MTPDmessage_ClientFlag::f_isolated_emoji;
+	}
 }
 
 void HistoryMessage::setReplyMarkup(const MTPReplyMarkup *markup) {
@@ -1136,6 +1230,10 @@ void HistoryMessage::setReplyMarkup(const MTPReplyMarkup *markup) {
 		history()->owner().requestItemResize(this);
 		Notify::replyMarkupUpdated(this);
 	}
+}
+
+Ui::Text::IsolatedEmoji HistoryMessage::isolatedEmoji() const {
+	return _text.toIsolatedEmoji();
 }
 
 TextWithEntities HistoryMessage::originalText() const {

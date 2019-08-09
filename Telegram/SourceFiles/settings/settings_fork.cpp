@@ -303,9 +303,8 @@ void SetupFork(not_null<Ui::VerticalLayout*> container) {
 
 } // namespace
 
-Fork::Fork(QWidget *parent, not_null<UserData*> self)
-: Section(parent)
-, _self(self) {
+Fork::Fork(QWidget *parent, not_null<Window::SessionController*> controller)
+: Section(parent) {
 	SetParentWidget(parent);
 	setupContent();
 }
