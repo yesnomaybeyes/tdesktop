@@ -2886,13 +2886,15 @@ void HistoryWidget::send(bool silent, Qt::KeyboardModifiers modifiers) {
 	message.silent = silent;
 	message.handleSupportSwitch = Support::HandleSwitch(modifiers);
 
-	const auto error = GetErrorTextForForward(
-		_peer,
-		_toForward,
-		message.textWithTags);
-	if (!error.isEmpty()) {
-		ShowErrorToast(error);
-		return;
+	if (_canSendMessages) {
+		const auto error = GetErrorTextForForward(
+			_peer,
+			_toForward,
+			message.textWithTags);
+		if (!error.isEmpty()) {
+			ShowErrorToast(error);
+			return;
+		}
 	}
 
 	session().api().sendMessage(std::move(message));
@@ -5308,7 +5310,9 @@ void HistoryWidget::keyPressEvent(QKeyEvent *e) {
 			const auto submitting = Ui::InputField::ShouldSubmit(
 				session().settings().sendSubmitWay(),
 				e->modifiers());
-			send(false, e->modifiers());
+			if (submitting) {
+				send(false, e->modifiers());
+			}
 		}
 	} else if (e->key() == Qt::Key_O && e->modifiers() == Qt::ControlModifier) {
 		chooseAttach();
