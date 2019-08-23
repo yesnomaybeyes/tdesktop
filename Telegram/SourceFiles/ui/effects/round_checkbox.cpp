@@ -424,7 +424,8 @@ void RoundImageCheckbox::paint(Painter &p, int x, int y, int outerWidth) {
 		auto pen = _st.selectFg->p;
 		pen.setWidth(_st.selectWidth);
 		p.setPen(pen);
-		p.drawEllipse(rtlrect(x, y, _st.imageRadius * 2, _st.imageRadius * 2, outerWidth));
+		const auto rect = rtlrect(x, y, _st.imageRadius * 2, _st.imageRadius * 2, outerWidth);
+		Global::SquareAvatars() ? p.drawRect(rect) : p.drawEllipse(rect);
 		p.setOpacity(1.);
 	}
 
