@@ -273,6 +273,7 @@ DeclareVar(QString, UriScheme);
 DeclareVar(bool, SearchEngine);
 DeclareVar(QString, SearchEngineUrl);
 DeclareVar(bool, AllRecentStickers);
+DeclareVar(int, CustomStickerSize);
 
 DeclareVar(bool, VoiceMsgPlaybackDoubled);
 DeclareVar(bool, SoundNotify);

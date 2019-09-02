@@ -5,6 +5,7 @@ Author: 23rd.
 
 #include "base/qthelp_url.h"
 #include "boxes/abstract_box.h"
+#include "info/profile/info_profile_button.h"
 #include "settings/settings_common.h"
 #include "ui/wrap/vertical_layout.h"
 #include "ui/wrap/slide_wrap.h"
@@ -81,7 +82,6 @@ void SettingBox::prepare() {
 		}
 		const auto weak = make_weak(this);
 		getOrSetGlobal(linkUrl);
-		Global::SetSearchEngineUrl(linkUrl);
 		Local::writeUserSettings();
 		_callback(!isInvalid);
 		if (weak) {
@@ -95,9 +95,9 @@ void SettingBox::prepare() {
 
 	setTitle(_title());
 
-	addButton(tr::lng_formatting_link_create(), submit);
+	addButton(tr::lng_box_ok(), submit);
 	addButton(tr::lng_cancel(), [=] {
-		_callback(!Global::SearchEngineUrl().isEmpty());
+		_callback(!getOrSetGlobal(QString()).isEmpty());
 		closeBox();
 	});
 
@@ -160,6 +160,39 @@ bool URISchemeBox::isInvalidUrl(QString linkUrl) {
 
 //////
 
+class StickerSizeBox : public SettingBox {
+	using SettingBox::SettingBox;
+
+protected:
+	QString getOrSetGlobal(QString value) override;
+	bool isInvalidUrl(QString linkUrl) override;
+
+private:
+	int _startSize = 0;
+};
+
+QString StickerSizeBox::getOrSetGlobal(QString value) {
+	if (value.isEmpty()) {
+		if (!_startSize) {
+			_startSize = Global::CustomStickerSize();
+		} else if (_startSize == Global::CustomStickerSize()) {
+			return QString();
+		}
+		return QString::number(Global::CustomStickerSize());
+	}
+	if (const auto number = value.toInt()) {
+		Global::SetCustomStickerSize(number);
+	}
+	return QString();
+}
+
+bool StickerSizeBox::isInvalidUrl(QString linkUrl) {
+	const auto number = linkUrl.toInt();
+	return !number || number < 50 || number > 256;
+}
+
+//////
+
 
 QWidget *parentWidget = nullptr;
 
@@ -206,21 +239,43 @@ void SetupForkContent(not_null<Ui::VerticalLayout*> container) {
 		tr::lng_settings_show_all_recent_stickers(tr::now),
 		Global::AllRecentStickers());
 
+	const auto restartBox = [=](Fn<void()> ok, Fn<void()> cancel) {
+		Ui::show(Box<ConfirmBox>(
+			tr::lng_settings_need_restart(tr::now),
+			tr::lng_settings_restart_now(tr::now),
+			[=] {
+				ok();
+				Local::writeUserSettings();
+				App::restart();
+			},
+			[=] {
+				cancel();
+			}));
+	};
+
+	AddButton(
+		container,
+		tr::lng_settings_custom_sticker_size(),
+		st::settingsChatButton,
+		&st::settingsIconStickers,
+		st::settingsChatIconLeft
+	)->addClickHandler([=] {
+		Ui::show(Box<StickerSizeBox>([=](bool isSuccess) {
+			if (isSuccess) {
+				restartBox([] {}, [] {});
+			}
+		},
+		tr::lng_settings_custom_sticker_size,
+		tr::lng_settings_sticker_size_label));
+	});
+
 	squareAvatars->checkedChanges(
 	) | rpl::filter([](bool checked) {
 		return (checked != Global::SquareAvatars());
 	}) | rpl::start_with_next([=](bool checked) {
-		Ui::show(Box<ConfirmBox>(
-				tr::lng_settings_need_restart(tr::now),
-				tr::lng_settings_restart_now(tr::now),
-				[=] {
-					Global::SetSquareAvatars(checked);
-					Local::writeUserSettings();
-					App::restart();
-				},
-				[=] {
-					squareAvatars->setChecked(!checked);
-				}));
+		restartBox(
+			[=] { Global::SetSquareAvatars(checked); },
+			[=] { squareAvatars->setChecked(!checked); });
 	}, squareAvatars->lifetime());
 
 	audioFade->checkedChanges(

@@ -292,6 +292,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_settings_search_engine_field_label" = "URL must contain '%q'";
 "lng_settings_show_all_recent_stickers" = "Show all Recently used Stickers";
 
+"lng_settings_custom_sticker_size" = "Custom Sticker Size";
+"lng_settings_sticker_size_label" = "Allowed values are between 50 and 256.";
+
 "lng_context_open_uri_link" = "Open Link with URI Scheme";
 
 "lng_context_search_selected" = "Search Selected Text";

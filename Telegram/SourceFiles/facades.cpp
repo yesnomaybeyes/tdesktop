@@ -420,6 +420,7 @@ struct Data {
 	QString SearchEngineUrl = qsl("https://dgg.gg/%q");
 	bool SearchEngine = false;
 	bool AllRecentStickers = true;
+	int CustomStickerSize = 256;
 
 	bool VoiceMsgPlaybackDoubled = false;
 	bool SoundNotify = true;
@@ -558,6 +559,7 @@ DefineVar(Global, bool, LastSeenInDialogs);
 DefineVar(Global, QString, SearchEngineUrl);
 DefineVar(Global, bool, SearchEngine);
 DefineVar(Global, bool, AllRecentStickers);
+DefineVar(Global, int, CustomStickerSize);
 
 DefineVar(Global, bool, VoiceMsgPlaybackDoubled);
 DefineVar(Global, bool, SoundNotify);

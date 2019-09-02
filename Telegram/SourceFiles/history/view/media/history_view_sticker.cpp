@@ -54,18 +54,21 @@ bool Sticker::isEmojiSticker() const {
 }
 
 QSize Sticker::size() {
+	const auto stickerSize = Global::CustomStickerSize() == 256
+		? st::maxStickerSize
+		: int(cScale() / 100.0 * Global::CustomStickerSize());
 	_size = _document->dimensions;
 	if (isEmojiSticker()) {
 		constexpr auto kIdealStickerSize = 512;
 		const auto zoom = GetEmojiStickerZoom(&_document->session());
 		const auto convert = [&](int size) {
-			return int(size * st::maxStickerSize * zoom / kIdealStickerSize);
+			return int(size * stickerSize * zoom / kIdealStickerSize);
 		};
 		_size = QSize(convert(_size.width()), convert(_size.height()));
 	} else {
 		_size = DownscaledSize(
 			_size,
-			{ st::maxStickerSize, st::maxStickerSize });
+			{ stickerSize, stickerSize });
 	}
 	return _size;
 }
