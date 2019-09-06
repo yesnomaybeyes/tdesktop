@@ -685,13 +685,6 @@ void History::checkForLoadedAtTop(not_null<HistoryItem*> added) {
 	}
 }
 
-HistoryItem *History::addToHistory(
-		const MTPMessage &msg,
-		MTPDmessage_ClientFlags clientFlags) {
-	const auto detachExistingItem = false;
-	return createItem(msg, clientFlags, detachExistingItem);
-}
-
 not_null<HistoryItem*> History::addNewLocalMessage(
 		MsgId id,
 		MTPDmessage::Flags flags,
@@ -880,8 +873,9 @@ void History::addUnreadMentionsSlice(const MTPmessages_Messages &result) {
 	auto added = false;
 	if (messages) {
 		const auto clientFlags = MTPDmessage_ClientFlags();
-		for (auto &message : *messages) {
-			if (auto item = addToHistory(message, clientFlags)) {
+		const auto type = NewMessageType::Existing;
+		for (const auto &message : *messages) {
+			if (const auto item = addNewMessage(message, clientFlags, type)) {
 				if (item->isUnreadMention()) {
 					_unreadMentions.insert(item->id);
 					added = true;
@@ -2613,17 +2607,16 @@ void History::dialogEntryApplied() {
 		return;
 	}
 	if (!chatListMessage()) {
+		clear(ClearType::Unload);
+		addNewerSlice(QVector<MTPMessage>());
+		addOlderSlice(QVector<MTPMessage>());
 		if (const auto channel = peer->asChannel()) {
 			const auto inviter = channel->inviter;
 			if (inviter > 0 && channel->amIn()) {
 				if (const auto from = owner().userLoaded(inviter)) {
-					clear(ClearType::Unload);
-					addNewerSlice(QVector<MTPMessage>());
 					insertJoinedMessage();
 				}
 			}
-		} else {
-			clear(ClearType::DeleteChat);
 		}
 		return;
 	}
@@ -3066,8 +3059,17 @@ void History::clear(ClearType type) {
 		lastKeyboardInited = false;
 		_loadedAtTop = _loadedAtBottom = false;
 	} else {
+		// Leave the 'sending' messages in local messages.
+		auto local = base::flat_set<not_null<HistoryItem*>>();
+		for (const auto item : _localMessages) {
+			if (!item->isSending()) {
+				local.emplace(item);
+			}
+		}
+		for (const auto item : local) {
+			item->destroy();
+		}
 		_notifications.clear();
-		_localMessages.clear();
 		owner().notifyHistoryCleared(this);
 		if (unreadCountKnown()) {
 			setUnreadCount(0);
