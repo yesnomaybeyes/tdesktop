@@ -1533,6 +1533,14 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 			});
 		}
 	};
+
+	const auto msg = [=] {
+		const auto self = Auth().data().history(Auth().userPeerId());
+		auto message = ApiWrap::MessageToSend(self);
+		message.textWithTags = PrepareEditText(_dragStateItem);
+		return message;
+	};
+
 	const auto addPhotoActions = [&](not_null<PhotoData*> photo) {
 		_menu->addAction(tr::lng_context_save_image(tr::now), App::LambdaDelayed(st::defaultDropdownMenu.menu.ripple.hideDuration, this, [=] {
 			savePhotoToFile(photo);
@@ -1545,12 +1553,11 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 				session().api().requestAttachedStickerSets(photo);
 			});
 		}
+
 		_menu->addAction(tr::lng_context_to_save_messages(tr::now), [=] {
 			Api::SendExistingPhoto(
-				Auth().data().history(Auth().userPeerId()),
-				photo,
-				_dragStateItem->originalText(),
-				0);
+				msg(),
+				photo);
 		});
 	};
 	const auto addDocumentActions = [&](not_null<DocumentData*> document) {
@@ -1583,12 +1590,11 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 		_menu->addAction(lnkIsVideo ? tr::lng_context_save_video(tr::now) : (lnkIsVoice ? tr::lng_context_save_audio(tr::now) : (lnkIsAudio ? tr::lng_context_save_audio_file(tr::now) : tr::lng_context_save_file(tr::now))), App::LambdaDelayed(st::defaultDropdownMenu.menu.ripple.hideDuration, this, [=] {
 			saveDocumentToFile(itemId, document);
 		}));
+
 		_menu->addAction(tr::lng_context_to_save_messages(tr::now), [=] {
 			Api::SendExistingDocument(
-				Auth().data().history(Auth().userPeerId()),
-				document,
-				item->originalText(),
-				0);
+				msg(),
+				document);
 		});
 	};
 	const auto link = ClickHandler::getActive();

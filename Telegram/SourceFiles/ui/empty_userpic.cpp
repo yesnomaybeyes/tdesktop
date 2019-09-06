@@ -12,6 +12,98 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_history.h"
 
 namespace Ui {
+namespace {
+
+void PaintSavedMessagesInner(
+		Painter &p,
+		int x,
+		int y,
+		int size,
+		const style::color &bg,
+		const style::color &fg) {
+	// |<----width----->|
+	//
+	// XXXXXXXXXXXXXXXXXX  ---
+	// X                X   |
+	// X                X   |
+	// X                X   |
+	// X                X height
+	// X       XX       X   |     ---
+	// X     XX  XX     X   |      |
+	// X   XX      XX   X   |     add
+	// X XX          XX X   |      |
+	// XX              XX  ---    ---
+
+	const auto thinkness = std::round(size * 0.055);
+	const auto increment = int(thinkness) % 2 + (size % 2);
+	const auto width = std::round(size * 0.15) * 2 + increment;
+	const auto height = std::round(size * 0.19) * 2 + increment;
+	const auto add = std::round(size * 0.064);
+
+	const auto left = x + (size - width) / 2;
+	const auto top = y + (size - height) / 2;
+	const auto right = left + width;
+	const auto bottom = top + height;
+	const auto middle = (left + right) / 2;
+	const auto half = (top + bottom) / 2;
+
+	p.setBrush(Qt::NoBrush);
+	auto pen = fg->p;
+	pen.setWidthF(thinkness);
+	pen.setCapStyle(Qt::FlatCap);
+
+	{
+		// XXXXXXXXXXXXXXXXXX
+		// X                X
+		// X                X
+		// X                X
+		// X                X
+		// X                X
+
+		pen.setJoinStyle(Qt::RoundJoin);
+		p.setPen(pen);
+		QPainterPath path;
+		path.moveTo(left, half);
+		path.lineTo(left, top);
+		path.lineTo(right, top);
+		path.lineTo(right, half);
+		p.drawPath(path);
+	}
+	{
+		// X                X
+		// X       XX       X
+		// X     XX  XX     X
+		// X   XX      XX   X
+		// X XX          XX X
+		// XX              XX
+
+		pen.setJoinStyle(Qt::MiterJoin);
+		p.setPen(pen);
+		QPainterPath path;
+		path.moveTo(left, half);
+		path.lineTo(left, bottom);
+		path.lineTo(middle, bottom - add);
+		path.lineTo(right, bottom);
+		path.lineTo(right, half);
+		p.drawPath(path);
+	}
+}
+
+template <typename Callback>
+[[nodiscard]] QPixmap Generate(int size, Callback callback) {
+	auto result = QImage(
+		QSize(size, size) * cIntRetinaFactor(),
+		QImage::Format_ARGB32_Premultiplied);
+	result.setDevicePixelRatio(cRetinaFactor());
+	result.fill(Qt::transparent);
+	{
+		Painter p(&result);
+		callback(p);
+	}
+	return App::pixmapFromImageInPlace(std::move(result));
+}
+
+} // namespace
 
 EmptyUserpic::EmptyUserpic(const style::color &color, const QString &name)
 : _color(color) {
@@ -81,6 +173,17 @@ void EmptyUserpic::PaintSavedMessages(
 	PaintSavedMessages(p, x, y, outerWidth, size, bg, fg);
 }
 
+void EmptyUserpic::PaintSavedMessagesRounded(
+		Painter &p,
+		int x,
+		int y,
+		int outerWidth,
+		int size) {
+	const auto &bg = st::historyPeerSavedMessagesBg;
+	const auto &fg = st::historyPeerUserpicFg;
+	PaintSavedMessagesRounded(p, x, y, outerWidth, size, bg, fg);
+}
+
 void EmptyUserpic::PaintSavedMessages(
 		Painter &p,
 		int x,
@@ -101,72 +204,37 @@ void EmptyUserpic::PaintSavedMessages(
 		p.drawEllipse(x, y, size, size);
 	}
 
-	// |<----width----->|
-	//
-	// XXXXXXXXXXXXXXXXXX  ---
-	// X                X   |
-	// X                X   |
-	// X                X   |
-	// X                X height
-	// X       XX       X   |     ---
-	// X     XX  XX     X   |      |
-	// X   XX      XX   X   |     add
-	// X XX          XX X   |      |
-	// XX              XX  ---    ---
+	PaintSavedMessagesInner(p, x, y, size, bg, fg);
+}
 
-	const auto thinkness = std::round(size * 0.055);
-	const auto increment = int(thinkness) % 2 + (size % 2);
-	const auto width = std::round(size * 0.15) * 2 + increment;
-	const auto height = std::round(size * 0.19) * 2 + increment;
-	const auto add = std::round(size * 0.064);
+void EmptyUserpic::PaintSavedMessagesRounded(
+		Painter &p,
+		int x,
+		int y,
+		int outerWidth,
+		int size,
+		const style::color &bg,
+		const style::color &fg) {
+	x = rtl() ? (outerWidth - x - size) : x;
 
-	const auto left = x + (size - width) / 2;
-	const auto top = y + (size - height) / 2;
-	const auto right = left + width;
-	const auto bottom = top + height;
-	const auto middle = (left + right) / 2;
-	const auto half = (top + bottom) / 2;
+	PainterHighQualityEnabler hq(p);
+	p.setBrush(bg);
+	p.setPen(Qt::NoPen);
+	p.drawRoundedRect(x, y, size, size, st::buttonRadius, st::buttonRadius);
 
-	p.setBrush(Qt::NoBrush);
-	auto pen = fg->p;
-	pen.setWidthF(thinkness);
-	pen.setCapStyle(Qt::FlatCap);
+	PaintSavedMessagesInner(p, x, y, size, bg, fg);
+}
 
-	{
-		// XXXXXXXXXXXXXXXXXX
-		// X                X
-		// X                X
-		// X                X
-		// X                X
-		// X                X
+QPixmap EmptyUserpic::GenerateSavedMessages(int size) {
+	return Generate(size, [&](Painter &p) {
+		PaintSavedMessages(p, 0, 0, size, size);
+	});
+}
 
-		pen.setJoinStyle(Qt::RoundJoin);
-		p.setPen(pen);
-		QPainterPath path;
-		path.moveTo(left, half);
-		path.lineTo(left, top);
-		path.lineTo(right, top);
-		path.lineTo(right, half);
-		p.drawPath(path);
-	}
-	{
-		// X                X
-		// X       XX       X
-		// X     XX  XX     X
-		// X   XX      XX   X
-		// X XX          XX X
-		// XX              XX
-
-		pen.setJoinStyle(Qt::MiterJoin);
-		p.setPen(pen);
-		QPainterPath path;
-		path.moveTo(left, half);
-		path.lineTo(left, bottom);
-		path.lineTo(middle, bottom - add);
-		path.lineTo(right, bottom);
-		path.lineTo(right, half);
-		p.drawPath(path);
-	}
+QPixmap EmptyUserpic::GenerateSavedMessagesRounded(int size) {
+	return Generate(size, [&](Painter &p) {
+		PaintSavedMessagesRounded(p, 0, 0, size, size);
+	});
 }
 
 InMemoryKey EmptyUserpic::uniqueKey() const {
