@@ -98,6 +98,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_chat_helpers.h"
 #include "styles/style_info.h"
 
+#include <QtGui/QWindow>
+#include <QtCore/QMimeData>
+
 namespace {
 
 constexpr auto kMessagesPerPageFirst = 30;
@@ -127,7 +130,7 @@ ApiWrap::RequestMessageDataCallback replyEditMessageDataCallback() {
 }
 
 void ActivateWindow(not_null<Window::SessionController*> controller) {
-	const auto window = controller->window();
+	const auto window = controller->widget();
 	window->activateWindow();
 	Core::App().activateWindowDelayed(window);
 }
@@ -677,7 +680,7 @@ void HistoryWidget::initTabbedSelector() {
 		if (_tabbedPanel && e->type() == QEvent::ParentChange) {
 			setTabbedPanel(nullptr);
 		}
-		return false;
+		return Core::EventFilter::Result::Continue;
 	});
 
 	selector->emojiChosen(
@@ -1777,7 +1780,7 @@ void HistoryWidget::showHistory(
 		_channel = peerToChannel(_peer->id);
 		_canSendMessages = _peer->canWrite();
 		_contactStatus = std::make_unique<HistoryView::ContactStatus>(
-			&controller()->window()->controller(),
+			&controller()->window(),
 			this,
 			_peer);
 		_contactStatus->heightValue() | rpl::start_with_next([=] {

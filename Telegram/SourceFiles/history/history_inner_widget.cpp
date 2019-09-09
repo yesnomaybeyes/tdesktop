@@ -51,6 +51,11 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_photo.h"
 #include "data/data_user.h"
 
+#include <QtGui/QClipboard>
+#include <QtGui/QDesktopServices>
+#include <QtWidgets/QApplication>
+#include <QtCore/QMimeData>
+
 namespace {
 
 constexpr auto kScrollDateHideTimeout = 1000;
@@ -151,7 +156,7 @@ HistoryInner::HistoryInner(
 			update();
 		}
 	});
-	subscribe(_controller->window()->dragFinished(), [this] {
+	subscribe(_controller->widget()->dragFinished(), [this] {
 		mouseActionUpdate(QCursor::pos());
 	});
 	session().data().itemRemoved(
@@ -1027,8 +1032,8 @@ void HistoryInner::mouseActionStart(const QPoint &screenPos, Qt::MouseButton but
 		? mouseActionView->data().get()
 		: nullptr;
 	_dragStartPosition = mapPointToItem(mapFromGlobal(screenPos), mouseActionView);
-	_pressWasInactive = _controller->window()->wasInactivePress();
-	if (_pressWasInactive) _controller->window()->setInactivePress(false);
+	_pressWasInactive = _controller->widget()->wasInactivePress();
+	if (_pressWasInactive) _controller->widget()->setInactivePress(false);
 
 	if (ClickHandler::getPressed()) {
 		_mouseAction = MouseAction::PrepareDrag;
@@ -1235,7 +1240,7 @@ std::unique_ptr<QMimeData> HistoryInner::prepareDrag() {
 void HistoryInner::performDrag() {
 	if (auto mimeData = prepareDrag()) {
 		// This call enters event loop and can destroy any QObject.
-		_controller->window()->launchDrag(std::move(mimeData));
+		_controller->widget()->launchDrag(std::move(mimeData));
 	}
 }
 
@@ -1742,7 +1747,7 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 					} else if (const auto contact = media->sharedContact()) {
 						const auto phone = contact->phoneNumber;
 						_menu->addAction(tr::lng_profile_copy_phone(tr::now), [=] {
-							QApplication::clipboard()->setText(phone);
+							QGuiApplication::clipboard()->setText(phone);
 						});
 					}
 				}
@@ -1761,7 +1766,7 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 			_menu->addAction(
 				actionText,
 				[text = link->copyToClipboardText()] {
-					QApplication::clipboard()->setText(text);
+					QGuiApplication::clipboard()->setText(text);
 				});
 			if (Global::AskUriScheme()) {
 				_menu->addAction(
@@ -1879,7 +1884,7 @@ void HistoryInner::savePhotoToFile(not_null<PhotoData*> photo) {
 void HistoryInner::copyContextImage(not_null<PhotoData*> photo) {
 	if (photo->isNull() || !photo->loaded()) return;
 
-	QApplication::clipboard()->setImage(photo->large()->original());
+	QGuiApplication::clipboard()->setImage(photo->large()->original());
 }
 
 void HistoryInner::showStickerPackInfo(not_null<DocumentData*> document) {

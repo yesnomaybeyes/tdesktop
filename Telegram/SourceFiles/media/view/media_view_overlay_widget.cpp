@@ -48,6 +48,14 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_mediaview.h"
 #include "styles/style_history.h"
 
+#include <QtWidgets/QApplication>
+#include <QtWidgets/QDesktopWidget>
+#include <QtCore/QBuffer>
+#include <QtGui/QGuiApplication>
+#include <QtGui/QClipboard>
+#include <QtGui/QWindow>
+#include <QtGui/QScreen>
+
 namespace Media {
 namespace View {
 namespace {
@@ -1301,13 +1309,13 @@ void OverlayWidget::onCopy() {
 	_dropdown->hideAnimated(Ui::DropdownMenu::HideOption::IgnoreShow);
 	if (_doc) {
 		if (videoShown()) {
-			QApplication::clipboard()->setImage(
+			QGuiApplication::clipboard()->setImage(
 				transformVideoFrame(videoFrame()));
 		} else if (!_current.isNull()) {
-			QApplication::clipboard()->setPixmap(_current);
+			QGuiApplication::clipboard()->setPixmap(_current);
 		}
 	} else if (_photo && _photo->loaded()) {
-		QApplication::clipboard()->setPixmap(_photo->large()->pix(fileOrigin()));
+		QGuiApplication::clipboard()->setPixmap(_photo->large()->pix(fileOrigin()));
 	}
 }
 
@@ -1736,6 +1744,19 @@ void OverlayWidget::showPhoto(not_null<PhotoData*> photo, not_null<PeerData*> co
 }
 
 void OverlayWidget::showDocument(not_null<DocumentData*> document, HistoryItem *context) {
+	showDocument(document, context, Data::CloudTheme());
+}
+
+void OverlayWidget::showTheme(
+		not_null<DocumentData*> document,
+		const Data::CloudTheme &cloud) {
+	showDocument(document, nullptr, cloud);
+}
+
+void OverlayWidget::showDocument(
+		not_null<DocumentData*> document,
+		HistoryItem *context,
+		const Data::CloudTheme &cloud) {
 	if (context) {
 		setContext(context);
 	} else {
@@ -1746,7 +1767,7 @@ void OverlayWidget::showDocument(not_null<DocumentData*> document, HistoryItem *
 	_photo = nullptr;
 
 	_streamingStartPaused = false;
-	displayDocument(document, context);
+	displayDocument(document, context, cloud);
 	preloadData(0);
 	activateControls();
 }
@@ -1805,7 +1826,10 @@ void OverlayWidget::redisplayContent() {
 }
 
 // Empty messages shown as docs: doc can be nullptr.
-void OverlayWidget::displayDocument(DocumentData *doc, HistoryItem *item) {
+void OverlayWidget::displayDocument(
+		DocumentData *doc,
+		HistoryItem *item,
+		const Data::CloudTheme &cloud) {
 	if (isHidden()) {
 		moveToScreen();
 	}
@@ -1814,6 +1838,7 @@ void OverlayWidget::displayDocument(DocumentData *doc, HistoryItem *item) {
 	clearStreaming();
 	destroyThemePreview();
 	_doc = doc;
+	_themeCloudData = cloud;
 	_photo = nullptr;
 	_radial.stop();
 
@@ -2190,26 +2215,43 @@ void OverlayWidget::playbackWaitingChange(bool waiting) {
 }
 
 void OverlayWidget::initThemePreview() {
+	using namespace Window::Theme;
+
 	Assert(_doc && _doc->isTheme());
 
+	const auto bytes = _doc->data();
 	auto &location = _doc->location();
-	if (location.isEmpty() || !location.accessEnable()) {
+	if (bytes.isEmpty()
+		&& (location.isEmpty() || !location.accessEnable())) {
 		return;
 	}
 	_themePreviewShown = true;
 
-	Window::Theme::CurrentData current;
-	current.backgroundId = Window::Theme::Background()->id();
-	current.backgroundImage = Window::Theme::Background()->createCurrentImage();
-	current.backgroundTiled = Window::Theme::Background()->tile();
+	auto current = CurrentData();
+	current.backgroundId = Background()->id();
+	current.backgroundImage = Background()->createCurrentImage();
+	current.backgroundTiled = Background()->tile();
+
+	const auto &cloudList = _doc->session().data().cloudThemes().list();
+	const auto i = ranges::find(
+		cloudList,
+		_doc->id,
+		&Data::CloudTheme::documentId);
+	const auto cloud = (i != end(cloudList)) ? *i : Data::CloudTheme();
+	const auto isTrusted = (cloud.documentId != 0);
+	const auto fields = [&] {
+		auto result = _themeCloudData.id ? _themeCloudData : cloud;
+		if (!result.documentId) {
+			result.documentId = _doc->id;
+		}
+		return result;
+	}();
 
 	const auto path = _doc->location().name();
 	const auto id = _themePreviewId = rand_value<uint64>();
 	const auto weak = make_weak(this);
 	crl::async([=, data = std::move(current)]() mutable {
-		auto preview = Window::Theme::GeneratePreview(
-			path,
-			std::move(data));
+		auto preview = GeneratePreview(bytes, path, fields, std::move(data));
 		crl::on_main(weak, [=, result = std::move(preview)]() mutable {
 			if (id != _themePreviewId) {
 				return;
@@ -2222,10 +2264,16 @@ void OverlayWidget::initThemePreview() {
 					tr::lng_theme_preview_apply(),
 					st::themePreviewApplyButton);
 				_themeApply->show();
-				_themeApply->setClickedCallback([this] {
+				_themeApply->setClickedCallback([=] {
+					const auto &object = Background()->themeObject();
+					const auto currentlyIsCustom = !object.cloud.id
+						&& !IsEmbeddedTheme(object.pathAbsolute);
 					auto preview = std::move(_themePreview);
 					close();
-					Window::Theme::Apply(std::move(preview));
+					Apply(std::move(preview));
+					if (isTrusted && !currentlyIsCustom) {
+						KeepApplied();
+					}
 				});
 				_themeCancel.create(
 					this,

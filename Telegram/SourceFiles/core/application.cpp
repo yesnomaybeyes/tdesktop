@@ -62,6 +62,11 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "boxes/confirm_box.h"
 #include "boxes/share_box.h"
 
+#include <QtWidgets/QDesktopWidget>
+#include <QtCore/QMimeDatabase>
+#include <QtGui/QGuiApplication>
+#include <QtGui/QDesktopServices>
+
 namespace Core {
 namespace {
 
@@ -138,7 +143,7 @@ Application::~Application() {
 	stopWebLoadManager();
 	App::deinitMedia();
 
-	Window::Theme::Unload();
+	Window::Theme::Uninitialize();
 
 	Media::Player::finish(_audio.get());
 	style::stopManager();
@@ -283,6 +288,14 @@ void Application::showDocument(not_null<DocumentData*> document, HistoryItem *it
 		_mediaView->activateWindow();
 		_mediaView->setFocus();
 	}
+}
+
+void Application::showTheme(
+		not_null<DocumentData*> document,
+		const Data::CloudTheme &cloud) {
+	_mediaView->showTheme(document, cloud);
+	_mediaView->activateWindow();
+	_mediaView->setFocus();
 }
 
 PeerData *Application::ui_getPeerForMouseAction() {

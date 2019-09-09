@@ -318,7 +318,7 @@ void DocumentOpenClickHandler::Open(
 		LaunchWithWarning(location.name(), context);
 	};
 	const auto &location = data->location(true);
-	if (data->isTheme() && !location.isEmpty() && location.accessEnable()) {
+	if (data->isTheme() && data->loaded(DocumentData::FilePathResolve::Checked)) {
 		Core::App().showDocument(data, context);
 		location.accessDisable();
 	} else if (data->canBePlayed()) {
@@ -568,6 +568,17 @@ void DocumentData::validateLottieSticker() {
 	}
 }
 
+void DocumentData::setDataAndCache(const QByteArray &data) {
+	setData(data);
+	if (saveToCache() && data.size() <= Storage::kMaxFileInMemory) {
+		session().data().cache().put(
+			cacheKey(),
+			Storage::Cache::Database::TaggedValue(
+				base::duplicate(data),
+				cacheTag()));
+	}
+}
+
 bool DocumentData::checkWallPaperProperties() {
 	if (type == WallPaperDocument) {
 		return true;
@@ -693,7 +704,8 @@ bool DocumentData::saveToCache() const {
 	return (type == StickerDocument && size < Storage::kMaxStickerInMemory)
 		|| (isAnimation() && size < Storage::kMaxAnimationInMemory)
 		|| (isVoiceMessage() && size < Storage::kMaxVoiceInMemory)
-		|| (type == WallPaperDocument);
+		|| (type == WallPaperDocument)
+		|| (isTheme() && size < Storage::kMaxFileInMemory);
 }
 
 void DocumentData::unload() {
