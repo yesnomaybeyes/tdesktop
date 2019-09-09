@@ -76,6 +76,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_month_day_year" = "{month} {day}, {year}";
 "lng_month_year" = "{month} {year}";
 
+"lng_calendar_beginning" = "Beginning";
+
 "lng_box_ok" = "OK";
 "lng_box_done" = "Done";
 
@@ -1172,6 +1174,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_media_size_limit" = "Limit by size";
 "lng_media_size_up_to" = "up to {size}";
 "lng_media_chat_background" = "Chat background";
+"lng_media_color_theme" = "Color theme";
 
 "lng_emoji_category1" = "People";
 "lng_emoji_category2" = "Nature";

@@ -47,29 +47,28 @@ public:
 	void resolve(const QString &slug, const FullMsgId &clickFromMessageId);
 	void showPreview(const MTPTheme &data);
 	void showPreview(const CloudTheme &cloud);
+	void applyFromDocument(const CloudTheme &cloud);
 
 private:
 	struct LoadingDocument {
+		CloudTheme theme;
 		DocumentData *document = nullptr;
 		rpl::lifetime subscription;
 		Fn<void()> callback;
 	};
 
 	void parseThemes(const QVector<MTPTheme> &list);
+	void checkCurrentTheme();
 
 	void install();
 	void setupReload();
 	[[nodiscard]] bool needReload() const;
 	void scheduleReload();
 	void reloadCurrent();
-	void updateFromDocument(
-		const CloudTheme &cloud,
-		not_null<DocumentData*> document);
-	void previewFromDocument(
-		const CloudTheme &cloud,
-		not_null<DocumentData*> document);
+	void previewFromDocument(const CloudTheme &cloud);
 	void loadDocumentAndInvoke(
 		LoadingDocument &value,
+		const CloudTheme &cloud,
 		not_null<DocumentData*> document,
 		Fn<void()> callback);
 	void invokeForLoaded(LoadingDocument &value);

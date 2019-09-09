@@ -131,9 +131,7 @@ void CloudThemes::applyUpdate(const MTPTheme &theme) {
 			|| !cloud.documentId) {
 			return;
 		}
-		updateFromDocument(
-			cloud,
-			_session->data().document(cloud.documentId));
+		applyFromDocument(cloud);
 	}, [&](const MTPDthemeDocumentNotModified &data) {
 	});
 	scheduleReload();
@@ -167,7 +165,7 @@ void CloudThemes::showPreview(const MTPTheme &data) {
 
 void CloudThemes::showPreview(const CloudTheme &cloud) {
 	if (const auto documentId = cloud.documentId) {
-		previewFromDocument(cloud, _session->data().document(documentId));
+		previewFromDocument(cloud);
 	} else if (cloud.createdBy == _session->userId()) {
 		Ui::show(Box(
 			Window::Theme::CreateForExistingBox,
@@ -179,10 +177,9 @@ void CloudThemes::showPreview(const CloudTheme &cloud) {
 	}
 }
 
-void CloudThemes::updateFromDocument(
-		const CloudTheme &cloud,
-		not_null<DocumentData*> document) {
-	loadDocumentAndInvoke(_updatingFrom, document, [=] {
+void CloudThemes::applyFromDocument(const CloudTheme &cloud) {
+	const auto document = _session->data().document(cloud.documentId);
+	loadDocumentAndInvoke(_updatingFrom, cloud, document, [=] {
 		auto preview = Window::Theme::PreviewFromFile(
 			document->data(),
 			document->location().name(),
@@ -194,16 +191,16 @@ void CloudThemes::updateFromDocument(
 	});
 }
 
-void CloudThemes::previewFromDocument(
-		const CloudTheme &cloud,
-		not_null<DocumentData*> document) {
-	loadDocumentAndInvoke(_previewFrom, document, [=] {
+void CloudThemes::previewFromDocument(const CloudTheme &cloud) {
+	const auto document = _session->data().document(cloud.documentId);
+	loadDocumentAndInvoke(_previewFrom, cloud, document, [=] {
 		Core::App().showTheme(document, cloud);
 	});
 }
 
 void CloudThemes::loadDocumentAndInvoke(
 		LoadingDocument &value,
+		const CloudTheme &cloud,
 		not_null<DocumentData*> document,
 		Fn<void()> callback) {
 	const auto alreadyWaiting = (value.document != nullptr);
@@ -211,7 +208,9 @@ void CloudThemes::loadDocumentAndInvoke(
 		value.document->cancel();
 	}
 	value.document = document;
-	value.document->save(Data::FileOrigin(), QString()); // #TODO themes
+	value.document->save(
+		Data::FileOriginTheme(cloud.id, cloud.accessHash),
+		QString());
 	value.callback = std::move(callback);
 	if (document->loaded()) {
 		invokeForLoaded(value);
@@ -271,6 +270,18 @@ void CloudThemes::parseThemes(const QVector<MTPTheme> &list) {
 		}, [&](const MTPDthemeDocumentNotModified &data) {
 			LOG(("API Error: Unexpected themeDocumentNotModified."));
 		});
+	}
+	checkCurrentTheme();
+}
+
+void CloudThemes::checkCurrentTheme() {
+	const auto &object = Window::Theme::Background()->themeObject();
+	if (!object.cloud.id || !object.cloud.documentId) {
+		return;
+	}
+	const auto i = ranges::find(_list, object.cloud.id, &CloudTheme::id);
+	if (i == end(_list)) {
+		install();
 	}
 }
 
