@@ -10,6 +10,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "window/themes/window_theme.h"
 #include "window/themes/window_theme_editor.h"
 #include "window/themes/window_theme_preview.h"
+#include "window/themes/window_themes_generate_name.h"
 #include "window/window_controller.h"
 #include "boxes/confirm_box.h"
 #include "ui/text/text_utilities.h"
@@ -64,6 +65,7 @@ public:
 		const ParsedTheme &parsed);
 
 	[[nodiscard]] ParsedTheme result() const;
+	[[nodiscard]] QImage image() const;
 
 	int resizeGetHeight(int newWidth) override;
 
@@ -212,6 +214,10 @@ ParsedTheme BackgroundSelector::result() const {
 	return result;
 }
 
+QImage BackgroundSelector::image() const {
+	return _background;
+}
+
 bool PaletteChanged(
 		const QByteArray &editorPalette,
 		const QByteArray &originalPalette,
@@ -223,7 +229,6 @@ bool PaletteChanged(
 void ImportFromFile(
 		not_null<Main::Session*> session,
 		not_null<QWidget*> parent) {
-	const auto &imgExtensions = cImgExtensions();
 	auto filters = QStringList(
 		qsl("Theme files (*.tdesktop-theme *.tdesktop-palette)"));
 	filters.push_back(FileDialog::AllFilesFilter());
@@ -238,7 +243,7 @@ void ImportFromFile(
 	});
 	FileDialog::GetOpenPath(
 		parent.get(),
-		tr::lng_choose_image(tr::now),
+		tr::lng_theme_editor_menu_import(tr::now),
 		filters.join(qsl(";;")),
 		crl::guard(parent, callback));
 }
@@ -273,73 +278,14 @@ void ImportFromFile(
 			data,
 			name,
 			ColorHexString(color->c));
+		if (data == "error") {
+			LOG(("Theme Error: could not adjust '%1: %2' in content"
+				).arg(QString::fromLatin1(name)
+				).arg(QString::fromLatin1(ColorHexString(color->c))));
+			return QByteArray();
+		}
 	}
 	return data;
-}
-
-// Only is valid for current theme, pass Local::ReadThemeContent() here.
-[[nodiscard]] ParsedTheme ParseTheme(
-		const Object &theme,
-		bool onlyPalette = false) {
-	auto raw = ParsedTheme();
-	raw.palette = theme.content;
-	const auto result = [&] {
-		if (const auto colorizer = ColorizerForTheme(theme.pathAbsolute)) {
-			raw.palette = Editor::ColorizeInContent(
-				std::move(raw.palette),
-				colorizer);
-		}
-		raw.palette = ReplaceAdjustableColors(std::move(raw.palette));
-		return raw;
-	};
-
-	zlib::FileToRead file(theme.content);
-
-	unz_global_info globalInfo = { 0 };
-	file.getGlobalInfo(&globalInfo);
-	if (file.error() != UNZ_OK) {
-		return result();
-	}
-	raw.palette = file.readFileContent("colors.tdesktop-theme", zlib::kCaseInsensitive, kThemeSchemeSizeLimit);
-	if (file.error() == UNZ_END_OF_LIST_OF_FILE) {
-		file.clearError();
-		raw.palette = file.readFileContent("colors.tdesktop-palette", zlib::kCaseInsensitive, kThemeSchemeSizeLimit);
-	}
-	if (file.error() != UNZ_OK) {
-		LOG(("Theme Error: could not read 'colors.tdesktop-theme' or 'colors.tdesktop-palette' in the theme file."));
-		return ParsedTheme();
-	} else if (onlyPalette) {
-		return result();
-	}
-
-	const auto fromFile = [&](const char *filename) {
-		raw.background = file.readFileContent(filename, zlib::kCaseInsensitive, kThemeBackgroundSizeLimit);
-		if (file.error() == UNZ_OK) {
-			return true;
-		} else if (file.error() == UNZ_END_OF_LIST_OF_FILE) {
-			file.clearError();
-			return true;
-		}
-		LOG(("Theme Error: could not read '%1' in the theme file.").arg(filename));
-		return false;
-	};
-
-	if (!fromFile("background.jpg") || !raw.background.isEmpty()) {
-		return raw.background.isEmpty() ? ParsedTheme() : result();
-	}
-	raw.isPng = true;
-	if (!fromFile("background.png") || !raw.background.isEmpty()) {
-		return raw.background.isEmpty() ? ParsedTheme() : result();
-	}
-	raw.tiled = true;
-	if (!fromFile("tiled.png") || !raw.background.isEmpty()) {
-		return raw.background.isEmpty() ? ParsedTheme() : result();
-	}
-	raw.isPng = false;
-	if (!fromFile("background.jpg") || !raw.background.isEmpty()) {
-		return raw.background.isEmpty() ? ParsedTheme() : result();
-	}
-	return result();
 }
 
 QByteArray GenerateDefaultPalette() {
@@ -524,6 +470,7 @@ SendMediaReady PrepareThemeMedia(
 Fn<void()> SavePreparedTheme(
 		not_null<Window::Controller*> window,
 		const ParsedTheme &parsed,
+		const QImage &background,
 		const QByteArray &originalContent,
 		const ParsedTheme &originalParsed,
 		const Data::CloudTheme &fields,
@@ -550,7 +497,6 @@ Fn<void()> SavePreparedTheme(
 
 	const auto creating = !fields.id
 		|| (fields.createdBy != session->userId());
-	const auto oldDocumentId = creating ? 0 : fields.documentId;
 	const auto changed = (parsed.background != originalParsed.background)
 		|| (parsed.tiled != originalParsed.tiled)
 		|| PaletteChanged(parsed.palette, originalParsed.palette, fields);
@@ -576,7 +522,8 @@ Fn<void()> SavePreparedTheme(
 			originalParsed,
 			cloud,
 			state->themeContent,
-			parsed);
+			parsed,
+			background);
 	};
 
 	const auto createTheme = [=](const MTPDocument &data) {
@@ -814,13 +761,15 @@ void SaveTheme(
 	}
 }
 
-void SaveThemeBox(
-		not_null<GenericBox*> box,
-		not_null<Window::Controller*> window,
-		const Data::CloudTheme &cloud,
-		const QByteArray &palette) {
-	Expects(window->account().sessionExists());
+struct CollectedData {
+	QByteArray originalContent;
+	ParsedTheme originalParsed;
+	ParsedTheme parsed;
+	QImage background;
+	QColor accent;
+};
 
+[[nodiscard]] CollectedData CollectData(const QByteArray &palette) {
 	const auto original = Local::ReadThemeContent();
 	const auto originalContent = original.content;
 
@@ -847,6 +796,25 @@ void SaveThemeBox(
 		parsed.background = originalParsed.background;
 		parsed.isPng = originalParsed.isPng;
 	}
+	const auto accent = st::windowActiveTextFg->c;
+	return { originalContent, originalParsed, parsed, background, accent };
+}
+
+QByteArray CollectForExport(const QByteArray &palette) {
+	return PackTheme(CollectData(palette).parsed);
+}
+
+void SaveThemeBox(
+		not_null<GenericBox*> box,
+		not_null<Window::Controller*> window,
+		const Data::CloudTheme &cloud,
+		const QByteArray &palette) {
+	Expects(window->account().sessionExists());
+
+	const auto collected = CollectData(palette);
+	const auto title = cloud.title.isEmpty()
+		? GenerateName(collected.accent)
+		: cloud.title;
 
 	box->setTitle(tr::lng_theme_editor_save_title(Ui::Text::WithEntities));
 
@@ -854,7 +822,7 @@ void SaveThemeBox(
 		box,
 		st::defaultInputField,
 		tr::lng_theme_editor_name(),
-		cloud.title));
+		title));
 	const auto linkWrap = box->addRow(
 		object_ptr<Ui::RpWidget>(box),
 		style::margins(
@@ -902,8 +870,8 @@ void SaveThemeBox(
 	const auto back = box->addRow(
 		object_ptr<BackgroundSelector>(
 			box,
-			background,
-			parsed),
+			collected.background,
+			collected.parsed),
 		style::margins(
 			st::boxRowPadding.left(),
 			st::themesSmallSkip,
@@ -963,14 +931,82 @@ void SaveThemeBox(
 		*cancel = SavePreparedTheme(
 			window,
 			back->result(),
-			originalContent,
-			originalParsed,
+			back->image(),
+			collected.originalContent,
+			collected.originalParsed,
 			fields,
 			done,
 			fail);
 	};
 	box->addButton(tr::lng_settings_save(), save);
 	box->addButton(tr::lng_cancel(), [=] { box->closeBox(); });
+}
+
+ParsedTheme ParseTheme(
+		const Object &theme,
+		bool onlyPalette,
+		bool parseCurrent) {
+	auto raw = ParsedTheme();
+	raw.palette = theme.content;
+	const auto result = [&] {
+		if (const auto colorizer = ColorizerForTheme(theme.pathAbsolute)) {
+			raw.palette = Editor::ColorizeInContent(
+				std::move(raw.palette),
+				colorizer);
+		}
+		if (parseCurrent) {
+			raw.palette = ReplaceAdjustableColors(std::move(raw.palette));
+		}
+		return raw;
+	};
+
+	zlib::FileToRead file(theme.content);
+
+	unz_global_info globalInfo = { 0 };
+	file.getGlobalInfo(&globalInfo);
+	if (file.error() != UNZ_OK) {
+		return result();
+	}
+	raw.palette = file.readFileContent("colors.tdesktop-theme", zlib::kCaseInsensitive, kThemeSchemeSizeLimit);
+	if (file.error() == UNZ_END_OF_LIST_OF_FILE) {
+		file.clearError();
+		raw.palette = file.readFileContent("colors.tdesktop-palette", zlib::kCaseInsensitive, kThemeSchemeSizeLimit);
+	}
+	if (file.error() != UNZ_OK) {
+		LOG(("Theme Error: could not read 'colors.tdesktop-theme' or 'colors.tdesktop-palette' in the theme file."));
+		return ParsedTheme();
+	} else if (onlyPalette) {
+		return result();
+	}
+
+	const auto fromFile = [&](const char *filename) {
+		raw.background = file.readFileContent(filename, zlib::kCaseInsensitive, kThemeBackgroundSizeLimit);
+		if (file.error() == UNZ_OK) {
+			return true;
+		} else if (file.error() == UNZ_END_OF_LIST_OF_FILE) {
+			file.clearError();
+			return true;
+		}
+		LOG(("Theme Error: could not read '%1' in the theme file.").arg(filename));
+		return false;
+	};
+
+	if (!fromFile("background.jpg") || !raw.background.isEmpty()) {
+		return raw.background.isEmpty() ? ParsedTheme() : result();
+	}
+	raw.isPng = true;
+	if (!fromFile("background.png") || !raw.background.isEmpty()) {
+		return raw.background.isEmpty() ? ParsedTheme() : result();
+	}
+	raw.tiled = true;
+	if (!fromFile("tiled.png") || !raw.background.isEmpty()) {
+		return raw.background.isEmpty() ? ParsedTheme() : result();
+	}
+	raw.isPng = false;
+	if (!fromFile("background.jpg") || !raw.background.isEmpty()) {
+		return raw.background.isEmpty() ? ParsedTheme() : result();
+	}
+	return result();
 }
 
 } // namespace Theme
