@@ -3225,6 +3225,11 @@ bool HistoryWidget::recordingAnimationCallback(crl::time now) {
 }
 
 void HistoryWidget::chooseAttach() {
+	if (_editMsgId) {
+		Ui::show(Box<InformBox>(tr::lng_edit_caption_attach(tr::now)));
+		return;
+	}
+
 	if (!_peer || !_peer->canWrite()) {
 		return;
 	} else if (const auto error = Data::RestrictionError(
@@ -4234,6 +4239,11 @@ bool HistoryWidget::confirmSendingFiles(
 	if (showSendingFilesError(list)) {
 		return false;
 	}
+	if (_editMsgId) {
+		Ui::show(Box<InformBox>(tr::lng_edit_caption_attach(tr::now)));
+		return false;
+	}
+
 	const auto noCompressOption = (list.files.size() > 1)
 		&& !list.allFilesForCompress
 		&& !list.albumIsPossible;
