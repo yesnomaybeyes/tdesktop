@@ -28,6 +28,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_peer_values.h"
 #include "data/data_folder.h"
 #include "data/data_peer_values.h"
+#include "facades.h"
 #include "app.h"
 
 namespace Dialogs {
@@ -510,7 +511,7 @@ Data::GlobalStructurePointer<UnreadBadgeStyleData> unreadBadgeStyle;
 void createCircleMask(UnreadBadgeSizeData *data, int size) {
 	if (!data->circle.isNull()) return;
 
-	data->circle = style::createCircleMask(size);
+	data->circle = style::createCircleMask(size, Global::SquareAvatars());
 }
 
 QImage colorizeCircleHalf(UnreadBadgeSizeData *data, int size, int half, int xoffset, style::color color) {

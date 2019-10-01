@@ -60,7 +60,7 @@ public:
 		TextWithTags&&,
 		Api::SendOptions)>;
 	using AsCopyCallback = Fn<void(
-		QVector<PeerData*>&&,
+		std::vector<not_null<PeerData*>>&&,
 		TextWithTags&&,
 		bool emptyText)>;
 	using FilterCallback = Fn<bool(PeerData*)>;

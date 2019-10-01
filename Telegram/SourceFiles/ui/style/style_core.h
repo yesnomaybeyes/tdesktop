@@ -65,16 +65,16 @@ QBrush transparentPlaceholderBrush();
 
 namespace internal {
 
-QImage createCircleMask(int size, QColor bg, QColor fg);
+QImage createCircleMask(int size, QColor bg, QColor fg, bool square);
 
 } // namespace internal
 
-inline QImage createCircleMask(int size) {
-	return internal::createCircleMask(size, QColor(0, 0, 0), QColor(255, 255, 255));
+inline QImage createCircleMask(int size, bool square) {
+	return internal::createCircleMask(size, QColor(0, 0, 0), QColor(255, 255, 255), square);
 }
 
-inline QImage createInvertedCircleMask(int size) {
-	return internal::createCircleMask(size, QColor(255, 255, 255), QColor(0, 0, 0));
+inline QImage createInvertedCircleMask(int size, bool square) {
+	return internal::createCircleMask(size, QColor(255, 255, 255), QColor(0, 0, 0), square);
 }
 
 } // namespace style

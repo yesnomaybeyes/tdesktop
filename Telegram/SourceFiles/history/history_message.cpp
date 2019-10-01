@@ -209,7 +209,7 @@ void FastShareMessage(not_null<HistoryItem*> item) {
 	const auto canCopyLink = item->hasDirectLink() || isGame;
 
 	const auto asCopyCallback = [=](
-			QVector<PeerData*> &&result,
+			std::vector<not_null<PeerData*>> &&result,
 			TextWithTags &&comment,
 			bool emptyText) {
 

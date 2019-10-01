@@ -11,6 +11,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/rp_widget.h"
 #include "ui/ui_utility.h"
 #include "app.h"
+#include "facades.h"
 
 #include <QtCore/QCoreApplication>
 

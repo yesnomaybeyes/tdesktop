@@ -172,7 +172,7 @@ QBrush transparentPlaceholderBrush() {
 
 namespace internal {
 
-QImage createCircleMask(int size, QColor bg, QColor fg) {
+QImage createCircleMask(int size, QColor bg, QColor fg, bool square = false) {
 	int realSize = size * DevicePixelRatio();
 #ifndef OS_MAC_OLD
 	auto result = QImage(realSize, realSize, QImage::Format::Format_Grayscale8);
@@ -186,8 +186,8 @@ QImage createCircleMask(int size, QColor bg, QColor fg) {
 		p.fillRect(0, 0, realSize, realSize, bg);
 		p.setPen(Qt::NoPen);
 		p.setBrush(fg);
-		
-		if (Global::SquareAvatars()) {
+
+		if (square) {
 			p.drawRect(0, 0, realSize, realSize);
 		} else {
 			p.drawEllipse(0, 0, realSize, realSize);

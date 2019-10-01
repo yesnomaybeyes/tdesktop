@@ -15,6 +15,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "chat_helpers/stickers.h"
 #include "main/main_session.h"
 #include "app.h"
+#include "facades.h"
 
 using namespace Images;
 
@@ -617,7 +618,9 @@ const QPixmap &Image::pixCircled(
 		w *= cIntRetinaFactor();
 		h *= cIntRetinaFactor();
 	}
-	auto options = Option::Smooth | Option::Circled;
+	auto options = Option::Smooth | (Global::SquareAvatars()
+		? Option::None
+		: Option::Circled);
 	auto k = PixKey(w, h, options);
 	auto i = _sizesCache.constFind(k);
 	if (i == _sizesCache.cend()) {

@@ -80,9 +80,9 @@ void createCircleMasks() {
 	if (!serviceMessageStyle->circle[NormalMask].isNull()) return;
 
 	int size = historyServiceMsgRadius() * 2;
-	serviceMessageStyle->circle[NormalMask] = style::createCircleMask(size);
+	serviceMessageStyle->circle[NormalMask] = style::createCircleMask(size, Global::SquareAvatars());
 	int sizeInverted = historyServiceMsgInvertedRadius() * 2;
-	serviceMessageStyle->circle[InvertedMask] = style::createInvertedCircleMask(sizeInverted);
+	serviceMessageStyle->circle[InvertedMask] = style::createInvertedCircleMask(sizeInverted, Global::SquareAvatars());
 }
 
 QPixmap circleCorner(int corner) {

@@ -14,6 +14,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "base/openssl_help.h"
 #include "chat_helpers/emoji_suggestions_helper.h"
 #include "platform/platform_info.h"
+#include "core/utils.h"
 
 #include <QtWidgets/QCommonStyle>
 #include <QtWidgets/QScrollBar>

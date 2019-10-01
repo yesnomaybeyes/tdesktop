@@ -3,27 +3,30 @@ Author: 23rd.
 */
 #include "settings/settings_fork.h"
 
+#include "app.h"
 #include "base/qthelp_url.h"
+#include "base/weak_ptr.h"
 #include "boxes/abstract_box.h"
+#include "boxes/confirm_box.h"
+#include "core/file_utilities.h"
+#include "facades.h"
 #include "info/profile/info_profile_button.h"
+#include "lang/lang_keys.h"
 #include "settings/settings_common.h"
-#include "ui/wrap/vertical_layout.h"
-#include "ui/wrap/slide_wrap.h"
+#include "storage/localstorage.h"
+#include "styles/style_boxes.h"
+#include "styles/style_settings.h"
 #include "ui/widgets/checkbox.h"
 #include "ui/widgets/input_fields.h"
-#include "lang/lang_keys.h"
-#include "storage/localstorage.h"
-#include "styles/style_settings.h"
-#include "styles/style_boxes.h"
-#include "core/file_utilities.h"
-#include "boxes/confirm_box.h"
+#include "ui/wrap/slide_wrap.h"
+#include "ui/wrap/vertical_layout.h"
 
 namespace Settings {
 namespace {
 
 using langString = tr::phrase<>;
 
-class SettingBox : public BoxContent {
+class SettingBox : public BoxContent, public base::has_weak_ptr  {
 public:
 	explicit SettingBox(
 		QWidget*,
@@ -80,7 +83,7 @@ void SettingBox::prepare() {
 			url->showError();
 			return;
 		}
-		const auto weak = make_weak(this);
+		const auto weak = base::make_weak(this);
 		getOrSetGlobal(linkUrl);
 		Local::writeUserSettings();
 		_callback(!isInvalid);

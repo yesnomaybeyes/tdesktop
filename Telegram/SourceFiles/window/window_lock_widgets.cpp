@@ -164,7 +164,7 @@ void PasscodeLockWidget::submitOnChange() {
 	}
 
 	const auto passcode = _passcode->text().toUtf8();
-	const auto correct = App::main()
+	const auto correct = window()->account().sessionExists()
 		? Local::checkPasscode(passcode)
 		: (Local::readMap(passcode) != Local::ReadMapPassNeeded);
 	if (!correct) {

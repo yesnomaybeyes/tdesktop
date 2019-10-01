@@ -11,6 +11,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/emoji_config.h"
 #include "ui/effects/animation_value.h"
 #include "app.h"
+#include "facades.h"
 #include "styles/style_history.h"
 
 namespace Ui {
