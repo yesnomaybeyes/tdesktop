@@ -27,6 +27,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/image/image.h"
 #include "ui/toast/toast.h"
 #include "ui/text_options.h"
+#include "ui/ui_utility.h"
+#include "ui/inactive_press.h"
 #include "window/window_session_controller.h"
 #include "window/window_peer_menu.h"
 #include "boxes/confirm_box.h"
@@ -50,6 +52,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_poll.h"
 #include "data/data_photo.h"
 #include "data/data_user.h"
+#include "data/data_file_origin.h"
+#include "facades.h"
+#include "app.h"
 
 #include <QtGui/QClipboard>
 #include <QtGui/QDesktopServices>
@@ -825,23 +830,23 @@ void HistoryInner::touchUpdateSpeed() {
 
 			// fingers are inacurates, we ignore small changes to avoid stopping the autoscroll because
 			// of a small horizontal offset when scrolling vertically
-			const int newSpeedY = (qAbs(pixelsPerSecond.y()) > FingerAccuracyThreshold) ? pixelsPerSecond.y() : 0;
-			const int newSpeedX = (qAbs(pixelsPerSecond.x()) > FingerAccuracyThreshold) ? pixelsPerSecond.x() : 0;
+			const int newSpeedY = (qAbs(pixelsPerSecond.y()) > Ui::kFingerAccuracyThreshold) ? pixelsPerSecond.y() : 0;
+			const int newSpeedX = (qAbs(pixelsPerSecond.x()) > Ui::kFingerAccuracyThreshold) ? pixelsPerSecond.x() : 0;
 			if (_touchScrollState == Ui::TouchScrollState::Auto) {
 				const int oldSpeedY = _touchSpeed.y();
 				const int oldSpeedX = _touchSpeed.x();
 				if ((oldSpeedY <= 0 && newSpeedY <= 0) || ((oldSpeedY >= 0 && newSpeedY >= 0)
 					&& (oldSpeedX <= 0 && newSpeedX <= 0)) || (oldSpeedX >= 0 && newSpeedX >= 0)) {
-					_touchSpeed.setY(snap((oldSpeedY + (newSpeedY / 4)), -MaxScrollAccelerated, +MaxScrollAccelerated));
-					_touchSpeed.setX(snap((oldSpeedX + (newSpeedX / 4)), -MaxScrollAccelerated, +MaxScrollAccelerated));
+					_touchSpeed.setY(snap((oldSpeedY + (newSpeedY / 4)), -Ui::kMaxScrollAccelerated, +Ui::kMaxScrollAccelerated));
+					_touchSpeed.setX(snap((oldSpeedX + (newSpeedX / 4)), -Ui::kMaxScrollAccelerated, +Ui::kMaxScrollAccelerated));
 				} else {
 					_touchSpeed = QPoint();
 				}
 			} else {
 				// we average the speed to avoid strange effects with the last delta
 				if (!_touchSpeed.isNull()) {
-					_touchSpeed.setX(snap((_touchSpeed.x() / 4) + (newSpeedX * 3 / 4), -MaxScrollFlick, +MaxScrollFlick));
-					_touchSpeed.setY(snap((_touchSpeed.y() / 4) + (newSpeedY * 3 / 4), -MaxScrollFlick, +MaxScrollFlick));
+					_touchSpeed.setX(snap((_touchSpeed.x() / 4) + (newSpeedX * 3 / 4), -Ui::kMaxScrollFlick, +Ui::kMaxScrollFlick));
+					_touchSpeed.setY(snap((_touchSpeed.y() / 4) + (newSpeedY * 3 / 4), -Ui::kMaxScrollFlick, +Ui::kMaxScrollFlick));
 				} else {
 					_touchSpeed = QPoint(newSpeedX, newSpeedY);
 				}
@@ -932,7 +937,7 @@ void HistoryInner::touchEvent(QTouchEvent *e) {
 	case QEvent::TouchEnd: {
 		if (!_touchInProgress) return;
 		_touchInProgress = false;
-		auto weak = make_weak(this);
+		auto weak = Ui::MakeWeak(this);
 		if (_touchSelect) {
 			mouseActionFinish(_touchPos, Qt::RightButton);
 			QContextMenuEvent contextMenu(QContextMenuEvent::Mouse, mapFromGlobal(_touchPos), _touchPos);
@@ -1032,8 +1037,10 @@ void HistoryInner::mouseActionStart(const QPoint &screenPos, Qt::MouseButton but
 		? mouseActionView->data().get()
 		: nullptr;
 	_dragStartPosition = mapPointToItem(mapFromGlobal(screenPos), mouseActionView);
-	_pressWasInactive = _controller->widget()->wasInactivePress();
-	if (_pressWasInactive) _controller->widget()->setInactivePress(false);
+	_pressWasInactive = Ui::WasInactivePress(_controller->widget());
+	if (_pressWasInactive) {
+		Ui::MarkInactivePress(_controller->widget(), false);
+	}
 
 	if (ClickHandler::getPressed()) {
 		_mouseAction = MouseAction::PrepareDrag;
@@ -1186,7 +1193,7 @@ std::unique_ptr<QMimeData> HistoryInner::prepareDrag() {
 		}
 		return TextForMimeData();
 	}();
-	if (auto mimeData = MimeDataFromText(selectedText)) {
+	if (auto mimeData = TextUtilities::MimeDataFromText(selectedText)) {
 		updateDragSelection(nullptr, nullptr, false);
 		_widget->noSelectingScroll();
 
@@ -1342,7 +1349,7 @@ void HistoryInner::mouseActionFinish(
 		const auto pressedItemId = pressedItemView
 			? pressedItemView->data()->fullId()
 			: FullMsgId();
-		App::activateClickHandler(activated, {
+		ActivateClickHandler(window(), activated, {
 			button,
 			QVariant::fromValue(pressedItemId)
 		});
@@ -1400,7 +1407,7 @@ void HistoryInner::mouseActionFinish(
 	if (!_selected.empty() && _selected.cbegin()->second != FullSelection) {
 		const auto [item, selection] = *_selected.cbegin();
 		if (const auto view = item->mainView()) {
-			SetClipboardText(
+			TextUtilities::SetClipboardText(
 				view->selectedText(selection),
 				QClipboard::Selection);
 		}
@@ -1851,7 +1858,7 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 }
 
 void HistoryInner::copySelectedText() {
-	SetClipboardText(getSelectedText());
+	TextUtilities::SetClipboardText(getSelectedText());
 }
 
 void HistoryInner::addSearchAction() {
@@ -1935,9 +1942,9 @@ void HistoryInner::saveContextGif(FullMsgId itemId) {
 void HistoryInner::copyContextText(FullMsgId itemId) {
 	if (const auto item = session().data().message(itemId)) {
 		if (const auto group = session().data().groups().find(item)) {
-			SetClipboardText(HistoryGroupText(group));
+			TextUtilities::SetClipboardText(HistoryGroupText(group));
 		} else {
-			SetClipboardText(HistoryItemText(item));
+			TextUtilities::SetClipboardText(HistoryItemText(item));
 		}
 	}
 }
@@ -2028,7 +2035,7 @@ void HistoryInner::keyPressEvent(QKeyEvent *e) {
 #ifdef Q_OS_MAC
 	} else if (e->key() == Qt::Key_E
 		&& e->modifiers().testFlag(Qt::ControlModifier)) {
-		SetClipboardText(getSelectedText(), QClipboard::FindBuffer);
+		TextUtilities::SetClipboardText(getSelectedText(), QClipboard::FindBuffer);
 #endif // Q_OS_MAC
 	} else if (e == QKeySequence::Delete) {
 		auto selectedState = getSelectionState();
@@ -3234,6 +3241,10 @@ QString HistoryInner::tooltipText() const {
 
 QPoint HistoryInner::tooltipPos() const {
 	return _mousePosition;
+}
+
+bool HistoryInner::tooltipWindowActive() const {
+	return Ui::InFocusChain(window());
 }
 
 void HistoryInner::onParentGeometryChanged() {
