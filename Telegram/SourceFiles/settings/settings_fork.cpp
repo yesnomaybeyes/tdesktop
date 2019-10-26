@@ -10,11 +10,11 @@ Author: 23rd.
 #include "boxes/confirm_box.h"
 #include "core/file_utilities.h"
 #include "facades.h"
-#include "info/profile/info_profile_button.h"
 #include "lang/lang_keys.h"
 #include "settings/settings_common.h"
 #include "storage/localstorage.h"
 #include "styles/style_boxes.h"
+#include "styles/style_layers.h"
 #include "styles/style_settings.h"
 #include "ui/widgets/checkbox.h"
 #include "ui/widgets/input_fields.h"
@@ -26,7 +26,7 @@ namespace {
 
 using langString = tr::phrase<>;
 
-class SettingBox : public BoxContent, public base::has_weak_ptr  {
+class SettingBox : public Ui::BoxContent, public base::has_weak_ptr  {
 public:
 	explicit SettingBox(
 		QWidget*,
@@ -302,7 +302,7 @@ void SetupForkContent(not_null<Ui::VerticalLayout*> container) {
 			},
 				tr::lng_settings_uri_scheme_box_title,
 				tr::lng_settings_uri_scheme_field_label),
-			LayerOption::KeepOther);
+			Ui::LayerOption::KeepOther);
 		} else {
 			Global::SetAskUriScheme(checked);
 			Local::writeUserSettings();
@@ -330,7 +330,7 @@ void SetupForkContent(not_null<Ui::VerticalLayout*> container) {
 			},
 				tr::lng_settings_search_engine_box_title,
 				tr::lng_settings_search_engine_field_label),
-			LayerOption::KeepOther);
+			Ui::LayerOption::KeepOther);
 		} else {
 			Global::SetSearchEngine(checked);
 			Local::writeUserSettings();
