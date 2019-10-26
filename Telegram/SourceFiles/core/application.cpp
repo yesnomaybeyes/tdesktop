@@ -208,6 +208,7 @@ void Application::run() {
 
 	Local::ReadMapState state = Local::readMap(QByteArray());
 
+	style::SetSquareUserpics(Global::SquareAvatars());
 	// Moved readMap to place before creating main window to change tray icon.
 	if (Global::SquareAvatars()) {
 		_logoNoMargin = _logo = Window::LoadLogoSquare();

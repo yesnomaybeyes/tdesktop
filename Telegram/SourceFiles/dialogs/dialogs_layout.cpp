@@ -511,7 +511,7 @@ Data::GlobalStructurePointer<UnreadBadgeStyleData> unreadBadgeStyle;
 void createCircleMask(UnreadBadgeSizeData *data, int size) {
 	if (!data->circle.isNull()) return;
 
-	data->circle = style::createCircleMask(size, Global::SquareAvatars());
+	data->circle = style::createCircleMask(size);
 }
 
 QImage colorizeCircleHalf(UnreadBadgeSizeData *data, int size, int half, int xoffset, style::color color) {
