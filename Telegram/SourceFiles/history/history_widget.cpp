@@ -3647,6 +3647,22 @@ bool HistoryWidget::eventFilter(QObject *obj, QEvent *e) {
 	if ((obj == _historyDown || obj == _unreadMentions) && e->type() == QEvent::Wheel) {
 		return _scroll->viewportEvent(e);
 	}
+	if (e->type() == QEvent::KeyPress) {
+		const auto k = static_cast<QKeyEvent *>(e);
+		const auto rightBracket = (k->key() == Qt::Key_BracketRight)
+			|| (k->key() == 1066);
+		if (rightBracket
+			&& k->modifiers().testFlag(Qt::ControlModifier)) {
+			const auto text = _field->getLastText();
+			const auto translatedString = rusKeyboardLayoutSwitch(text);
+			if (text != translatedString) {
+				clearFieldText();
+				setFieldText({ translatedString, TextWithTags::Tags() });
+				return true;
+			}
+		}
+	}
+
 	return TWidget::eventFilter(obj, e);
 }
 
