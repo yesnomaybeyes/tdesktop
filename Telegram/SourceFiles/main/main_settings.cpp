@@ -94,6 +94,7 @@ QByteArray Settings::serialize() const {
 		stream << qint32(_variables.replaceEmoji.current() ? 1 : 0);
 		stream << qint32(_variables.suggestEmoji ? 1 : 0);
 		stream << qint32(_variables.suggestStickersByEmoji ? 1 : 0);
+		stream << qint32(_variables.spellcheckerEnabled.current() ? 1 : 0);
 	}
 	return result;
 }
@@ -141,6 +142,7 @@ void Settings::constructFromSerialized(const QByteArray &serialized) {
 	qint32 replaceEmoji = _variables.replaceEmoji.current() ? 1 : 0;
 	qint32 suggestEmoji = _variables.suggestEmoji ? 1 : 0;
 	qint32 suggestStickersByEmoji = _variables.suggestStickersByEmoji ? 1 : 0;
+	qint32 spellcheckerEnabled = _variables.spellcheckerEnabled.current() ? 1 : 0;
 
 	stream >> selectorTab;
 	stream >> lastSeenWarningSeen;
@@ -251,6 +253,9 @@ void Settings::constructFromSerialized(const QByteArray &serialized) {
 		stream >> suggestEmoji;
 		stream >> suggestStickersByEmoji;
 	}
+	if (!stream.atEnd()) {
+		stream >> spellcheckerEnabled;
+	}
 	if (stream.status() != QDataStream::Ok) {
 		LOG(("App Error: "
 			"Bad data for Main::Settings::constructFromSerialized()"));
@@ -331,6 +336,7 @@ void Settings::constructFromSerialized(const QByteArray &serialized) {
 	_variables.replaceEmoji = (replaceEmoji == 1);
 	_variables.suggestEmoji = (suggestEmoji == 1);
 	_variables.suggestStickersByEmoji = (suggestStickersByEmoji == 1);
+	_variables.spellcheckerEnabled = (spellcheckerEnabled == 1);
 }
 
 void Settings::setSupportChatsTimeSlice(int slice) {

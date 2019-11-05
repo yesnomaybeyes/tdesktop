@@ -12,7 +12,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "boxes/mute_settings_box.h"
 #include "boxes/add_contact_box.h"
 #include "boxes/report_box.h"
-#include "boxes/generic_box.h"
 #include "boxes/create_poll_box.h"
 #include "boxes/peers/add_participants_box.h"
 #include "boxes/peers/edit_contact_box.h"
@@ -20,6 +19,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/text/text_utilities.h"
 #include "ui/widgets/labels.h"
 #include "ui/widgets/checkbox.h"
+#include "ui/layers/generic_box.h"
 #include "main/main_session.h"
 #include "apiwrap.h"
 #include "mainwidget.h"
@@ -47,6 +47,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "dialogs/dialogs_key.h"
 #include "boxes/peers/edit_peer_info_box.h"
 #include "facades.h"
+#include "styles/style_layers.h"
 #include "styles/style_boxes.h"
 #include "styles/style_window.h" // st::windowMinWidth
 
@@ -675,7 +676,7 @@ void PeerMenuShareContactBox(
 		if (!peer->canWrite()) {
 			Ui::show(Box<InformBox>(
 				tr::lng_forward_share_cant(tr::now)),
-				LayerOption::KeepOther);
+				Ui::LayerOption::KeepOther);
 			return;
 		} else if (peer->isSelf()) {
 			auto action = Api::SendAction(peer->owner().history(peer));
@@ -699,7 +700,7 @@ void PeerMenuShareContactBox(
 				auto action = Api::SendAction(history);
 				action.clearDraft = false;
 				user->session().api().shareContact(user, action);
-			}), LayerOption::KeepOther);
+			}), Ui::LayerOption::KeepOther);
 	};
 	*weak = Ui::show(Box<PeerListBox>(
 		std::make_unique<ChooseRecipientBoxController>(
@@ -742,7 +743,7 @@ void PeerMenuCreatePoll(not_null<PeerData*> peer) {
 }
 
 void PeerMenuBlockUserBox(
-		not_null<GenericBox*> box,
+		not_null<Ui::GenericBox*> box,
 		not_null<Window::Controller*> window,
 		not_null<UserData*> user,
 		bool suggestClearChat) {
@@ -865,7 +866,7 @@ QPointer<Ui::RpWidget> ShowForwardMessagesBox(
 		std::make_unique<ChooseRecipientBoxController>(
 			navigation,
 			std::move(callback)),
-		std::move(initBox)), LayerOption::KeepOther);
+		std::move(initBox)), Ui::LayerOption::KeepOther);
 	return weak->data();
 }
 
@@ -891,7 +892,7 @@ QPointer<Ui::RpWidget> ShowSendNowMessagesBox(
 		Ui::Toast::Show(config);
 		return { nullptr };
 	}
-	const auto box = std::make_shared<QPointer<BoxContent>>();
+	const auto box = std::make_shared<QPointer<Ui::BoxContent>>();
 	auto done = [
 		=,
 		list = std::move(items),
@@ -921,7 +922,7 @@ QPointer<Ui::RpWidget> ShowSendNowMessagesBox(
 	};
 	*box = Ui::show(
 		Box<ConfirmBox>(text, tr::lng_send_button(tr::now), std::move(done)),
-		LayerOption::KeepOther);
+		Ui::LayerOption::KeepOther);
 	return box->data();
 }
 
@@ -932,7 +933,7 @@ void PeerMenuAddChannelMembers(
 		&& channel->membersCount() >= Global::ChatSizeMax()) {
 		Ui::show(
 			Box<MaxInviteBox>(channel),
-			LayerOption::KeepOther);
+			Ui::LayerOption::KeepOther);
 		return;
 	}
 	const auto api = &channel->session().api();
@@ -1014,7 +1015,9 @@ void ToggleHistoryArchived(not_null<History*> history, bool archived) {
 
 Fn<void()> ClearHistoryHandler(not_null<PeerData*> peer) {
 	return [=] {
-		Ui::show(Box<DeleteMessagesBox>(peer, true), LayerOption::KeepOther);
+		Ui::show(
+			Box<DeleteMessagesBox>(peer, true),
+			Ui::LayerOption::KeepOther);
 	};
 }
 
@@ -1026,7 +1029,9 @@ Fn<void()> GoToFirstMessageHandler(not_null<PeerData*> peer) {
 
 Fn<void()> DeleteAndLeaveHandler(not_null<PeerData*> peer) {
 	return [=] {
-		Ui::show(Box<DeleteMessagesBox>(peer, false), LayerOption::KeepOther);
+		Ui::show(
+			Box<DeleteMessagesBox>(peer, false),
+			Ui::LayerOption::KeepOther);
 	};
 }
 

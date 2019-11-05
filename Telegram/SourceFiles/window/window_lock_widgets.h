@@ -87,7 +87,7 @@ struct TermsLock {
 
 };
 
-class TermsBox : public BoxContent {
+class TermsBox : public Ui::BoxContent {
 public:
 	TermsBox(
 		QWidget*,
