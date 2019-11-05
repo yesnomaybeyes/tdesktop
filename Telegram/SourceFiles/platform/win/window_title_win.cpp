@@ -18,7 +18,7 @@ namespace Platform {
 TitleWidget::TitleWidget(QWidget *parent)
 : Window::TitleWidget(parent)
 , _st(st::defaultWindowTitle)
-, _top(this, st::titleButtonTop)
+, _top(this, _st.top)
 , _minimize(this, _st.minimize)
 , _maximizeRestore(this, _st.maximize)
 , _close(this, _st.close)
@@ -27,7 +27,7 @@ TitleWidget::TitleWidget(QWidget *parent)
 	_top->setClickedCallback([this]() {
 		if (_topState) {
 			_topState = false;
-			window()->setWindowFlags(windowFlags() | Qt::WindowStaysOnBottomHint);
+			window()->setWindowFlags(windowFlags());
 			window()->show();
 		} else {
 			_topState = true;
@@ -132,6 +132,14 @@ void TitleWidget::updateButtonsState() {
 		_activeState
 		? &_st.closeIconActiveOver
 		: nullptr);
+
+	const auto top = _activeState
+		? (_topState ? &_st.topIconActive : &_st.top2IconActive)
+		: (_topState ? &_st.top.icon : &_st.top2Icon);
+	const auto topOver = _activeState
+		? (_topState ? &_st.topIconActiveOver : &_st.top2IconActiveOver)
+		: (_topState ? &_st.top.iconOver : &_st.top2IconOver);
+	_top->setIconOverride(top, topOver);
 }
 
 Window::HitTestResult TitleWidget::hitTest(const QPoint &p) const {
