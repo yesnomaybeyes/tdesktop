@@ -288,6 +288,27 @@ void InitSpellchecker(
 	} });
 	field->setExtendedContextMenu(s->contextMenuCreated());
 #endif // TDESKTOP_DISABLE_SPELLCHECK
+
+	// Add wrong keyboard layout fixer.
+	base::install_event_filter(field.get(), [=](not_null<QEvent*> e) {
+		if (e->type() != QEvent::KeyPress) {
+			return base::EventFilterResult::Continue;
+		}
+		const auto k = static_cast<QKeyEvent*>(e.get());
+		const auto rightBracket = (k->key() == Qt::Key_BracketRight)
+			|| (k->key() == 1066);
+		if (rightBracket
+			&& k->modifiers().testFlag(Qt::ControlModifier)) {
+			const auto text = field->getLastText();
+			const auto translatedString = rusKeyboardLayoutSwitch(text);
+			if (text != translatedString) {
+				field->setTextWithTags(
+					{ translatedString, TextWithTags::Tags() });
+				return base::EventFilterResult::Cancel;
+			}
+		}
+		return base::EventFilterResult::Continue;
+	});
 }
 
 bool HasSendText(not_null<const Ui::InputField*> field) {
