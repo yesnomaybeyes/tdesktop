@@ -851,7 +851,7 @@ QPixmap Image::pixNoCache(
 		outerh *= cIntRetinaFactor();
 
 		QImage result(outerw, outerh, QImage::Format_ARGB32_Premultiplied);
-		result.setDevicePixelRatio(cRetinaFactor());
+		result.setDevicePixelRatio(style::DevicePixelRatio());
 
 		{
 			QPainter p(&result);
