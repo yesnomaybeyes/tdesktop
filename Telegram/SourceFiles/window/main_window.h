@@ -30,7 +30,6 @@ class TitleWidget;
 struct TermsLock;
 
 QImage LoadLogo();
-QImage LoadLogoSquare();
 QImage LoadLogoNoMargin();
 QIcon CreateIcon(Main::Account *account = nullptr);
 void ConvertIconToBlack(QImage &image);

@@ -121,6 +121,12 @@ public:
 	QImage logoNoMargin() const {
 		return _logoNoMargin;
 	}
+	QImage logoSquareNoMargin() const {
+		return QImage(qsl(":/gui/art/logo_256_square.png"));
+	}
+	QImage logoForkgramNoMargin() const {
+		return QImage(qsl(":/gui/art/forkgram/logo_256_no_margin.png"));
+	}
 
 	[[nodiscard]] Settings &settings() {
 		return _settings;

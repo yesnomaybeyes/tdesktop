@@ -170,6 +170,13 @@ public:
 		return _variables.useBlackTrayIcon;
 	}
 
+	void setUseOriginalTrayIcon(bool value) {
+		_variables.useOriginalTrayIcon = value;
+	}
+	bool useOriginalTrayIcon() const {
+		return _variables.useOriginalTrayIcon;
+	}
+
 
 	[[nodiscard]] Data::AutoDownload::Full &autoDownload() {
 		return _variables.autoDownload;
@@ -292,6 +299,7 @@ private:
 
 		std::vector<PeerId> bindedChats{0, 0, 0, 0};
 		bool useBlackTrayIcon = false;
+		bool useOriginalTrayIcon = false;
 
 		bool loopAnimatedStickers = true;
 		rpl::variable<bool> largeEmoji = true;

@@ -53,10 +53,6 @@ QImage LoadLogo() {
 	return QImage(qsl(":/gui/art/logo_256.png"));
 }
 
-QImage LoadLogoSquare() {
-	return QImage(qsl(":/gui/art/logo_256_square.png"));
-}
-
 QImage LoadLogoNoMargin() {
 	return QImage(qsl(":/gui/art/logo_256_no_margin.png"));
 }

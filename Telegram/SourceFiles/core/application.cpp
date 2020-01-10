@@ -205,14 +205,6 @@ void Application::run() {
 	// Create mime database, so it won't be slow later.
 	QMimeDatabase().mimeTypeForName(qsl("text/plain"));
 
-	Local::ReadMapState state = Local::readMap(QByteArray());
-
-	style::SetSquareUserpics(Global::SquareAvatars());
-	// Moved readMap to place before creating main window to change tray icon.
-	if (Global::SquareAvatars()) {
-		_logoNoMargin = _logo = Window::LoadLogoSquare();
-	}
-
 	_window = std::make_unique<Window::Controller>(&activeAccount());
 
 	const auto currentGeometry = _window->widget()->geometry();
@@ -231,6 +223,7 @@ void Application::run() {
 	startShortcuts();
 	App::initMedia();
 
+	Local::ReadMapState state = Local::readMap(QByteArray());
 	if (state == Local::ReadMapPassNeeded) {
 		Global::SetLocalPasscode(true);
 		Global::RefLocalPasscodeChanged().notify();

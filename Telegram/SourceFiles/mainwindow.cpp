@@ -88,6 +88,32 @@ MainWindow::MainWindow(not_null<Window::Controller*> controller)
 	iconbig32 = logoNoMargin.scaledToWidth(32, Qt::SmoothTransformation);
 	iconbig64 = logoNoMargin.scaledToWidth(64, Qt::SmoothTransformation);
 
+	account().sessionValue(
+	) | rpl::start_with_next([=](Main::Session *session) {
+		if (!session) {
+			return;
+		}
+		const auto isSquare = Global::SquareAvatars();
+		const auto isOriginal = session->settings().useOriginalTrayIcon();
+		const auto getIconOr = [&](auto l) {
+			return isOriginal
+				? l
+				: isSquare
+					? Core::App().logoSquareNoMargin()
+					: Core::App().logoForkgramNoMargin();
+		};
+
+		auto logo = getIconOr(Core::App().logo());
+		icon16 = logo.scaledToWidth(16, Qt::SmoothTransformation);
+		icon32 = logo.scaledToWidth(32, Qt::SmoothTransformation);
+		icon64 = logo.scaledToWidth(64, Qt::SmoothTransformation);
+
+		auto logoNoMargin = getIconOr(Core::App().logoNoMargin());
+		iconbig16 = logoNoMargin.scaledToWidth(16, Qt::SmoothTransformation);
+		iconbig32 = logoNoMargin.scaledToWidth(32, Qt::SmoothTransformation);
+		iconbig64 = logoNoMargin.scaledToWidth(64, Qt::SmoothTransformation);
+	}, lifetime());
+
 	resize(st::windowDefaultWidth, st::windowDefaultHeight);
 
 	setLocale(QLocale(QLocale::English, QLocale::UnitedStates));

@@ -245,6 +245,9 @@ void SetupForkContent(
 	const auto useBlackTrayIcon = addCheckbox(
 		tr::lng_settings_use_black_tray_icon(tr::now),
 		session->settings().useBlackTrayIcon());
+	const auto useOriginalTrayIcon = addCheckbox(
+		tr::lng_settings_use_original_tray_icon(tr::now),
+		session->settings().useOriginalTrayIcon());
 
 	const auto restartBox = [=](Fn<void()> ok, Fn<void()> cancel) {
 		Ui::show(Box<ConfirmBox>(
@@ -357,6 +360,15 @@ void SetupForkContent(
 		Local::writeUserSettings();
 		Global::RefUnreadCounterUpdate().notify(true);
 	}, useBlackTrayIcon->lifetime());
+
+	useOriginalTrayIcon->checkedChanges(
+	) | rpl::filter([=](bool checked) {
+		return (checked != session->settings().useOriginalTrayIcon());
+	}) | rpl::start_with_next([=](bool checked) {
+		restartBox(
+			[=] { session->settings().setUseOriginalTrayIcon(checked); },
+			[=] { useOriginalTrayIcon->setChecked(!checked); });
+	}, useOriginalTrayIcon->lifetime());
 }
 
 void SetupFork(

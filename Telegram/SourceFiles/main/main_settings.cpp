@@ -93,6 +93,7 @@ QByteArray Settings::serialize() const {
 			stream << quint64(peerId);
 		}
 		stream << qint32(_variables.useBlackTrayIcon ? 1 : 0);
+		stream << qint32(_variables.useOriginalTrayIcon ? 1 : 0);
 		stream << qint32(0);// LEGACY _variables.autoplayGifs ? 1 : 0);
 		stream << qint32(_variables.loopAnimatedStickers ? 1 : 0);
 		stream << qint32(_variables.largeEmoji.current() ? 1 : 0);
@@ -148,6 +149,7 @@ void Settings::constructFromSerialized(const QByteArray &serialized) {
 	qint32 skipArchiveInSearch = _variables.skipArchiveInSearch.current() ? 1 : 0;
 	std::vector<PeerId> bindedChats = std::move(_variables.bindedChats);
 	qint32 useBlackTrayIcon = _variables.useBlackTrayIcon ? 1 : 0;
+	qint32 useOriginalTrayIcon = _variables.useOriginalTrayIcon ? 1 : 0;
 	qint32 autoplayGifs = 1;
 	qint32 loopAnimatedStickers = _variables.loopAnimatedStickers ? 1 : 0;
 	qint32 largeEmoji = _variables.largeEmoji.current() ? 1 : 0;
@@ -268,6 +270,9 @@ void Settings::constructFromSerialized(const QByteArray &serialized) {
 		stream >> useBlackTrayIcon;
 	}
 	if (!stream.atEnd()) {
+		stream >> useOriginalTrayIcon;
+	}
+	if (!stream.atEnd()) {
 		stream >> autoplayGifs;
 		stream >> loopAnimatedStickers;
 		stream >> largeEmoji;
@@ -372,6 +377,7 @@ void Settings::constructFromSerialized(const QByteArray &serialized) {
 	_variables.skipArchiveInSearch = (skipArchiveInSearch == 1);
 	_variables.bindedChats = std::move(bindedChats);
 	_variables.useBlackTrayIcon = (useBlackTrayIcon == 1);
+	_variables.useOriginalTrayIcon = (useOriginalTrayIcon == 1);
 	_variables.loopAnimatedStickers = (loopAnimatedStickers == 1);
 	_variables.largeEmoji = (largeEmoji == 1);
 	_variables.replaceEmoji = (replaceEmoji == 1);
