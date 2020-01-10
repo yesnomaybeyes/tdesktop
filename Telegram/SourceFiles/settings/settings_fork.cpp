@@ -11,6 +11,7 @@ Author: 23rd.
 #include "core/file_utilities.h"
 #include "facades.h"
 #include "lang/lang_keys.h"
+#include "main/main_session.h"
 #include "settings/settings_common.h"
 #include "storage/localstorage.h"
 #include "styles/style_boxes.h"
@@ -20,11 +21,13 @@ Author: 23rd.
 #include "ui/widgets/input_fields.h"
 #include "ui/wrap/slide_wrap.h"
 #include "ui/wrap/vertical_layout.h"
+#include "window/window_session_controller.h"
 
 namespace Settings {
 namespace {
 
 using langString = tr::phrase<>;
+using SessionController = not_null<Window::SessionController*>;
 
 class SettingBox : public Ui::BoxContent, public base::has_weak_ptr  {
 public:
@@ -203,7 +206,12 @@ void SetParentWidget(QWidget *parent) {
 	parentWidget = parent;
 }
 
-void SetupForkContent(not_null<Ui::VerticalLayout*> container) {
+void SetupForkContent(
+	not_null<Ui::VerticalLayout*> container,
+	SessionController controller) {
+
+	const auto session = &controller->session();
+
 	const auto checkbox = [&](const QString &label, bool checked) {
 		return object_ptr<Ui::Checkbox>(
 			container,
@@ -241,6 +249,9 @@ void SetupForkContent(not_null<Ui::VerticalLayout*> container) {
 	const auto allRecentStickers = addCheckbox(
 		tr::lng_settings_show_all_recent_stickers(tr::now),
 		Global::AllRecentStickers());
+	const auto useBlackTrayIcon = addCheckbox(
+		tr::lng_settings_use_black_tray_icon(tr::now),
+		session->settings().useBlackTrayIcon());
 
 	const auto restartBox = [=](Fn<void()> ok, Fn<void()> cancel) {
 		Ui::show(Box<ConfirmBox>(
@@ -344,13 +355,24 @@ void SetupForkContent(not_null<Ui::VerticalLayout*> container) {
 		Global::SetAllRecentStickers(checked);
 		Local::writeUserSettings();
 	}, lastSeenInDialogs->lifetime());
+
+	useBlackTrayIcon->checkedChanges(
+	) | rpl::filter([=](bool checked) {
+		return (checked != session->settings().useBlackTrayIcon());
+	}) | rpl::start_with_next([=](bool checked) {
+		session->settings().setUseBlackTrayIcon(checked);
+		Local::writeUserSettings();
+		Global::RefUnreadCounterUpdate().notify(true);
+	}, useBlackTrayIcon->lifetime());
 }
 
-void SetupFork(not_null<Ui::VerticalLayout*> container) {
+void SetupFork(
+	not_null<Ui::VerticalLayout*> container,
+	SessionController controller) {
 	AddSkip(container, st::settingsCheckboxesSkip);
 
 	auto wrap = object_ptr<Ui::VerticalLayout>(container);
-	SetupForkContent(wrap.data());
+	SetupForkContent(wrap.data(), controller);
 
 	container->add(object_ptr<Ui::OverrideMargins>(
 		container,
@@ -361,16 +383,16 @@ void SetupFork(not_null<Ui::VerticalLayout*> container) {
 
 } // namespace
 
-Fork::Fork(QWidget *parent, not_null<Window::SessionController*> controller)
+Fork::Fork(QWidget *parent, SessionController controller)
 : Section(parent) {
 	SetParentWidget(parent);
-	setupContent();
+	setupContent(controller);
 }
 
-void Fork::setupContent() {
+void Fork::setupContent(SessionController controller) {
 	const auto content = Ui::CreateChild<Ui::VerticalLayout>(this);
 
-	SetupFork(content);
+	SetupFork(content, controller);
 
 	Ui::ResizeFitChild(this, content);
 }

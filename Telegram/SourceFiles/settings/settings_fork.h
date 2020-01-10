@@ -12,7 +12,7 @@ public:
 	Fork(QWidget *parent, not_null<Window::SessionController*> controller);
 
 private:
-	void setupContent();
+	void setupContent(not_null<Window::SessionController*> controller);
 
 };
 

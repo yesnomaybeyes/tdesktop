@@ -931,7 +931,9 @@ QImage MainWindow::iconWithCounter(int size, int count, style::color bg, style::
 	}
 
 	QImage img(smallIcon ? ((size == 16) ? iconbig16 : (size == 32 ? iconbig32 : iconbig64)) : ((size == 16) ? icon16 : (size == 32 ? icon32 : icon64)));
-	if (account().sessionExists() && account().session().supportMode()) {
+
+	if (account().sessionExists()
+		&& (account().session().supportMode() || account().session().settings().useBlackTrayIcon())) {
 		Window::ConvertIconToBlack(img);
 	}
 	if (!count) return img;

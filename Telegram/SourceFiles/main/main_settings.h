@@ -163,6 +163,13 @@ public:
 		return _variables.bindedChats[index];
 	}
 
+	void setUseBlackTrayIcon(bool value) {
+		_variables.useBlackTrayIcon = value;
+	}
+	bool useBlackTrayIcon() const {
+		return _variables.useBlackTrayIcon;
+	}
+
 
 	[[nodiscard]] Data::AutoDownload::Full &autoDownload() {
 		return _variables.autoDownload;
@@ -284,6 +291,7 @@ private:
 		rpl::variable<bool> skipArchiveInSearch = false;
 
 		std::vector<PeerId> bindedChats{0, 0, 0, 0};
+		bool useBlackTrayIcon = false;
 
 		bool loopAnimatedStickers = true;
 		rpl::variable<bool> largeEmoji = true;
