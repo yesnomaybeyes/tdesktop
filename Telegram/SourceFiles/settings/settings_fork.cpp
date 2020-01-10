@@ -199,13 +199,6 @@ bool StickerSizeBox::isInvalidUrl(QString linkUrl) {
 
 //////
 
-
-QWidget *parentWidget = nullptr;
-
-void SetParentWidget(QWidget *parent) {
-	parentWidget = parent;
-}
-
 void SetupForkContent(
 	not_null<Ui::VerticalLayout*> container,
 	SessionController controller) {
@@ -354,7 +347,7 @@ void SetupForkContent(
 	}) | rpl::start_with_next([=](bool checked) {
 		Global::SetAllRecentStickers(checked);
 		Local::writeUserSettings();
-	}, lastSeenInDialogs->lifetime());
+	}, allRecentStickers->lifetime());
 
 	useBlackTrayIcon->checkedChanges(
 	) | rpl::filter([=](bool checked) {
@@ -385,7 +378,6 @@ void SetupFork(
 
 Fork::Fork(QWidget *parent, SessionController controller)
 : Section(parent) {
-	SetParentWidget(parent);
 	setupContent(controller);
 }
 
