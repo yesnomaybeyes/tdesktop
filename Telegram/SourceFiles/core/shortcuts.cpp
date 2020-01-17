@@ -74,6 +74,8 @@ const auto CommandByName = base::flat_map<QString, Command>{
 	{ qsl("first_chat")       , Command::ChatFirst },
 	{ qsl("last_chat")        , Command::ChatLast },
 	{ qsl("self_chat")        , Command::ChatSelf },
+
+	{ qsl("show_archive")     , Command::ShowArchive },
 };
 
 const auto CommandNames = base::flat_map<Command, QString>{
@@ -96,6 +98,8 @@ const auto CommandNames = base::flat_map<Command, QString>{
 	{ Command::ChatFirst     , qsl("first_chat") },
 	{ Command::ChatLast      , qsl("last_chat") },
 	{ Command::ChatSelf      , qsl("self_chat") },
+
+	{ Command::ShowArchive   , qsl("show_archive") },
 };
 
 class Manager {
@@ -333,13 +337,13 @@ void Manager::fillDefaults() {
 	set(qsl("ctrl+6"), Command::ChatBinded1);
 	set(qsl("ctrl+7"), Command::ChatBinded2);
 	set(qsl("ctrl+8"), Command::ChatBinded3);
-	set(qsl("ctrl+9"), Command::ChatBinded4);
 	set(qsl("ctrl+shift+6"), Command::SetChatBinded1);
 	set(qsl("ctrl+shift+7"), Command::SetChatBinded2);
 	set(qsl("ctrl+shift+8"), Command::SetChatBinded3);
-	set(qsl("ctrl+shift+9"), Command::SetChatBinded4);
 
 	set(qsl("ctrl+0"), Command::ChatSelf);
+
+	set(qsl("ctrl+9"), Command::ShowArchive);
 }
 
 void Manager::writeDefaultFile() {

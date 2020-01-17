@@ -24,7 +24,7 @@ TitleWidget::TitleWidget(QWidget *parent)
 , _close(this, _st.close)
 , _shadow(this, st::titleShadow)
 , _maximizedState(parent->window()->windowState() & Qt::WindowMaximized) {
-	_top->setClickedCallback([this]() {
+	_top->setClickedCallback([=] {
 		if (_topState) {
 			_topState = false;
 			window()->setWindowFlags(windowFlags());
@@ -38,18 +38,20 @@ TitleWidget::TitleWidget(QWidget *parent)
 	});
 	_top->setPointerCursor(false);
 
-	_minimize->setClickedCallback([this]() {
-		window()->setWindowState(Qt::WindowMinimized);
+	_minimize->setClickedCallback([=] {
+		window()->setWindowState(
+			window()->windowState() | Qt::WindowMinimized);
 		_minimize->clearState();
 	});
 	_minimize->setPointerCursor(false);
-	_maximizeRestore->setClickedCallback([this]() {
-		window()->setWindowState(_maximizedState ? Qt::WindowNoState : Qt::WindowMaximized);
+	_maximizeRestore->setClickedCallback([=] {
+		window()->setWindowState(_maximizedState
+			? Qt::WindowNoState
+			: Qt::WindowMaximized);
 		_maximizeRestore->clearState();
 	});
 	_maximizeRestore->setPointerCursor(false);
-	_close->setClickedCallback([this]() {
-		
+	_close->setClickedCallback([=] {
 		window()->close();
 		_close->clearState();
 	});

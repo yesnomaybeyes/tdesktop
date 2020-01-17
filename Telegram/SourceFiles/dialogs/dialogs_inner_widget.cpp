@@ -2953,6 +2953,16 @@ void InnerWidget::setupShortcuts() {
 			App::main()->choosePeer(session().userPeerId(), ShowAtUnreadMsgId);
 			return true;
 		});
+		request->check(Command::ShowArchive) && request->handle([=] {
+			const auto folder = session().data().folderLoaded(
+				Data::Folder::kId);
+			if (folder && !folder->chatsList()->empty()) {
+				_controller->openFolder(folder);
+				Ui::hideSettingsAndLayer();
+				return true;
+			}
+			return false;
+		});
 
 		static const auto kPinned = {
 			Command::ChatPinned1,
@@ -2979,7 +2989,6 @@ void InnerWidget::setupShortcuts() {
 			Command::ChatBinded1,
 			Command::ChatBinded2,
 			Command::ChatBinded3,
-			Command::ChatBinded4,
 		};
 		auto &&binded = ranges::view::zip(kBinded, ranges::view::ints(0));
 		for (const auto [command, index] : binded) {

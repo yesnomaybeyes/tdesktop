@@ -1502,7 +1502,6 @@ void HistoryWidget::setupShortcuts() {
 			Command::SetChatBinded1,
 			Command::SetChatBinded2,
 			Command::SetChatBinded3,
-			Command::SetChatBinded4,
 		};
 		auto &&binded = ranges::view::zip(kSetBinded, ranges::view::ints(0));
 		for (const auto [command, index] : binded) {
