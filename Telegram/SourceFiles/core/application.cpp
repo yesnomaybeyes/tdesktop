@@ -224,6 +224,7 @@ void Application::run() {
 	App::initMedia();
 
 	Local::ReadMapState state = Local::readMap(QByteArray());
+	style::SetSquareUserpics(Global::SquareAvatars());
 	if (state == Local::ReadMapPassNeeded) {
 		Global::SetLocalPasscode(true);
 		Global::RefLocalPasscodeChanged().notify();
