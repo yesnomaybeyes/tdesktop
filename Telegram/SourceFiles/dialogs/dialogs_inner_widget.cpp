@@ -2990,7 +2990,7 @@ void InnerWidget::setupShortcuts() {
 			Command::ChatBinded2,
 			Command::ChatBinded3,
 		};
-		auto &&binded = ranges::view::zip(kBinded, ranges::view::ints(0));
+		auto &&binded = ranges::view::zip(kBinded, ranges::view::ints(0, ranges::unreachable));
 		for (const auto [command, index] : binded) {
 			request->check(command) && request->handle([=, index = index] {
 				const auto peerId = session().settings().bindedChat(index);

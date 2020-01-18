@@ -1503,7 +1503,7 @@ void HistoryWidget::setupShortcuts() {
 			Command::SetChatBinded2,
 			Command::SetChatBinded3,
 		};
-		auto &&binded = ranges::view::zip(kSetBinded, ranges::view::ints(0));
+		auto &&binded = ranges::view::zip(kSetBinded, ranges::view::ints(0, ranges::unreachable));
 		for (const auto [command, index] : binded) {
 			request->check(command) && request->handle([=, index = index] {
 				auto toBind = _peer->id;
