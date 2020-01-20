@@ -252,6 +252,27 @@ void Application::run() {
 	for (const auto &error : Shortcuts::Errors()) {
 		LOG(("Shortcuts Error: %1").arg(error));
 	}
+
+	activeAccount().sessionValue(
+	) | rpl::start_with_next([=](Main::Session *session) {
+		if (!session) {
+			return;
+		}
+
+		const auto isSquare = Global::SquareAvatars();
+		const auto isOriginal = session->settings().useOriginalTrayIcon();
+		auto logo = isOriginal
+			? Window::LoadLogoNoMargin()
+			: isSquare
+				? Core::App().logoSquareNoMargin()
+				: Core::App().logoForkgramNoMargin();
+
+		if (session->settings().useBlackTrayIcon()) {
+			Window::ConvertIconToBlack(logo);
+		}
+		_logoNoMargin = std::move(logo);
+		_logo = _logoNoMargin;
+	}, _lifetime);
 }
 
 bool Application::hideMediaView() {

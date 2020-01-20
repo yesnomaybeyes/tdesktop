@@ -369,7 +369,7 @@ void RegisterCustomScheme() {
 		}
 	}
 	if (!iconExists) {
-		if (QFile(qsl(":/gui/art/logo_256.png")).copy(icon)) {
+		if (QFile(qsl(":/gui/art/forkgram/logo_256_no_margin.png")).copy(icon)) {
 			DEBUG_LOG(("App Info: Icon copied to 'tdata'"));
 		}
 	}

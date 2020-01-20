@@ -242,12 +242,14 @@ void SetupForkContent(
 	const auto allRecentStickers = addCheckbox(
 		tr::lng_settings_show_all_recent_stickers(tr::now),
 		Global::AllRecentStickers());
+#ifndef Q_OS_LINUX
 	const auto useBlackTrayIcon = addCheckbox(
 		tr::lng_settings_use_black_tray_icon(tr::now),
 		session->settings().useBlackTrayIcon());
 	const auto useOriginalTrayIcon = addCheckbox(
 		tr::lng_settings_use_original_tray_icon(tr::now),
 		session->settings().useOriginalTrayIcon());
+#endif // !Q_OS_LINUX
 
 	const auto restartBox = [=](Fn<void()> ok, Fn<void()> cancel) {
 		Ui::show(Box<ConfirmBox>(
@@ -352,13 +354,20 @@ void SetupForkContent(
 		Local::writeUserSettings();
 	}, allRecentStickers->lifetime());
 
+#ifndef Q_OS_LINUX
 	useBlackTrayIcon->checkedChanges(
 	) | rpl::filter([=](bool checked) {
 		return (checked != session->settings().useBlackTrayIcon());
 	}) | rpl::start_with_next([=](bool checked) {
+#ifdef Q_OS_WIN
 		session->settings().setUseBlackTrayIcon(checked);
 		Local::writeUserSettings();
 		Global::RefUnreadCounterUpdate().notify(true);
+#else // !Q_OS_WIN
+		restartBox(
+			[=] { session->settings().setUseBlackTrayIcon(checked); },
+			[=] { useBlackTrayIcon->setChecked(!checked); });
+#endif // Q_OS_WIN
 	}, useBlackTrayIcon->lifetime());
 
 	useOriginalTrayIcon->checkedChanges(
@@ -369,6 +378,7 @@ void SetupForkContent(
 			[=] { session->settings().setUseOriginalTrayIcon(checked); },
 			[=] { useOriginalTrayIcon->setChecked(!checked); });
 	}, useOriginalTrayIcon->lifetime());
+#endif // !Q_OS_LINUX
 }
 
 void SetupFork(
