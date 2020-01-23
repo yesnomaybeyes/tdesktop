@@ -42,9 +42,6 @@ extern "C" {
 namespace Core {
 namespace {
 
-// Check with own update stream, but not change original AppVersion.
-constexpr int ForkAppVersion = AppVersion + 0;
-
 constexpr auto kUpdaterTimeout = 10 * crl::time(1000);
 constexpr auto kMaxResponseSize = 1024 * 1024;
 
@@ -392,8 +389,8 @@ bool UnpackUpdate(const QString &filepath) {
 				LOG(("Update Error: downloaded alpha version %1 is not greater, than mine %2").arg(alphaVersion).arg(cAlphaVersion()));
 				return false;
 			}
-		} else if (int32(version) <= ForkAppVersion) {
-			LOG(("Update Error: downloaded version %1 is not greater, than mine %2").arg(version).arg(ForkAppVersion));
+		} else if (int32(version) <= AppVersion) {
+			LOG(("Update Error: downloaded version %1 is not greater, than mine %2").arg(version).arg(AppVersion));
 			return false;
 		}
 
@@ -739,7 +736,7 @@ QString HttpChecker::validateLatestUrl(
 		QString url) const {
 	const auto myVersion = isAvailableAlpha
 		? cAlphaVersion()
-		: uint64(ForkAppVersion);
+		: uint64(AppVersion);
 	const auto validVersion = (cAlphaVersion() || !isAvailableAlpha);
 	if (!validVersion || availableVersion <= myVersion) {
 		return QString();
@@ -888,14 +885,13 @@ MtpChecker::MtpChecker(QPointer<MTP::Instance> instance, bool testing)
 }
 
 void MtpChecker::start() {
-	return;
 	if (!_mtp.valid()) {
 		LOG(("Update Info: MTP is unavailable."));
 		crl::on_main(this, [=] { fail(); });
 		return;
 	}
 	const auto updaterVersion = Platform::AutoUpdateVersion();
-	const auto feed = "tdhbcfeed"
+	const auto feed = "frkgrmfeed"
 		+ (updaterVersion > 1 ? QString::number(updaterVersion) : QString());
 	MTP::ResolveChannel(&_mtp, feed, [=](const MTPInputChannel &channel) {
 		_mtp.send(
@@ -997,7 +993,7 @@ auto MtpChecker::parseText(const QByteArray &text) const
 auto MtpChecker::validateLatestLocation(
 		uint64 availableVersion,
 		const FileLocation &location) const -> FileLocation {
-	const auto myVersion = uint64(ForkAppVersion);
+	const auto myVersion = uint64(AppVersion);
 	return (availableVersion <= myVersion) ? FileLocation() : location;
 }
 
@@ -1501,8 +1497,8 @@ bool checkReadyUpdate() {
 				ClearAll();
 				return false;
 			}
-		} else if (versionNum <= ForkAppVersion) {
-			LOG(("Update Error: cant install version %1 having version %2").arg(versionNum).arg(ForkAppVersion));
+		} else if (versionNum <= AppVersion) {
+			LOG(("Update Error: cant install version %1 having version %2").arg(versionNum).arg(AppVersion));
 			ClearAll();
 			return false;
 		}

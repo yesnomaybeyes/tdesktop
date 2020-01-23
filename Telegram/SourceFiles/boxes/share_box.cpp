@@ -415,7 +415,9 @@ void ShareBox::keyPressEvent(QKeyEvent *e) {
 
 SendMenuType ShareBox::sendMenuType() const {
 	const auto selected = _inner->selected();
-	return (selected.size() == 1 && selected.front()->isSelf())
+	return ranges::all_of(selected, HistoryView::CanScheduleUntilOnline)
+		? SendMenuType::ScheduledToUser
+		: (selected.size() == 1 && selected.front()->isSelf())
 		? SendMenuType::Reminder
 		: SendMenuType::Scheduled;
 }
@@ -436,7 +438,7 @@ void ShareBox::createButtons() {
 		const auto send = addButton(tr::lng_share_confirm(), [=] {
 			submit({});
 		});
-		SetupSendMenu(
+		SetupSendMenuAndShortcuts(
 			send,
 			[=] { return sendMenuType(); },
 			[=] { submitSilent(); },

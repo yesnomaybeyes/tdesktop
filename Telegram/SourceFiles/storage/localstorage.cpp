@@ -2867,7 +2867,7 @@ const QString &readAutoupdatePrefixRaw() {
 			return AutoupdatePrefix(value);
 		}
 	}
-	return AutoupdatePrefix("https://zik.one/forkgram/");
+	return AutoupdatePrefix("https://forkgram.github.io/");
 }
 
 void writeAutoupdatePrefix(const QString &prefix) {

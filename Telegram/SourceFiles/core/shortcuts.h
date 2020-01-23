@@ -37,6 +37,10 @@ enum class Command {
 
 	ShowArchive,
 
+	JustSendMessage,
+	SendSilentMessage,
+	ScheduleMessage,
+
 	ChatBinded1,
 	ChatBinded2,
 	ChatBinded3,
