@@ -220,6 +220,7 @@ void MainWindow::setupPasscodeLock() {
 	if (animated) {
 		_passcodeLock->showAnimated(bg);
 	} else {
+		_passcodeLock->showFinished();
 		setInnerFocus();
 	}
 }

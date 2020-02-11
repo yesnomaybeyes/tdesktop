@@ -15,6 +15,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_drafts.h"
 #include "data/data_user.h"
 #include "boxes/send_files_box.h"
+#include "base/platform/base_platform_info.h"
 #include "ui/widgets/input_fields.h"
 #include "ui/emoji_config.h"
 #include "export/export_settings.h"
@@ -2132,7 +2133,10 @@ bool _readOldMtpData(bool remove, ReadSettingsContext &context) {
 }
 
 void _writeUserSettings() {
-	if (_readingUserSettings) {
+	if (!_userWorking()) {
+		LOG(("App Error: attempt to write user settings too early!"));
+		return;
+	} else if (_readingUserSettings) {
 		LOG(("App Error: attempt to write settings while reading them!"));
 		return;
 	}
@@ -2669,6 +2673,7 @@ void finish() {
 }
 
 void InitialLoadTheme();
+bool ApplyDefaultNightMode();
 void readLangPack();
 
 void start() {
@@ -2688,7 +2693,10 @@ void start() {
 		_readOldMtpData(false, context); // needed further in _readMtpData
 		applyReadContext(std::move(context));
 
-		return writeSettings();
+		if (!ApplyDefaultNightMode()) {
+			writeSettings();
+		}
+		return;
 	}
 	LOG(("App Info: reading settings..."));
 
@@ -4466,6 +4474,20 @@ void InitialLoadTheme() {
 	} else {
 		clearTheme();
 	}
+}
+
+bool ApplyDefaultNightMode() {
+	const auto NightByDefault = Platform::IsMacStoreBuild();
+	if (!NightByDefault
+		|| Window::Theme::IsNightMode()
+		|| _themeKeyDay
+		|| _themeKeyNight
+		|| _themeKeyLegacy) {
+		return false;
+	}
+	Window::Theme::ToggleNightMode();
+	Window::Theme::KeepApplied();
+	return true;
 }
 
 Window::Theme::Saved readThemeAfterSwitch() {
