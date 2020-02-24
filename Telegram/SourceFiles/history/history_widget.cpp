@@ -1744,7 +1744,6 @@ void HistoryWidget::showHistory(
 
 	clearReplyReturns();
 	if (_history) {
-		clearAllLoadRequests();
 		if (Ui::InFocusChain(_list)) {
 			// Removing focus from list clears selected and updates top bar.
 			setFocus();
@@ -1763,6 +1762,8 @@ void HistoryWidget::showHistory(
 		destroyPinnedBar();
 		_membersDropdown.destroy();
 		_scrollToAnimation.stop();
+
+		clearAllLoadRequests();
 		_history = _migrated = nullptr;
 		_list = nullptr;
 		_peer = nullptr;
@@ -1902,6 +1903,9 @@ void HistoryWidget::showHistory(
 					sendBotStartCommand();
 				}
 			}
+		}
+		if (!_history->folderKnown()) {
+			session().data().histories().requestDialogEntry(_history);
 		}
 		if (_history->chatListUnreadMark()) {
 			_history->owner().histories().changeDialogUnreadMark(
