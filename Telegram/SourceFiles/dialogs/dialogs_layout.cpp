@@ -225,6 +225,7 @@ void paintRow(
 		not_null<const BasicRow*> row,
 		not_null<Entry*> entry,
 		Dialogs::Key chat,
+		FilterId filterId,
 		PeerData *from,
 		const HiddenSenderInfo *hiddenSenderInfo,
 		HistoryItem *item,
@@ -329,7 +330,7 @@ void paintRow(
 		}
 
 		auto availableWidth = namewidth;
-		if (entry->isPinnedDialog() && !entry->fixedOnTopIndex()) {
+		if (entry->isPinnedDialog(filterId) && (filterId || !entry->fixedOnTopIndex())) {
 			auto &icon = (active ? st::dialogsPinnedIconActive : (selected ? st::dialogsPinnedIconOver : st::dialogsPinnedIcon));
 			icon.paint(p, fullWidth - st::dialogsPadding.x() - icon.width(), texttop, fullWidth);
 			availableWidth -= icon.width() + st::dialogsUnreadPadding;
@@ -356,7 +357,7 @@ void paintRow(
 		}
 	} else if (!item) {
 		auto availableWidth = namewidth;
-		if (entry->isPinnedDialog() && !entry->fixedOnTopIndex()) {
+		if (entry->isPinnedDialog(filterId) && (filterId || !entry->fixedOnTopIndex())) {
 			auto &icon = (active ? st::dialogsPinnedIconActive : (selected ? st::dialogsPinnedIconOver : st::dialogsPinnedIcon));
 			icon.paint(p, fullWidth - st::dialogsPadding.x() - icon.width(), texttop, fullWidth);
 			availableWidth -= icon.width() + st::dialogsUnreadPadding;
@@ -373,7 +374,7 @@ void paintRow(
 		}
 
 		paintItemCallback(nameleft, namewidth);
-	} else if (entry->isPinnedDialog() && !entry->fixedOnTopIndex()) {
+	} else if (entry->isPinnedDialog(filterId) && (filterId || !entry->fixedOnTopIndex())) {
 		auto availableWidth = namewidth;
 		auto &icon = (active ? st::dialogsPinnedIconActive : (selected ? st::dialogsPinnedIconOver : st::dialogsPinnedIcon));
 		icon.paint(p, fullWidth - st::dialogsPadding.x() - icon.width(), texttop, fullWidth);
@@ -634,6 +635,7 @@ void paintUnreadCount(
 void RowPainter::paint(
 		Painter &p,
 		not_null<const Row*> row,
+		FilterId filterId,
 		int fullWidth,
 		bool active,
 		bool selected,
@@ -689,8 +691,8 @@ void RowPainter::paint(
 	const auto displayPinnedIcon = !displayUnreadCounter
 		&& !displayMentionBadge
 		&& !displayUnreadMark
-		&& entry->isPinnedDialog()
-		&& !entry->fixedOnTopIndex();
+		&& entry->isPinnedDialog(filterId)
+		&& (filterId || !entry->fixedOnTopIndex());
 
 	const auto from = history
 		? (history->peer->migrateTo()
@@ -768,6 +770,7 @@ void RowPainter::paint(
 		row,
 		entry,
 		row->key(),
+		filterId,
 		from,
 		nullptr,
 		item,
@@ -891,6 +894,7 @@ void RowPainter::paint(
 		row,
 		history,
 		history,
+		FilterId(),
 		from,
 		hiddenSenderInfo,
 		item,

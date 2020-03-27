@@ -227,6 +227,12 @@ void FastShareMessage(not_null<HistoryItem*> item) {
 				message.textWithTags = emptyText
 					? comment
 					: PrepareEditText(item);
+				if (const auto id =
+						App::main()->currentReplyToIdFor(history)) {
+					message.action.replyTo = id;
+					history->clearCloudDraft();
+					history->clearLocalDraft();
+				}
 				if (const auto document = item->media()->document()) {
 					Api::SendExistingDocument(std::move(message), document);
 				} else if (const auto photo = item->media()->photo()) {
@@ -1061,6 +1067,8 @@ std::unique_ptr<Data::Media> HistoryMessage::CreateMedia(
 		return std::make_unique<Data::MediaPoll>(
 			item,
 			item->history()->owner().processPoll(media));
+	}, [&](const MTPDmessageMediaDice &media) -> Result {
+		return std::make_unique<Data::MediaDice>(item, media.vvalue().v);
 	}, [](const MTPDmessageMediaEmpty &) -> Result {
 		return nullptr;
 	}, [](const MTPDmessageMediaUnsupported &) -> Result {
