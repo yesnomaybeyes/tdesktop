@@ -1489,31 +1489,6 @@ void HistoryWidget::setupShortcuts() {
 				return true;
 			});
 		}
-
-		static const auto kSetBinded = {
-			Command::SetChatBinded1,
-			Command::SetChatBinded2,
-			Command::SetChatBinded3,
-		};
-		auto &&binded = ranges::view::zip(kSetBinded, ranges::view::ints(0, ranges::unreachable));
-		for (const auto [command, index] : binded) {
-			request->check(command) && request->handle([=, index = index] {
-				auto toBind = _peer->id;
-				if (toBind == session().settings().bindedChat(index)) {
-					toBind = 0;
-				}
-				session().settings().setBindedChat(toBind, index);
-
-				auto toast = Ui::Toast::Config();
-				toast.text = (toBind
-					? tr::lng_binded
-					: tr::lng_unbinded)(tr::now);
-				toast.durationMs = kBindedToastDuration;
-				Ui::Toast::Show(this, toast);
-				Local::writeUserSettings();
-				return true;
-			});
-		}
 	}, lifetime());
 }
 
@@ -1796,6 +1771,7 @@ void HistoryWidget::showHistory(
 
 	_showAtMsgId = showAtMsgId;
 	_historyInited = false;
+	_contactStatus = nullptr;
 
 	// Unload lottie animations.
 	Auth().data().unloadHeavyViewParts(HistoryInner::ElementDelegate());
@@ -1813,8 +1789,6 @@ void HistoryWidget::showHistory(
 		}, _contactStatus->lifetime());
 		orderWidgets();
 		controller()->tabbedSelector()->setCurrentPeer(_peer);
-	} else {
-		_contactStatus = nullptr;
 	}
 	refreshTabbedPanel();
 
