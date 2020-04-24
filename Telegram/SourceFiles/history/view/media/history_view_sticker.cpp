@@ -38,13 +38,17 @@ namespace {
 		0.625);
 }
 
-[[nodiscard]] QImage CacheDiceImage(int index, const QImage &image) {
-	static auto Cache = base::flat_map<int, QImage>();
-	const auto i = Cache.find(index);
+[[nodiscard]] QImage CacheDiceImage(
+		const QString &emoji,
+		int index,
+		const QImage &image) {
+	static auto Cache = base::flat_map<std::pair<QString, int>, QImage>();
+	const auto key = std::make_pair(emoji, index);
+	const auto i = Cache.find(key);
 	if (i != end(Cache) && i->second.size() == image.size()) {
 		return i->second;
 	}
-	Cache[index] = image;
+	Cache[key] = image;
 	return image;
 }
 
@@ -74,12 +78,7 @@ void Sticker::initSize() {
 		: int(cScale() / 100.0 * Global::CustomStickerSize());
 	_size = _document->dimensions;
 	if (isEmojiSticker() || _diceIndex >= 0) {
-		constexpr auto kIdealStickerSize = 512;
-		const auto zoom = GetEmojiStickerZoom(&_document->session());
-		const auto convert = [&](int size) {
-			return int(size * stickerSize * zoom / kIdealStickerSize);
-		};
-		_size = QSize(convert(_size.width()), convert(_size.height()));
+		_size = GetAnimatedEmojiSize(&_document->session(), _size);
 		[[maybe_unused]] bool result = readyToDrawLottie();
 	} else {
 		_size = DownscaledSize(
@@ -110,6 +109,24 @@ bool Sticker::readyToDrawLottie() {
 	return (_lottie && _lottie->ready());
 }
 
+QSize Sticker::GetAnimatedEmojiSize(not_null<Main::Session*> session) {
+	return GetAnimatedEmojiSize(session, { 512, 512 });
+}
+
+QSize Sticker::GetAnimatedEmojiSize(
+		not_null<Main::Session*> session,
+		QSize documentSize) {
+	const auto stickerSize = Global::CustomStickerSize() == 256
+		? st::maxStickerSize
+		: int(cScale() / 100.0 * Global::CustomStickerSize());
+	constexpr auto kIdealStickerSize = 512;
+	const auto zoom = GetEmojiStickerZoom(session);
+	const auto convert = [&](int size) {
+		return int(size * stickerSize * zoom / kIdealStickerSize);
+	};
+	return { convert(documentSize.width()), convert(documentSize.height()) };
+}
+
 void Sticker::draw(Painter &p, const QRect &r, bool selected) {
 	if (readyToDrawLottie()) {
 		paintLottie(p, r, selected);
@@ -130,7 +147,7 @@ void Sticker::paintLottie(Painter &p, const QRect &r, bool selected) {
 		: Lottie::Animation::FrameInfo();
 	if (_nextLastDiceFrame) {
 		_nextLastDiceFrame = false;
-		_lastDiceFrame = CacheDiceImage(_diceIndex, frame.image);
+		_lastDiceFrame = CacheDiceImage(_diceEmoji, _diceIndex, frame.image);
 	}
 	const auto &image = _lastDiceFrame.isNull()
 		? frame.image
@@ -241,7 +258,8 @@ void Sticker::refreshLink() {
 	}
 }
 
-void Sticker::setDiceIndex(int index) {
+void Sticker::setDiceIndex(const QString &emoji, int index) {
+	_diceEmoji = emoji;
 	_diceIndex = index;
 }
 
