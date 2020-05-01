@@ -33,6 +33,12 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include <QtGui/QGuiApplication>
 
+namespace {
+
+const auto kPsaForwardedPrefix = "cloud_lng_forwarded_psa_";
+
+} // namespace
+
 void HistoryMessageVia::create(UserId userId) {
 	bot = Auth().data().user(userId);
 	maxWidth = st::msgServiceNameFont->width(
@@ -128,7 +134,7 @@ void HistoryMessageForwarded::create(const HistoryMessageVia *via) const {
 	} else {
 		phrase = name;
 	}
-	if (via) {
+	if (via && psaType.isEmpty()) {
 		if (fromChannel) {
 			phrase = tr::lng_forwarded_channel_via(
 				tr::now,
@@ -145,11 +151,19 @@ void HistoryMessageForwarded::create(const HistoryMessageVia *via) const {
 				textcmdLink(2, '@' + via->bot->username));
 		}
 	} else {
-		if (fromChannel) {
-			phrase = tr::lng_forwarded_channel(
-				tr::now,
-				lt_channel,
-				textcmdLink(1, phrase));
+		if (fromChannel || !psaType.isEmpty()) {
+			auto custom = psaType.isEmpty()
+				? QString()
+				: Lang::Current().getNonDefaultValue(
+					kPsaForwardedPrefix + psaType.toUtf8());
+			phrase = !custom.isEmpty()
+				? custom.replace("{channel}", textcmdLink(1, phrase))
+				: (psaType.isEmpty()
+					? tr::lng_forwarded_channel
+					: tr::lng_forwarded_psa_default)(
+						tr::now,
+						lt_channel,
+						textcmdLink(1, phrase));
 		} else {
 			phrase = tr::lng_forwarded(
 				tr::now,
