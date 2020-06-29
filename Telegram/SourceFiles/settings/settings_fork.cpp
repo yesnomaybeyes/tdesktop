@@ -8,9 +8,11 @@ Author: 23rd.
 #include "base/weak_ptr.h"
 #include "boxes/abstract_box.h"
 #include "boxes/confirm_box.h"
+#include "core/application.h"
 #include "core/file_utilities.h"
 #include "facades.h"
 #include "lang/lang_keys.h"
+#include "main/main_domain.h"
 #include "main/main_session.h"
 #include "settings/settings_common.h"
 #include "storage/localstorage.h"
@@ -88,7 +90,7 @@ void SettingBox::prepare() {
 		}
 		const auto weak = base::make_weak(this);
 		getOrSetGlobal(linkUrl);
-		Local::writeUserSettings();
+		Core::App().saveSettingsDelayed();
 		_callback(!isInvalid);
 		if (weak) {
 			closeBox();
@@ -129,9 +131,9 @@ protected:
 
 QString SearchEngineBox::getOrSetGlobal(QString value) {
 	if (value.isEmpty()) {
-		return Global::SearchEngineUrl();
+		return Core::App().settings().searchEngineUrl();
 	}
-	Global::SetSearchEngineUrl(value);
+	Core::App().settings().setSearchEngineUrl(value);
 	return QString();
 }
 
@@ -154,9 +156,9 @@ protected:
 
 QString URISchemeBox::getOrSetGlobal(QString value) {
 	if (value.isEmpty()) {
-		return Global::UriScheme();
+		return Core::App().settings().uriScheme();
 	}
-	Global::SetUriScheme(value);
+	Core::App().settings().setUriScheme(value);
 	return QString();
 }
 
@@ -180,14 +182,14 @@ private:
 QString StickerSizeBox::getOrSetGlobal(QString value) {
 	if (value.isEmpty()) {
 		if (!_startSize) {
-			_startSize = Global::CustomStickerSize();
-		} else if (_startSize == Global::CustomStickerSize()) {
+			_startSize = Core::App().settings().customStickerSize();
+		} else if (_startSize == Core::App().settings().customStickerSize()) {
 			return QString();
 		}
-		return QString::number(Global::CustomStickerSize());
+		return QString::number(Core::App().settings().customStickerSize());
 	}
 	if (const auto number = value.toInt()) {
-		Global::SetCustomStickerSize(number);
+		Core::App().settings().setCustomStickerSize(number);
 	}
 	return QString();
 }
@@ -205,6 +207,13 @@ void SetupForkContent(
 
 	const auto session = &controller->session();
 
+	auto wrap = object_ptr<Ui::VerticalLayout>(container);
+	const auto inner = wrap.data();
+	container->add(object_ptr<Ui::OverrideMargins>(
+		container,
+		std::move(wrap),
+		QMargins(0, 0, 0, st::settingsCheckbox.margin.bottom())));
+
 	const auto checkbox = [&](const QString &label, bool checked) {
 		return object_ptr<Ui::Checkbox>(
 			container,
@@ -212,44 +221,15 @@ void SetupForkContent(
 			checked,
 			st::settingsCheckbox);
 	};
-	const auto addCheckbox = [&](const QString &label, bool checked) {
-		return container->add(
+	const auto add = [&](const QString &label, bool checked, auto &&handle) {
+		inner->add(
 			checkbox(label, checked),
-			st::settingsCheckboxPadding);
+			st::settingsCheckboxPadding
+		)->checkedChanges(
+		) | rpl::start_with_next(
+			std::move(handle),
+			inner->lifetime());
 	};
-	const auto addSlidingCheckbox = [&](const QString &label, bool checked) {
-		return container->add(
-			object_ptr<Ui::SlideWrap<Ui::Checkbox>>(
-				container,
-				checkbox(label, checked),
-				st::settingsCheckboxPadding));
-	};
-	const auto squareAvatars = addCheckbox(
-		tr::lng_settings_square_avatats(tr::now),
-		Global::SquareAvatars());
-	const auto audioFade = addCheckbox(
-		tr::lng_settings_audio_fade(tr::now),
-		Global::AudioFade());
-	const auto uriScheme = addCheckbox(
-		tr::lng_settings_uri_scheme(tr::now),
-		Global::AskUriScheme());
-	const auto lastSeenInDialogs = addCheckbox(
-		tr::lng_settings_last_seen_in_dialogs(tr::now),
-		Global::LastSeenInDialogs());
-	const auto searchEngine = addCheckbox(
-		tr::lng_settings_search_engine(tr::now),
-		Global::SearchEngine());
-	const auto allRecentStickers = addCheckbox(
-		tr::lng_settings_show_all_recent_stickers(tr::now),
-		Global::AllRecentStickers());
-#ifndef Q_OS_LINUX
-	const auto useBlackTrayIcon = addCheckbox(
-		tr::lng_settings_use_black_tray_icon(tr::now),
-		session->settings().useBlackTrayIcon());
-	const auto useOriginalTrayIcon = addCheckbox(
-		tr::lng_settings_use_original_tray_icon(tr::now),
-		session->settings().useOriginalTrayIcon());
-#endif // !Q_OS_LINUX
 
 	const auto restartBox = [=](Fn<void()> ok, Fn<void()> cancel) {
 		Ui::show(Box<ConfirmBox>(
@@ -257,13 +237,148 @@ void SetupForkContent(
 			tr::lng_settings_restart_now(tr::now),
 			[=] {
 				ok();
-				Local::writeUserSettings();
+				Core::App().saveSettingsDelayed(0);
 				App::restart();
 			},
 			[=] {
 				cancel();
-			}));
+			}),
+		Ui::LayerOption::KeepOther);
 	};
+	const auto addRestart = [&](
+			const QString &label,
+			auto checkedCallback,
+			auto ok) {
+		const auto checkRow = inner->add(
+			checkbox(label, checkedCallback()),
+			st::settingsCheckboxPadding
+		);
+		checkRow->checkedChanges(
+		) | rpl::filter([=](bool checked) {
+			return (checked != checkedCallback());
+		}) | rpl::start_with_next([=](bool checked) {
+			restartBox(
+				[=] { ok(checked); },
+				[=] { checkRow->setChecked(!checked); });
+		}, inner->lifetime());
+	};
+
+	//
+	addRestart(
+		tr::lng_settings_square_avatats(tr::now),
+		[] { return Core::App().settings().squareUserpics(); },
+		[=](bool checked) {
+			Core::App().settings().setSquareUserpics(checked);
+		});
+
+	//
+	add(
+		tr::lng_settings_audio_fade(tr::now),
+		Core::App().settings().audioFade(),
+		[=](bool checked) {
+			Core::App().settings().setAudioFade(checked);
+			Core::App().saveSettingsDelayed();
+		});
+
+	//
+	const auto uriScheme = inner->add(
+		checkbox(
+			tr::lng_settings_uri_scheme(tr::now),
+			Core::App().settings().askUriScheme()),
+		st::settingsCheckboxPadding
+	);
+	uriScheme->checkedChanges(
+	) | rpl::start_with_next([=](bool checked) {
+		if (checked) {
+			auto callback = [=](bool isSuccess) {
+				uriScheme->setChecked(isSuccess);
+				Core::App().settings().setAskUriScheme(checked);
+				Core::App().saveSettingsDelayed();
+			};
+			Ui::show(Box<URISchemeBox>(
+				std::move(callback),
+				tr::lng_settings_uri_scheme_box_title,
+				tr::lng_settings_uri_scheme_field_label),
+			Ui::LayerOption::KeepOther);
+		} else {
+			Core::App().settings().setAskUriScheme(checked);
+			Core::App().saveSettingsDelayed();
+		}
+	}, uriScheme->lifetime());
+
+	//
+	add(
+		tr::lng_settings_last_seen_in_dialogs(tr::now),
+		Core::App().settings().lastSeenInDialogs(),
+		[=](bool checked) {
+			Core::App().settings().setLastSeenInDialogs(checked);
+			Core::App().saveSettingsDelayed();
+		});
+
+	//
+	const auto searchEngine = inner->add(
+		checkbox(
+			tr::lng_settings_search_engine(tr::now),
+			Core::App().settings().searchEngine()),
+		st::settingsCheckboxPadding
+	);
+
+	//
+	searchEngine->checkedChanges(
+	) | rpl::start_with_next([=](bool checked) {
+		if (checked) {
+			auto callback = [=](bool isSuccess) {
+				searchEngine->setChecked(isSuccess);
+				Core::App().settings().setSearchEngine(checked);
+				Core::App().saveSettingsDelayed();
+			};
+			Ui::show(Box<SearchEngineBox>(
+				std::move(callback),
+				tr::lng_settings_search_engine_box_title,
+				tr::lng_settings_search_engine_field_label),
+			Ui::LayerOption::KeepOther);
+		} else {
+			Core::App().settings().setSearchEngine(checked);
+			Core::App().saveSettingsDelayed();
+		}
+	}, searchEngine->lifetime());
+
+	//
+	add(
+		tr::lng_settings_use_black_tray_icon(tr::now),
+		Core::App().settings().allRecentStickers(),
+		[=](bool checked) {
+			Core::App().settings().setAllRecentStickers(checked);
+			Core::App().saveSettingsDelayed();
+		});
+
+#ifndef Q_OS_LINUX
+#ifdef Q_OS_WIN
+	add(
+		tr::lng_settings_use_black_tray_icon(tr::now),
+		Core::App().settings().useBlackTrayIcon(),
+		[=](bool checked) {
+			Core::App().settings().setUseBlackTrayIcon(checked);
+			Core::App().saveSettingsDelayed();
+			Core::App().domain().notifyUnreadBadgeChanged();
+		});
+#else // !Q_OS_WIN
+	addRestart(
+		tr::lng_settings_use_black_tray_icon(tr::now),
+		[] { return Core::App().settings().useBlackTrayIcon(); },
+		[=](bool checked) {
+			Core::App().settings().setUseBlackTrayIcon(checked);
+		});
+#endif // Q_OS_WIN
+
+	add(
+		tr::lng_settings_use_original_tray_icon(tr::now),
+		Core::App().settings().useOriginalTrayIcon(),
+		[=](bool checked) {
+			Core::App().settings().setUseOriginalTrayIcon(checked);
+			Core::App().saveSettingsDelayed();
+		});
+#endif // !Q_OS_LINUX
 
 	AddButton(
 		container,
@@ -281,104 +396,6 @@ void SetupForkContent(
 		tr::lng_settings_sticker_size_label));
 	});
 
-	squareAvatars->checkedChanges(
-	) | rpl::filter([](bool checked) {
-		return (checked != Global::SquareAvatars());
-	}) | rpl::start_with_next([=](bool checked) {
-		restartBox(
-			[=] { Global::SetSquareAvatars(checked); },
-			[=] { squareAvatars->setChecked(!checked); });
-	}, squareAvatars->lifetime());
-
-	audioFade->checkedChanges(
-	) | rpl::filter([](bool checked) {
-		return (checked != Global::AudioFade());
-	}) | rpl::start_with_next([=](bool checked) {
-		Global::SetAudioFade(checked);
-		Local::writeUserSettings();
-	}, audioFade->lifetime());
-
-	uriScheme->checkedChanges(
-	) | rpl::filter([](bool checked) {
-		return (checked != Global::AskUriScheme());
-	}) | rpl::start_with_next([=](bool checked) {
-		if (checked) {
-			Ui::show(Box<URISchemeBox>([=](
-				const bool &isSuccess) {
-				uriScheme->setChecked(isSuccess);
-				Global::SetAskUriScheme(isSuccess);
-				Local::writeUserSettings();
-			},
-				tr::lng_settings_uri_scheme_box_title,
-				tr::lng_settings_uri_scheme_field_label),
-			Ui::LayerOption::KeepOther);
-		} else {
-			Global::SetAskUriScheme(checked);
-			Local::writeUserSettings();
-		}
-	}, uriScheme->lifetime());
-
-	lastSeenInDialogs->checkedChanges(
-	) | rpl::filter([](bool checked) {
-		return (checked != Global::LastSeenInDialogs());
-	}) | rpl::start_with_next([=](bool checked) {
-		Global::SetLastSeenInDialogs(checked);
-		Local::writeUserSettings();
-	}, lastSeenInDialogs->lifetime());
-
-	searchEngine->checkedChanges(
-	) | rpl::filter([](bool checked) {
-		return (checked != Global::SearchEngine());
-	}) | rpl::start_with_next([=](bool checked) {
-		if (checked) {
-			Ui::show(Box<SearchEngineBox>([=](
-				const bool &isSuccess) {
-				searchEngine->setChecked(isSuccess);
-				Global::SetSearchEngine(isSuccess);
-				Local::writeUserSettings();
-			},
-				tr::lng_settings_search_engine_box_title,
-				tr::lng_settings_search_engine_field_label),
-			Ui::LayerOption::KeepOther);
-		} else {
-			Global::SetSearchEngine(checked);
-			Local::writeUserSettings();
-		}
-	}, searchEngine->lifetime());
-
-	allRecentStickers->checkedChanges(
-	) | rpl::filter([](bool checked) {
-		return (checked != Global::AllRecentStickers());
-	}) | rpl::start_with_next([=](bool checked) {
-		Global::SetAllRecentStickers(checked);
-		Local::writeUserSettings();
-	}, allRecentStickers->lifetime());
-
-#ifndef Q_OS_LINUX
-	useBlackTrayIcon->checkedChanges(
-	) | rpl::filter([=](bool checked) {
-		return (checked != session->settings().useBlackTrayIcon());
-	}) | rpl::start_with_next([=](bool checked) {
-#ifdef Q_OS_WIN
-		session->settings().setUseBlackTrayIcon(checked);
-		Local::writeUserSettings();
-		Global::RefUnreadCounterUpdate().notify(true);
-#else // !Q_OS_WIN
-		restartBox(
-			[=] { session->settings().setUseBlackTrayIcon(checked); },
-			[=] { useBlackTrayIcon->setChecked(!checked); });
-#endif // Q_OS_WIN
-	}, useBlackTrayIcon->lifetime());
-
-	useOriginalTrayIcon->checkedChanges(
-	) | rpl::filter([=](bool checked) {
-		return (checked != session->settings().useOriginalTrayIcon());
-	}) | rpl::start_with_next([=](bool checked) {
-		restartBox(
-			[=] { session->settings().setUseOriginalTrayIcon(checked); },
-			[=] { useOriginalTrayIcon->setChecked(!checked); });
-	}, useOriginalTrayIcon->lifetime());
-#endif // !Q_OS_LINUX
 }
 
 void SetupFork(

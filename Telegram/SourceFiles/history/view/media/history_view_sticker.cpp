@@ -17,6 +17,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "history/view/media/history_view_media_common.h"
 #include "ui/image/image.h"
 #include "ui/emoji_config.h"
+#include "core/application.h"
+#include "core/core_settings.h"
 #include "main/main_session.h"
 #include "main/main_account.h"
 #include "main/main_app_config.h"
@@ -27,6 +29,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_document_media.h"
 #include "data/data_file_origin.h"
 #include "lottie/lottie_single_player.h"
+#include "chat_helpers/stickers_lottie.h"
 #include "styles/style_history.h"
 #include "facades.h"
 
@@ -91,9 +94,10 @@ bool Sticker::isEmojiSticker() const {
 }
 
 void Sticker::initSize() {
-	const auto stickerSize = Global::CustomStickerSize() == 256
+	const auto s = Core::App().settings().customStickerSize();
+	const auto stickerSize = (s == 256)
 		? st::maxStickerSize
-		: int(cScale() / 100.0 * Global::CustomStickerSize());
+		: int(cScale() / 100.0 * s);
 	_size = _data->dimensions;
 	if (isEmojiSticker() || _diceIndex >= 0) {
 		_size = GetAnimatedEmojiSize(&_data->session(), _size);
@@ -137,9 +141,10 @@ QSize Sticker::GetAnimatedEmojiSize(not_null<Main::Session*> session) {
 QSize Sticker::GetAnimatedEmojiSize(
 		not_null<Main::Session*> session,
 		QSize documentSize) {
-	const auto stickerSize = Global::CustomStickerSize() == 256
+	const auto s = Core::App().settings().customStickerSize();
+	const auto stickerSize = (s == 256)
 		? st::maxStickerSize
-		: int(cScale() / 100.0 * Global::CustomStickerSize());
+		: int(cScale() / 100.0 * s);
 	constexpr auto kIdealStickerSize = 512;
 	const auto zoom = GetEmojiStickerZoom(session);
 	const auto convert = [&](int size) {
@@ -189,13 +194,13 @@ void Sticker::paintLottie(Painter &p, const QRect &r, bool selected) {
 		return;
 	}
 
-	const auto paused = App::wnd()->sessionController()->isGifPausedAtLeastFor(Window::GifPauseReason::Any);
+	const auto paused = _parent->delegate()->elementIsGifPaused();
 	const auto playOnce = (_diceIndex > 0)
 		? true
 		: (_diceIndex == 0)
 		? false
 		: (isEmojiSticker()
-			|| !_data->session().settings().loopAnimatedStickers());
+			|| !Core::App().settings().loopAnimatedStickers());
 	const auto count = _lottie->information().framesCount;
 	_atTheEnd = (frame.index + 1 == count);
 	_nextLastDiceFrame = !paused
@@ -300,10 +305,10 @@ void Sticker::setDiceIndex(const QString &emoji, int index) {
 void Sticker::setupLottie() {
 	Expects(_dataMedia != nullptr);
 
-	_lottie = Stickers::LottiePlayerFromDocument(
+	_lottie = ChatHelpers::LottiePlayerFromDocument(
 		_dataMedia.get(),
 		_replacements,
-		Stickers::LottieSize::MessageHistory,
+		ChatHelpers::StickerLottieSize::MessageHistory,
 		_size * cIntRetinaFactor(),
 		Lottie::Quality::High);
 	lottieCreated();

@@ -29,18 +29,19 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/text/text_isolated_emoji.h"
 #include "ui/text_options.h"
 #include "core/application.h"
+#include "core/ui_integration.h"
 #include "layout.h"
 #include "window/notifications_manager.h"
 #include "window/window_session_controller.h"
-#include "observer_peer.h"
 #include "storage/storage_shared_media.h"
+#include "mtproto/mtproto_config.h"
 #include "data/data_session.h"
+#include "data/data_changes.h"
 #include "data/data_game.h"
 #include "data/data_media_types.h"
 #include "data/data_channel.h"
 #include "data/data_user.h"
 #include "data/data_histories.h"
-#include "facades.h"
 #include "app.h"
 #include "styles/style_dialogs.h"
 #include "styles/style_widgets.h"
@@ -209,6 +210,7 @@ void FastShareMessage(not_null<HistoryItem*> item) {
 	};
 	const auto history = item->history();
 	const auto owner = &history->owner();
+	const auto session = &history->session();
 	const auto data = std::make_shared<ShareData>(
 		history->peer,
 		owner->itemOrItsGroup(item));
@@ -253,19 +255,19 @@ void FastShareMessage(not_null<HistoryItem*> item) {
 			for (const auto i : history->owner().groups().find(item)->items) {
 				asCopySend(i);
 			}
-		} else if (const auto item = Auth().data().message(data->msgIds[0])) {
-			asCopySend(item);
+		} else if (const auto i = history->owner().message(data->msgIds[0])) {
+			asCopySend(i);
 		}
 	};
 
 	auto copyCallback = [=]() {
 		if (const auto item = owner->message(data->msgIds[0])) {
 			if (item->hasDirectLink()) {
-				HistoryView::CopyPostLink(item->fullId());
+				HistoryView::CopyPostLink(session, item->fullId());
 			} else if (const auto bot = item->getMessageBot()) {
 				if (const auto media = item->media()) {
 					if (const auto game = media->game()) {
-						const auto link = Core::App().createInternalLinkFull(
+						const auto link = session->createInternalLinkFull(
 							bot->username
 							+ qsl("?game=")
 							+ game->shortName);
@@ -397,9 +399,11 @@ void FastShareMessage(not_null<HistoryItem*> item) {
 }
 
 Fn<void(ChannelData*, MsgId)> HistoryDependentItemCallback(
-		const FullMsgId &msgId) {
-	return [dependent = msgId](ChannelData *channel, MsgId msgId) {
-		if (const auto item = Auth().data().message(dependent)) {
+		not_null<HistoryItem*> item) {
+	const auto session = &item->history()->session();
+	const auto dependent = item->fullId();
+	return [=](ChannelData *channel, MsgId msgId) {
+		if (const auto item = session->data().message(dependent)) {
 			item->updateDependencyItem();
 		}
 	};
@@ -820,7 +824,7 @@ bool HistoryMessage::allowsSendNow() const {
 
 bool HistoryMessage::isTooOldForEdit(TimeId now) const {
 	return !_history->peer->canEditMessagesIndefinitely()
-		&& (now - date() >= Global::EditTimeLimit());
+		&& (now - date() >= _history->session().serverConfig().editTimeLimit);
 }
 
 bool HistoryMessage::allowsEdit(TimeId now) const {
@@ -873,11 +877,11 @@ void HistoryMessage::createComponents(const CreateConfig &config) {
 			history()->session().api().requestMessageData(
 				history()->peer->asChannel(),
 				reply->replyToMsgId,
-				HistoryDependentItemCallback(fullId()));
+				HistoryDependentItemCallback(this));
 		}
 	}
 	if (const auto via = Get<HistoryMessageVia>()) {
-		via->create(config.viaBotId);
+		via->create(&history()->owner(), config.viaBotId);
 	}
 	if (const auto views = Get<HistoryMessageViews>()) {
 		views->_views = config.viewsCount;
@@ -1190,9 +1194,9 @@ void HistoryMessage::contributeToSlowmode(TimeId realDate) {
 void HistoryMessage::addToUnreadMentions(UnreadMentionType type) {
 	if (IsServerMsgId(id) && isUnreadMention()) {
 		if (history()->addToUnreadMentions(id, type)) {
-			Notify::peerUpdatedDelayed(
-				history()->peer,
-				Notify::PeerUpdate::Flag::UnreadMentionsChanged);
+			history()->session().changes().historyUpdated(
+				history(),
+				Data::HistoryUpdate::Flag::UnreadMentions);
 		}
 	}
 }
@@ -1247,7 +1251,7 @@ TextWithEntities HistoryMessage::withLocalEntities(
 }
 
 void HistoryMessage::setText(const TextWithEntities &textWithEntities) {
-	for_const (auto &entity, textWithEntities.entities) {
+	for (const auto &entity : textWithEntities.entities) {
 		auto type = entity.type();
 		if (type == EntityType::Url
 			|| type == EntityType::CustomUrl
@@ -1261,11 +1265,16 @@ void HistoryMessage::setText(const TextWithEntities &textWithEntities) {
 		setEmptyText();
 		return;
 	}
+
 	clearIsolatedEmoji();
+	const auto context = Core::UiIntegration::Context{
+		.session = &history()->session()
+	};
 	_text.setMarkedText(
 		st::messageTextStyle,
 		withLocalEntities(textWithEntities),
-		Ui::ItemTextOptions(this));
+		Ui::ItemTextOptions(this),
+		context);
 	if (!textWithEntities.text.isEmpty() && _text.isEmpty()) {
 		// If server has allowed some text that we've trim-ed entirely,
 		// just replace it with something so that UI won't look buggy.
@@ -1276,6 +1285,7 @@ void HistoryMessage::setText(const TextWithEntities &textWithEntities) {
 	} else if (!_media) {
 		checkIsolatedEmoji();
 	}
+
 	_textWidth = -1;
 	_textHeight = 0;
 }
@@ -1311,14 +1321,19 @@ void HistoryMessage::checkIsolatedEmoji() {
 }
 
 void HistoryMessage::setReplyMarkup(const MTPReplyMarkup *markup) {
+	const auto requestUpdate = [&] {
+		history()->owner().requestItemResize(this);
+		history()->session().changes().messageUpdated(
+			this,
+			Data::MessageUpdate::Flag::ReplyMarkup);
+	};
 	if (!markup) {
 		if (_flags & MTPDmessage::Flag::f_reply_markup) {
 			_flags &= ~MTPDmessage::Flag::f_reply_markup;
 			if (Has<HistoryMessageReplyMarkup>()) {
 				RemoveComponents(HistoryMessageReplyMarkup::Bit());
 			}
-			history()->owner().requestItemResize(this);
-			Notify::replyMarkupUpdated(this);
+			requestUpdate();
 		}
 		return;
 	}
@@ -1336,8 +1351,7 @@ void HistoryMessage::setReplyMarkup(const MTPReplyMarkup *markup) {
 			changed = true;
 		}
 		if (changed) {
-			history()->owner().requestItemResize(this);
-			Notify::replyMarkupUpdated(this);
+			requestUpdate();
 		}
 	} else {
 		if (!(_flags & MTPDmessage::Flag::f_reply_markup)) {
@@ -1347,8 +1361,7 @@ void HistoryMessage::setReplyMarkup(const MTPReplyMarkup *markup) {
 			AddComponents(HistoryMessageReplyMarkup::Bit());
 		}
 		Get<HistoryMessageReplyMarkup>()->create(*markup);
-		history()->owner().requestItemResize(this);
-		Notify::replyMarkupUpdated(this);
+		requestUpdate();
 	}
 }
 

@@ -11,7 +11,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/emoji_config.h"
 #include "ui/effects/animation_value.h"
 #include "app.h"
-#include "facades.h"
+#include "core/application.h"
 #include "styles/style_history.h"
 
 namespace Ui {
@@ -145,7 +145,7 @@ void EmptyUserpic::paint(
 		int outerWidth,
 		int size) const {
 	paint(p, x, y, outerWidth, size, [&p, x, y, size] {
-		if (Global::SquareAvatars()) {
+		if (Core::App().settings().squareUserpics()) {
 			p.drawRect(x, y, size, size);
 		} else {
 			p.drawEllipse(x, y, size, size);
@@ -201,7 +201,7 @@ void EmptyUserpic::PaintSavedMessages(
 	p.setBrush(bg);
 	p.setPen(Qt::NoPen);
 
-	if (Global::SquareAvatars()) {
+	if (Core::App().settings().squareUserpics()) {
 		p.drawRect(x, y, size, size);
 	} else {
 		p.drawEllipse(x, y, size, size);
