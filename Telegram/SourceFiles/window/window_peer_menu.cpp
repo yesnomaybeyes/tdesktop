@@ -1029,7 +1029,7 @@ void PeerMenuAddChannelMembers(
 		return;
 	}
 	const auto api = &channel->session().api();
-	api->requestChannelMembersForAdd(channel, [=](
+	api->requestChannelMembersForAdd(channel, crl::guard(navigation, [=](
 			const MTPchannels_ChannelParticipants &result) {
 		api->parseChannelParticipants(channel, result, [&](
 				int availableCount,
@@ -1051,7 +1051,7 @@ void PeerMenuAddChannelMembers(
 				channel,
 				{ already.begin(), already.end() });
 		});
-	});
+	}));
 }
 
 void PeerMenuAddMuteAction(
