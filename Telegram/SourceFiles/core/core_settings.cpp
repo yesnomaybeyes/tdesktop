@@ -120,7 +120,8 @@ QByteArray Settings::serialize() const {
 			<< qint32(_thirdColumnWidth.current())
 			<< qint32(_thirdSectionExtendedBy)
 			<< qint32(_notifyFromAll ? 1 : 0)
-			<< qint32(_nativeWindowFrame.current() ? 1 : 0);
+			<< qint32(_nativeWindowFrame.current() ? 1 : 0)
+			<< qint32(_systemDarkModeEnabled.current() ? 1 : 0);
 	}
 	return result;
 }
@@ -197,6 +198,7 @@ void Settings::addFromSerialized(const QByteArray &serialized) {
 	qint32 thirdSectionExtendedBy = _thirdSectionExtendedBy;
 	qint32 notifyFromAll = _notifyFromAll ? 1 : 0;
 	qint32 nativeWindowFrame = _nativeWindowFrame.current() ? 1 : 0;
+	qint32 systemDarkModeEnabled = _systemDarkModeEnabled.current() ? 1 : 0;
 
 	stream >> themesAccentColors;
 	if (!stream.atEnd()) {
@@ -286,6 +288,9 @@ void Settings::addFromSerialized(const QByteArray &serialized) {
 	}
 	if (!stream.atEnd()) {
 		stream >> nativeWindowFrame;
+	}
+	if (!stream.atEnd()) {
+		stream >> systemDarkModeEnabled;
 	}
 	if (stream.status() != QDataStream::Ok) {
 		LOG(("App Error: "
@@ -393,6 +398,7 @@ void Settings::addFromSerialized(const QByteArray &serialized) {
 	}
 	_notifyFromAll = (notifyFromAll == 1);
 	_nativeWindowFrame = (nativeWindowFrame == 1);
+	_systemDarkModeEnabled = (systemDarkModeEnabled == 1);
 }
 
 bool Settings::chatWide() const {
@@ -536,6 +542,7 @@ void Settings::resetOnLastLogout() {
 	_thirdColumnWidth = kDefaultThirdColumnWidth; // p-w
 	_notifyFromAll = true;
 	_tabbedReplacedWithInfo = false; // per-window
+	_systemDarkModeEnabled = false;
 }
 
 bool Settings::ThirdColumnByDefault() {
