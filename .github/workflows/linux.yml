@@ -74,6 +74,8 @@ jobs:
 
       - name: Disable man for further package installs.
         run: |
+          apt-get update && \
+          apt-get install sudo
           cfgFile="/etc/dpkg/dpkg.cfg.d/no_man"
           sudo touch $cfgFile
           p() {
