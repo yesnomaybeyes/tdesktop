@@ -531,7 +531,7 @@ jobs:
           ./configure.sh \
           -D CMAKE_CXX_FLAGS="-s" \
           -D TDESKTOP_API_ID=99971 -D TDESKTOP_API_HASH=1ec735e74910fa5490a7913679afffa8 \
-          -D DESKTOP_APP_USE_PACKAGED=ON \
+          -D DESKTOP_APP_USE_PACKAGED=OFF \
           $DEFINE
 
           cd ../out/Debug
