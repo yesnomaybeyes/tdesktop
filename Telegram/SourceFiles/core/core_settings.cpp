@@ -32,8 +32,9 @@ QByteArray Settings::serialize() const {
 		+ Serialize::stringSize(_downloadPath.current())
 		+ Serialize::bytearraySize(_downloadPathBookmark)
 		+ sizeof(qint32) * 12
-		+ Serialize::stringSize(_callOutputDeviceID)
-		+ Serialize::stringSize(_callInputDeviceID)
+		+ Serialize::stringSize(_callOutputDeviceId)
+		+ Serialize::stringSize(_callInputDeviceId)
+		+ Serialize::stringSize(_callVideoInputDeviceId)
 		+ Serialize::stringSize(_uriScheme) + Serialize::stringSize(_searchEngineUrl)
 		+ sizeof(qint32) * 3;
 	for (const auto &[key, value] : _soundOverrides) {
@@ -64,8 +65,8 @@ QByteArray Settings::serialize() const {
 			<< qint32(_notificationsCount)
 			<< static_cast<qint32>(_notificationsCorner)
 			<< qint32(_autoLock)
-			<< _callOutputDeviceID
-			<< _callInputDeviceID
+			<< _callOutputDeviceId
+			<< _callInputDeviceId
 			<< qint32(_callOutputVolume)
 			<< qint32(_callInputVolume)
 			<< qint32(_callAudioDuckingEnabled ? 1 : 0)
@@ -121,7 +122,8 @@ QByteArray Settings::serialize() const {
 			<< qint32(_thirdSectionExtendedBy)
 			<< qint32(_notifyFromAll ? 1 : 0)
 			<< qint32(_nativeWindowFrame.current() ? 1 : 0)
-			<< qint32(_systemDarkModeEnabled.current() ? 1 : 0);
+			<< qint32(_systemDarkModeEnabled.current() ? 1 : 0)
+			<< _callVideoInputDeviceId;
 	}
 	return result;
 }
@@ -163,8 +165,9 @@ void Settings::addFromSerialized(const QByteArray &serialized) {
 	qint32 notificationsCount = _notificationsCount;
 	qint32 notificationsCorner = static_cast<qint32>(_notificationsCorner);
 	qint32 autoLock = _autoLock;
-	QString callOutputDeviceID = _callOutputDeviceID;
-	QString callInputDeviceID = _callInputDeviceID;
+	QString callOutputDeviceId = _callOutputDeviceId;
+	QString callInputDeviceId = _callInputDeviceId;
+	QString callVideoInputDeviceId = _callVideoInputDeviceId;
 	qint32 callOutputVolume = _callOutputVolume;
 	qint32 callInputVolume = _callInputVolume;
 	qint32 callAudioDuckingEnabled = _callAudioDuckingEnabled ? 1 : 0;
@@ -219,8 +222,8 @@ void Settings::addFromSerialized(const QByteArray &serialized) {
 			>> notificationsCount
 			>> notificationsCorner
 			>> autoLock
-			>> callOutputDeviceID
-			>> callInputDeviceID
+			>> callOutputDeviceId
+			>> callInputDeviceId
 			>> callOutputVolume
 			>> callInputVolume
 			>> callAudioDuckingEnabled
@@ -292,6 +295,9 @@ void Settings::addFromSerialized(const QByteArray &serialized) {
 	if (!stream.atEnd()) {
 		stream >> systemDarkModeEnabled;
 	}
+	if (!stream.atEnd()) {
+		stream >> callVideoInputDeviceId;
+	}
 	if (stream.status() != QDataStream::Ok) {
 		LOG(("App Error: "
 			"Bad data for Core::Settings::constructFromSerialized()"));
@@ -329,8 +335,9 @@ void Settings::addFromSerialized(const QByteArray &serialized) {
 	_countUnreadMessages = (countUnreadMessages == 1);
 	_notifyAboutPinned = (notifyAboutPinned == 1);
 	_autoLock = autoLock;
-	_callOutputDeviceID = callOutputDeviceID;
-	_callInputDeviceID = callInputDeviceID;
+	_callOutputDeviceId = callOutputDeviceId;
+	_callInputDeviceId = callInputDeviceId;
+	_callVideoInputDeviceId = callVideoInputDeviceId;
 	_callOutputVolume = callOutputVolume;
 	_callInputVolume = callInputVolume;
 	_callAudioDuckingEnabled = (callAudioDuckingEnabled == 1);
@@ -508,8 +515,9 @@ void Settings::resetOnLastLogout() {
 	_notifyAboutPinned = true;
 	//_autoLock = 3600;
 
-	//_callOutputDeviceID = u"default"_q;
-	//_callInputDeviceID = u"default"_q;
+	//_callOutputDeviceId = u"default"_q;
+	//_callInputDeviceId = u"default"_q;
+	//_callVideoInputDeviceId = u"default"_q;
 	//_callOutputVolume = 100;
 	//_callInputVolume = 100;
 	//_callAudioDuckingEnabled = true;
